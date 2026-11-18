@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { acquireLock, lockPath, releaseLock, setLockPid } from "./lock.js";
@@ -46,6 +46,8 @@ test("lock: stale by age or dead pid is replaced; corrupt lock is replaced", () 
     assert.equal(acquireLock(p, 3, { staleMs: 100, now: () => now, isAlive: () => true }), true);
     assert.equal(acquireLock(p, 4, { staleMs: 100, now: () => now, isAlive: () => false }), true); // dead pid
     writeFileSync(p, "not json");
+    const old = new Date(Date.now() - 10_000);
+    utimesSync(p, old, old); // unreadable content is stale only when its mtime is older than staleMs
     assert.equal(acquireLock(p, 5, { staleMs: 100, now: () => now, isAlive: () => true }), true);
   } finally {
     t.done();
@@ -75,5 +77,33 @@ test("lock: a child that exits before setLockPid leaves no lock (S5)", () => {
     releaseLock(p, 333);
     setLockPid(p, 333);
     assert.equal(existsSync(p), false);
+  } finally { t.done(); }
+});
+
+test("lock: an empty or corrupt FRESH lock is held (not stale); older than staleMs it is taken over", () => {
+  const t = tmp();
+  try {
+    const p = join(t.dir, "locks", "x.lock");
+    mkdirSync(join(t.dir, "locks"));
+    writeFileSync(p, "");
+    assert.equal(acquireLock(p, 1, { staleMs: 2000 }), false);
+    assert.equal(readFileSync(p, "utf8"), "");
+    const old = new Date(Date.now() - 5_000);
+    utimesSync(p, old, old);
+    assert.equal(acquireLock(p, 2, { staleMs: 2000 }), true);
+    assert.equal(JSON.parse(readFileSync(p, "utf8")).pid, 2);
+  } finally { t.done(); }
+});
+
+test("lock: acquire is atomic with content and leaves no temp or marker files; owner release leaves none", () => {
+  const t = tmp();
+  try {
+    const p = join(t.dir, "locks", "y.lock");
+    assert.equal(acquireLock(p, 7, { staleMs: 2000 }), true);
+    assert.equal(JSON.parse(readFileSync(p, "utf8")).pid, 7); // content present as soon as the lock exists
+    assert.equal(acquireLock(p, 8, { staleMs: 2000, isAlive: () => true }), false);
+    assert.deepEqual(readdirSync(join(t.dir, "locks")), ["y.lock"]);
+    releaseLock(p, 7);
+    assert.deepEqual(readdirSync(join(t.dir, "locks")), []);
   } finally { t.done(); }
 });

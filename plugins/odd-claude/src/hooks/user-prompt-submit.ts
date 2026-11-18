@@ -10,10 +10,14 @@ import type { HookInput, HookOutput } from "./run.js";
 export function userPromptSubmit(input: HookInput, opts: StateOptions = {}): HookOutput | undefined {
   // New turn: reset the per-turn exploration counters (R14). Never affects the output.
   if (typeof input.session_id === "string" && input.session_id !== "") {
-    try {
-      resetExploration(input.session_id, opts);
-    } catch (err) {
-      logError(`UserPromptSubmit reset: ${err instanceof Error ? err.message : String(err)}`, opts);
+    // A lock timeout would skip the reset and leave the turn silenced; retry once before logging and moving on.
+    for (let attempt = 1; attempt <= 2; attempt++) {
+      try {
+        resetExploration(input.session_id, opts);
+        break;
+      } catch (err) {
+        if (attempt === 2) logError(`UserPromptSubmit reset: ${err instanceof Error ? err.message : String(err)}`, opts);
+      }
     }
   }
   const additionalContext = buildPromptAnchor(input.prompt);

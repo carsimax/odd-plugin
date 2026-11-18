@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync, readdirSync, existsSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
+import { mkdtempSync, rmSync, readdirSync, existsSync, readFileSync, writeFileSync, mkdirSync, utimesSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -128,6 +128,40 @@ test("logError appends a line to logs/hooks.log", () => {
     const lines = readFileSync(join(dir, "logs", "hooks.log"), "utf8").trim().split("\n");
     assert.equal(lines.length, 2);
     assert.match(lines[0], /boom/);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("updateSessionState: an empty FRESH lock is held, so it times out without calling the callback or touching the lock", () => {
+  const dir = tmp();
+  try {
+    const lock = `${sessionStatePath("st", { dataDir: dir })}.lock`;
+    mkdirSync(join(dir, "sessions"), { recursive: true });
+    writeFileSync(lock, "");
+    let called = false;
+    const t0 = Date.now();
+    assert.throws(() => updateSessionState("st", (s) => ((called = true), s), { dataDir: dir }), /session state lock timeout/);
+    assert.ok(Date.now() - t0 <= 1500, `took ${Date.now() - t0} ms`);
+    assert.equal(called, false);
+    assert.equal(readFileSync(lock, "utf8"), "");
+    assert.deepEqual(readdirSync(join(dir, "sessions")), ["st.json.lock"]);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("updateSessionState: a lock older than 2 s (even empty) is stale and gets acquired; nothing is left behind", () => {
+  const dir = tmp();
+  try {
+    const lock = `${sessionStatePath("st", { dataDir: dir })}.lock`;
+    mkdirSync(join(dir, "sessions"), { recursive: true });
+    writeFileSync(lock, "");
+    const old = new Date(Date.now() - 3_000);
+    utimesSync(lock, old, old);
+    updateSessionState("st", (s) => ({ ...s, a: 1 }), { dataDir: dir });
+    assert.deepEqual(readSessionState("st", { dataDir: dir }), { a: 1 });
+    assert.deepEqual(readdirSync(join(dir, "sessions")), ["st.json"]);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

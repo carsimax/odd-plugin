@@ -3,7 +3,7 @@
 // Layout: <dataDir>/sessions/<session>.json  and  <dataDir>/logs/hooks.log
 import { appendFileSync, chmodSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { acquireLock, releaseLock } from "./lock.js";
+import { acquireLock, releaseOwnedLock } from "./lock.js";
 
 export const STATE_SCHEMA_VERSION = 1;
 
@@ -113,7 +113,7 @@ export function updateSessionState(
     if (next !== current) writeSessionState(sessionId, next, opts);
     return next;
   } finally {
-    releaseLock(lock, process.pid);
+    releaseOwnedLock(lock, process.pid);
   }
 }
 

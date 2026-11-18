@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdtempSync, rmSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { execFileSync, spawn, spawnSync } from "node:child_process";
@@ -295,6 +295,31 @@ test("F1: 10 parallel PostToolUse processes count exactly and notify exactly onc
     const outs = await Promise.all(Array.from({ length: 10 }, runOne));
     assert.equal(outs.filter((o) => o.includes("Exploration budget")).length, 1);
     assert.equal((readSessionState("par", { dataDir: dir }).exploration as { lookups: number }).lookups, 10);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("F1 stress: 10 parallel spawns x 20 rounds always give 1 notice, lookups 10 and no leftover lock/marker files", async () => {
+  const dir = tmp();
+  try {
+    const runOne = (sid: string) =>
+      new Promise<string>((resolve, reject) => {
+        const c = spawn(process.execPath, [runJs, "PostToolUse"], { env: { ...process.env, CLAUDE_PLUGIN_DATA: dir } });
+        let out = "";
+        c.stdout.on("data", (d) => (out += d));
+        c.on("error", reject);
+        c.on("close", (code) => (code === 0 ? resolve(out) : reject(new Error(`exit ${code}`))));
+        c.stdin.end(JSON.stringify({ session_id: sid, tool_name: "Read", tool_response: "x" }));
+      });
+    for (let round = 0; round < 20; round++) {
+      const sid = `stress${round}`;
+      const outs = await Promise.all(Array.from({ length: 10 }, () => runOne(sid)));
+      assert.equal(outs.filter((o) => o.includes("Exploration budget")).length, 1, `round ${round}`);
+      assert.equal((readSessionState(sid, { dataDir: dir }).exploration as { lookups: number }).lookups, 10, `round ${round}`);
+    }
+    const files = readdirSync(join(dir, "sessions"));
+    assert.deepEqual(files.filter((f) => !/^stress\d+\.json$/.test(f)), []);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
