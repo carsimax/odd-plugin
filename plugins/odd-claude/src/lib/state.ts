@@ -1,8 +1,8 @@
 // Shared state-file helper. State lives under CLAUDE_PLUGIN_DATA (set by Claude Code for
 // hooks) or an explicit `dataDir` option (tests/CLI); never under ~/.claude directly.
 // Layout: <dataDir>/sessions/<session>.json  and  <dataDir>/logs/hooks.log
-import { appendFileSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { appendFileSync, chmodSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 
 export const STATE_SCHEMA_VERSION = 1;
 
@@ -47,20 +47,40 @@ export function readSessionState(sessionId: string, opts: StateOptions = {}): St
   }
 }
 
-/** Atomic write: temp file in the same dir, then rename. */
-export function writeSessionState(sessionId: string, data: StateData, opts: StateOptions = {}): void {
-  const path = sessionStatePath(sessionId, opts);
-  const dir = join(path, "..");
-  mkdirSync(dir, { recursive: true });
-  const body: StateFile = { version: STATE_SCHEMA_VERSION, sessionId, data };
+/** Atomic write: temp file in the same dir as `path`, then rename. Creates the dir. */
+export function atomicWriteFile(path: string, content: string | Buffer, mode?: number): void {
+  mkdirSync(dirname(path), { recursive: true });
   const tmp = `${path}.${process.pid}.${Date.now()}.tmp`;
   try {
-    writeFileSync(tmp, JSON.stringify(body, null, 2) + "\n", "utf8");
+    // `mode` is applied explicitly (chmod) so the umask cannot widen or narrow it.
+    writeFileSync(tmp, content, mode === undefined ? undefined : { mode });
+    if (mode !== undefined) chmodSync(tmp, mode);
     renameSync(tmp, path);
   } catch (err) {
     rmSync(tmp, { force: true });
     throw err;
   }
+}
+
+export function writeSessionState(sessionId: string, data: StateData, opts: StateOptions = {}): void {
+  const body: StateFile = { version: STATE_SCHEMA_VERSION, sessionId, data };
+  atomicWriteFile(sessionStatePath(sessionId, opts), JSON.stringify(body, null, 2) + "\n");
+}
+
+/** Plugin-wide (non-session) state at <dataDir>/<name>.json, e.g. `setup`. Same envelope. */
+export function readPluginState(name: string, opts: StateOptions = {}): StateData {
+  try {
+    const parsed = JSON.parse(readFileSync(join(resolveDataDir(opts), `${safeSegment(name)}.json`), "utf8")) as Partial<StateFile>;
+    if (parsed.version !== STATE_SCHEMA_VERSION || typeof parsed.data !== "object" || parsed.data === null) return {};
+    return parsed.data;
+  } catch {
+    return {};
+  }
+}
+
+export function writePluginState(name: string, data: StateData, opts: StateOptions = {}): void {
+  const body: StateFile = { version: STATE_SCHEMA_VERSION, sessionId: name, data };
+  atomicWriteFile(join(resolveDataDir(opts), `${safeSegment(name)}.json`), JSON.stringify(body, null, 2) + "\n");
 }
 
 export function updateSessionState(
