@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { chmodSync, existsSync, lstatSync, mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { spawn } from "node:child_process";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { createSessionScratch, listScratch, removeSessionScratch, scratchDir, sweepStaleTombstones } from "./scratch.js";
@@ -257,6 +258,101 @@ test("a tombstone leftover does not break removal and the dir ends up gone", () 
     writeFileSync(join(p, "f"), "x");
     assert.equal(removeSessionScratch("s", { dataDir: dir }), "removed");
     assert.deepEqual(listScratch(join(dir, "scratch")).entries, []);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("sweep unlinks symlinks inside a stale tombstone without following them", () => {
+  const dir = tmp();
+  const outside = tmp();
+  try {
+    const now = 1_700_000_000_000;
+    const root = join(dir, "scratch");
+    mkdirSync(root, { recursive: true });
+    const tomb = join(root, `.rm-1-${now - 2 * 3600_000}-x`);
+    mkdirSync(tomb);
+    mkdirSync(join(outside, "victim"));
+    writeFileSync(join(outside, "victim", "MARKER"), "x");
+    symlinkSync(join(outside, "victim"), join(tomb, "link"));
+    assert.equal(sweepStaleTombstones({ dataDir: dir }, now), 1);
+    assert.equal(existsSync(tomb), false);
+    assert.ok(existsSync(join(outside, "victim", "MARKER")), "victim MARKER survives");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+    rmSync(outside, { recursive: true, force: true });
+  }
+});
+
+test("sweep ignores malformed and future-dated names", () => {
+  const dir = tmp();
+  try {
+    const now = 1_700_000_000_000;
+    const root = join(dir, "scratch");
+    mkdirSync(root, { recursive: true });
+    const names = [".rm-x-y-z", ".rm--1000-x", ".rm-1-1000", ".rm-1-1e3-x", ".rm-1-99999999999999999-a"];
+    for (const n of names) mkdirSync(join(root, n));
+    assert.equal(sweepStaleTombstones({ dataDir: dir }, now), 0);
+    for (const n of names) assert.ok(existsSync(join(root, n)), n);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("sweep honours the 200 cap and counts only tombstone entries", () => {
+  const dir = tmp();
+  try {
+    const now = 1_700_000_000_000;
+    const root = join(dir, "scratch");
+    mkdirSync(root, { recursive: true });
+    for (let i = 0; i < 250; i++) mkdirSync(join(root, `.rm-1-${now - 2 * 3600_000}-t${i}`));
+    assert.equal(sweepStaleTombstones({ dataDir: dir }, now), 200);
+    assert.equal(sweepStaleTombstones({ dataDir: dir }, now), 50);
+    assert.equal(sweepStaleTombstones({ dataDir: dir }, now), 0);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("non-tombstone entries do not starve the sweep", () => {
+  const dir = tmp();
+  try {
+    const now = 1_700_000_000_000;
+    const root = join(dir, "scratch");
+    mkdirSync(root, { recursive: true });
+    for (let i = 0; i < 250; i++) mkdirSync(join(root, `a-session-${i}`));
+    const tomb = join(root, `.rm-1-${now - 2 * 3600_000}-z`);
+    mkdirSync(tomb);
+    assert.equal(sweepStaleTombstones({ dataDir: dir }, now), 1);
+    assert.equal(existsSync(tomb), false);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("concurrent sweeps ignore ENOENT silently (no hooks.log flood)", async () => {
+  const dir = tmp();
+  try {
+    const now = Date.now();
+    const root = join(dir, "scratch");
+    mkdirSync(root, { recursive: true });
+    for (let i = 0; i < 200; i++) {
+      const t = join(root, `.rm-1-${now - 2 * 3600_000}-c${i}`);
+      mkdirSync(join(t, "a", "b"), { recursive: true });
+      writeFileSync(join(t, "a", "b", "f"), "x");
+    }
+    const mod = new URL("./scratch.js", import.meta.url).href;
+    const code = `import(${JSON.stringify(mod)}).then((m) => { m.sweepStaleTombstones({ dataDir: ${JSON.stringify(dir)} }); });`;
+    await Promise.all(
+      Array.from({ length: 4 }, () => new Promise<void>((resolve, reject) => {
+        const c = spawn(process.execPath, ["-e", code], { stdio: "ignore" });
+        c.on("error", reject);
+        c.on("close", () => resolve());
+      })),
+    );
+    const log = join(dir, "logs", "hooks.log");
+    const text = existsSync(log) ? readFileSync(log, "utf8") : "";
+    assert.ok(!/ENOENT/.test(text), text);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

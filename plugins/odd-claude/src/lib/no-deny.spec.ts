@@ -24,7 +24,7 @@ function files(dir: string, out: string[] = []): string[] {
 }
 
 test("no source or hook config returns or declares a deny/ask/block decision", () => {
-  const targets = [...files(join(root, "src")).filter((f) => f.endsWith(".ts") && !f.endsWith(".test.ts")), join(root, "hooks", "hooks.json")];
+  const targets = [...files(join(root, "src")).filter((f) => f.endsWith(".ts") && !f.endsWith(".spec.ts")), join(root, "hooks", "hooks.json")];
   for (const f of targets) {
     const text = readFileSync(f, "utf8");
     assert.doesNotMatch(text, FORBIDDEN, f);
@@ -104,7 +104,7 @@ test("admission cards and the Judgment Day skill state their rules without claim
 
 test("the mod source never hooks prompt/tool events nor returns a decision (S2)", () => {
   const dir = join(root, "hooks");
-  const sources = readdirSync(dir).filter((f) => /\.(ts|mts|js|mjs)$/.test(f) && !/\.test\./.test(f));
+  const sources = readdirSync(dir).filter((f) => /\.(ts|mts|js|mjs)$/.test(f) && !/\.(spec|test)\./.test(f));
   assert.ok(sources.includes("register.ts"));
   const cfg = JSON.parse(readFileSync(join(dir, "hooks.json"), "utf8")) as { modules?: string[] };
   assert.deepEqual(cfg.modules, ["./register.ts"]);

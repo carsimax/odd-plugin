@@ -79,7 +79,7 @@ const SWEEP_MAX_ENTRIES = 200;
 /**
  * Deletes tombstones (`.rm-<pid>-<ts>-<id>`) left by a crashed removal. Only real directories (lstat, never symlinks) directly
  * inside the verified real scratch root, whose name carries a timestamp older than maxAgeMs, whose realpath is exactly
- * <realroot>/<name>. Bounded to SWEEP_MAX_ENTRIES inspected entries. Returns how many were removed; never throws.
+ * <realroot>/<name>. Bounded to SWEEP_MAX_ENTRIES tombstone-matching entries per run (other entries never count); ENOENT is ignored silently. Returns how many were removed; never throws.
  */
 export function sweepStaleTombstones(opts = {}, now = Date.now(), maxAgeMs = TOMBSTONE_MAX_AGE_MS) {
     let removed = 0;
@@ -89,10 +89,11 @@ export function sweepStaleTombstones(opts = {}, now = Date.now(), maxAgeMs = TOM
         if (rootStat === undefined || rootStat.isSymbolicLink() || !rootStat.isDirectory())
             return 0;
         const realRoot = realpathSync(root);
-        for (const name of readdirSync(realRoot).slice(0, SWEEP_MAX_ENTRIES)) {
+        const candidates = readdirSync(realRoot).filter((name) => {
             const m = TOMBSTONE_RE.exec(name);
-            if (m === null || now - Number(m[1]) < maxAgeMs)
-                continue;
+            return m !== null && now - Number(m[1]) >= maxAgeMs;
+        });
+        for (const name of candidates.slice(0, SWEEP_MAX_ENTRIES)) {
             const p = join(realRoot, name);
             try {
                 const st = lstatSync(p);
@@ -102,6 +103,9 @@ export function sweepStaleTombstones(opts = {}, now = Date.now(), maxAgeMs = TOM
                 removed++;
             }
             catch (err) {
+                // A concurrent sweep may have removed it already: not worth a log line.
+                if (err.code === "ENOENT")
+                    continue;
                 logError(`scratch sweep skipped ${name}: ${err.message}`, opts);
             }
         }

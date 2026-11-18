@@ -86,7 +86,7 @@ function shippedFiles(dir: string, out: string[] = []): string[] {
 }
 
 test("no shipped file references review tools or an external review binary", () => {
-  const self = join(pluginRoot, "src", "lib", "agents-guard.test.ts");
+  const self = join(pluginRoot, "src", "lib", "agents-guard.spec.ts");
   const forbidden = [
     /odd_review/i,
     /gentle[-_]review/i, // odd-check: allow

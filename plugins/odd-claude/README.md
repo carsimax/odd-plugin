@@ -75,7 +75,7 @@ Memory tools are `mem_*`: `mcp__engram__mem_*` when the engram MCP is configured
 `/odd-claude:4r-review [git range]` (empty = working tree against `HEAD`) runs four independent lens reviewers in parallel via `Agent`: `odd-review-risk` (R1), `odd-review-resilience` (R4), `odd-review-readability` (R2) and `odd-review-reliability` (R3). The skill gathers the diff (it validates a git range argument itself), passes it in each prompt, and merges the findings into one deduplicated, severity-sorted report. It defaults to all four lenses and may skip irrelevant ones, saying so.
 
 - **Advisory only:** the report gates nothing and approves nothing; there is no approval state and no publication gating. It needs no external review binary and no review tools.
-- **Read-only reviewers:** the lens agents allow only `Read`, `Grep`, `Glob` (plus codegraph) and list `Edit`, `Write`, `NotebookEdit` and `Bash` under `disallowedTools`; `src/lib/agents-guard.test.ts` enforces this for them and for the Judgment Day judges.
+- **Read-only reviewers:** the lens agents allow only `Read`, `Grep`, `Glob` (plus codegraph) and list `Edit`, `Write`, `NotebookEdit` and `Bash` under `disallowedTools`; `src/lib/agents-guard.spec.ts` enforces this for them and for the Judgment Day judges.
 - **Judgment Day** (`/odd-claude:judgment-day`) stays independent: two blind judges and at most two fix rounds; it neither requires nor replaces `4r-review`.
 
 ### Subagents cannot ask questions
