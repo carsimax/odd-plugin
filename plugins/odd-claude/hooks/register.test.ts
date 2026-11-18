@@ -86,3 +86,42 @@ test('odd-changes degrades silently: no pane API, git failing', async ($: any, o
   const answer = await $.command.run({ command: 'odd-changes', args: '' } as any);
   expect(answer.text).toBe('Not a git repository; no changes to summarize.');
 });
+
+const PROFILE_FILE = JSON.stringify({ version: 1, sessionId: 'profiles', data: { active: 'economy', routing: { 'odd-explore': { model: 'haiku', effort: 'low' }, 'odd-worker': { model: 'sonnet' }, 'odd-verify': { model: 'evil' } } } });
+
+function spawnSetup($: any, on: any, file: string | undefined) {
+  const seen: any[] = [];
+  on('process.hookEnv', () => ({ value: { CLAUDE_PLUGIN_DATA: '/data' } }));
+  on('fs.read', () => {
+    if (file === undefined) throw new Error('ENOENT');
+    return { value: file };
+  });
+  on('agent.spawn', (_$: any, e: any) => { seen.push(e); return { model: e.model ?? 'inherited', agentId: 'x1' }; });
+  return seen;
+}
+
+test('agent.spawn rewrites the model of an odd-claude agent from the active profile', async ($: any, on: any) => {
+  const seen = spawnSetup($, on, PROFILE_FILE);
+  const r = await $.agent.spawn({ prompt: 'look around', subagentType: 'odd-claude:odd-explore' } as any);
+  expect(seen.length).toBe(1);
+  expect(seen[0].model).toBe('haiku');
+  expect(seen[0].prompt).toBe('look around');
+  expect(r.deny).toBe(undefined);
+});
+
+test('agent.spawn leaves other agents, unknown roles, bad models and a missing profile untouched, and never refuses', async ($: any, on: any) => {
+  const seen = spawnSetup($, on, PROFILE_FILE);
+  for (const subagentType of ['general-purpose', 'other-plugin:odd-explore', 'odd-claude:odd-unknown', 'odd-claude:odd-verify']) {
+    const r = await $.agent.spawn({ prompt: 'x', subagentType, model: 'opus' } as any);
+    expect(r.deny).toBe(undefined);
+  }
+  expect(seen.map((e: any) => e.model)).toEqual(['opus', 'opus', 'opus', 'opus']);
+});
+
+test('agent.spawn with no profile file or unreadable state passes the spawn through', async ($: any, on: any) => {
+  const seen = spawnSetup($, on, undefined);
+  const r = await $.agent.spawn({ prompt: 'x', subagentType: 'odd-claude:odd-worker' } as any);
+  expect(seen.length).toBe(1);
+  expect(seen[0].model).toBe(undefined);
+  expect(r.deny).toBe(undefined);
+});

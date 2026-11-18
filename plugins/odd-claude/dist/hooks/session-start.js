@@ -10,6 +10,8 @@ import { titleSequence } from "../lib/terminal.js";
 import { refreshStatuslineShim } from "../lib/setup-fs.js";
 import { bannerEnabled, bannerText } from "../lib/banner.js";
 import { pluginVersion } from "../lib/version.js";
+import { profileContextLine } from "../lib/profiles.js";
+import { recordTranscriptPath } from "../lib/stats.js";
 /**
  * Records the session start in state (when a session id and data dir exist) and injects the
  * odd-claude context (persona, delegation mode, cards dir, reply-language rule) as additionalContext.
@@ -28,6 +30,7 @@ export function sessionStart(input, opts = {}) {
             // no data dir: the context must still be injected
         }
     }
+    recordTranscriptPath(input, opts);
     const env = opts.env ?? process.env;
     // After a plugin update the root moves: keep an existing statusLine shim (see /odd-claude:setup) pointing at it.
     const shimData = opts.dataDir ?? env.CLAUDE_PLUGIN_DATA;
@@ -54,7 +57,7 @@ export function sessionStart(input, opts = {}) {
         delegationMode: readDelegationMode(opts),
         cardsDir: resolveCardsDir(env),
         backgroundSubagents: readBackgroundSubagents(opts),
-        extraLines: [...scratchLines, ...extraLines],
+        extraLines: [...scratchLines, ...extraLines, ...[profileContextLine(opts)].filter((l) => l !== undefined)],
     });
     const out = { hookSpecificOutput: { hookEventName: "SessionStart", additionalContext }, terminalSequence: titleSequence(typeof input.cwd === "string" ? input.cwd : undefined) };
     // R45: the banner is a user-facing systemMessage (never model context), only on a fresh startup, opt-out via env or state.

@@ -122,12 +122,20 @@ test("the mod source never hooks prompt/tool events nor returns a decision (S2)"
   assert.ok(sources.includes("register.ts"));
   const cfg = JSON.parse(readFileSync(join(dir, "hooks.json"), "utf8")) as { modules?: string[] };
   assert.deepEqual(cfg.modules, ["./register.ts"]);
-  const bad = new RegExp(["\\bde" + "ny\\b", "\\bdeci" + "sion\\b", "tool\\.ch" + "eck", "tool\\.ca" + "ll", "prompt\\.", "agent\\.sp" + "awn", "\\bblo" + "ck\\b", "continue\\s*:\\s*false", "stopReason", "\\bas" + "k\\b"].join("|"));
+  const bad = new RegExp(["\\bde" + "ny\\b", "\\bdeci" + "sion\\b", "tool\\.ch" + "eck", "tool\\.ca" + "ll", "prompt\\.", "\\bblo" + "ck\\b", "continue\\s*:\\s*false", "stopReason", "\\bas" + "k\\b"].join("|"));
   for (const f of sources) {
     const text = readFileSync(join(dir, f), "utf8");
     assert.doesNotMatch(text, bad, f);
+    // the one routing hook (R40, agent.spawn) may only continue with next(...): it never refuses a spawn
+    const start = text.indexOf("on('agent.spawn'");
+    assert.ok(start >= 0, f);
+    const body = text.slice(start, text.indexOf("\n  on(", start + 1));
+    const returns = body.match(/\breturn\b[^;]*;/g) ?? [];
+    assert.ok(returns.length >= 1);
+    for (const r of returns) assert.match(r, /^return next\(/, r);
+    assert.doesNotMatch(body, /reject|throw/, f);
     // every hook it registers is one of its own advisory surfaces
     const events = [...text.matchAll(/\bon\(\s*'([a-z.]+)'/g)].map((m) => m[1]).sort();
-    assert.deepEqual(events, ["command.run", "command.run", "session.start", "ui.close", "ui.render", "ui.render"], f);
+    assert.deepEqual(events, ["agent.spawn", "command.run", "command.run", "session.start", "ui.close", "ui.render", "ui.render"], f);
   }
 });

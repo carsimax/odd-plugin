@@ -1,7 +1,8 @@
 // odd-claude mod (R09): optional live subagents pane. Everything here is an enhancement over the command hooks:
 // the plugin works without it (mods off, `-p`, safe mode) and `/odd-claude:agents` prints the same table.
-// Rules: the mod never touches the prompt or tool calls, only answers its own command and pane, and any
-// missing API degrades silently. The table format mirrors src/lib/subagents.ts renderSubagents.
+// Rules: the mod never touches the prompt or tool calls, only answers its own commands and panes, and any
+// missing API degrades silently. The one routing hook is the spawn hook of R40: it only ever rewrites `model`
+// of an odd-claude agent from the active profile and always continues with next(...); it never refuses a spawn. The table format mirrors src/lib/subagents.ts renderSubagents.
 // Only static relative imports are allowed in a mod, so the formatters are repeated below.
 // `/odd-changes` (R46) opens a pane with the working-tree summary of src/lib/changes.ts (git status + diff --stat,
 // read-only, bounded timeout), refreshed on a timer; `/odd-claude:changes` prints the same text without mods.
@@ -12,6 +13,9 @@ const COMMAND = 'odd-agents';
 const PANE = 'odd-agents';
 const CHANGES_COMMAND = 'odd-changes';
 const CHANGES_PANE = 'odd-changes';
+const ROLE_PREFIX = 'odd-claude:';
+const ROLES = ['odd-explore', 'odd-verify', 'odd-worker', 'odd-jd-fix', 'odd-jd-judge-a', 'odd-jd-judge-b', 'odd-review-readability', 'odd-review-reliability', 'odd-review-resilience', 'odd-review-risk'];
+const MODELS = ['haiku', 'sonnet', 'opus'];
 const NOT_A_REPO = 'Not a git repository; no changes to summarize.';
 
 function duration(ms: number): string {
@@ -104,6 +108,24 @@ async function load($: any): Promise<Rec[]> {
   }
 }
 
+// R40: model of an odd-claude agent from <data>/profiles.json (written by /odd-claude:profiles, same whitelist
+// as src/lib/profiles.ts); undefined = no profile, not ours or anything unreadable, i.e. leave the spawn alone.
+export async function routedModel($: any, subagentType: unknown): Promise<string | undefined> {
+  try {
+    if (typeof subagentType !== 'string' || !subagentType.startsWith(ROLE_PREFIX)) return undefined;
+    const role = subagentType.slice(ROLE_PREFIX.length);
+    if (!ROLES.includes(role)) return undefined;
+    const env = await $.process.hookEnv();
+    const dir = env?.CLAUDE_PLUGIN_DATA;
+    if (typeof dir !== 'string' || dir === '') return undefined;
+    const raw = JSON.parse(await $.fs.read(`${dir}/profiles.json`));
+    const model = raw?.version === 1 ? raw?.data?.routing?.[role]?.model : undefined;
+    return typeof model === 'string' && MODELS.includes(model) ? model : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 export function register(on: any) {
   let timer: any;
   let changesTimer: any;
@@ -164,6 +186,12 @@ export function register(on: any) {
     const { Box, Text } = $.ui.resolve(e);
     const lines = tableLines(await load($), Date.now());
     return Box({ key: 'root' }, ...lines.map((l, i) => Text({ key: `l${i}` }, l)));
+  });
+
+  on('agent.spawn', async ($: any, e: any, next: any) => {
+    const model = e?.fork === true ? undefined : await routedModel($, e?.subagentType);
+    if (model === undefined) return next(e);
+    return next({ ...e, model });
   });
 
   on('ui.close', async ($: any, e: any, next: any) => {
