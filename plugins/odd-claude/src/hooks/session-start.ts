@@ -8,6 +8,8 @@ import { recordAgentStatus } from "../lib/agent-status.js";
 import { createSessionScratch, sweepStaleTombstones } from "../lib/scratch.js";
 import { titleSequence } from "../lib/terminal.js";
 import { refreshStatuslineShim } from "../lib/setup-fs.js";
+import { bannerEnabled, bannerText } from "../lib/banner.js";
+import { pluginVersion } from "../lib/version.js";
 import type { HookInput, HookOutput } from "./run.js";
 
 /**
@@ -58,5 +60,14 @@ export function sessionStart(input: HookInput, opts: StateOptions = {}): HookOut
     backgroundSubagents: readBackgroundSubagents(opts),
     extraLines: [...scratchLines, ...extraLines],
   });
-  return { hookSpecificOutput: { hookEventName: "SessionStart", additionalContext }, terminalSequence: titleSequence(typeof input.cwd === "string" ? input.cwd : undefined) };
+  const out: HookOutput = { hookSpecificOutput: { hookEventName: "SessionStart", additionalContext }, terminalSequence: titleSequence(typeof input.cwd === "string" ? input.cwd : undefined) };
+  // R45: the banner is a user-facing systemMessage (never model context), only on a fresh startup, opt-out via env or state.
+  if (input.source === "startup" && bannerEnabled(opts)) {
+    try {
+      out.systemMessage = bannerText(pluginVersion());
+    } catch {
+      // no version: no banner
+    }
+  }
+  return out;
 }

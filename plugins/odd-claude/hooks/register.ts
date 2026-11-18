@@ -2,12 +2,17 @@
 // the plugin works without it (mods off, `-p`, safe mode) and `/odd-claude:agents` prints the same table.
 // Rules: the mod never touches the prompt or tool calls, only answers its own command and pane, and any
 // missing API degrades silently. The table format mirrors src/lib/subagents.ts renderSubagents.
-// Only static relative imports are allowed in a mod, so the formatter is repeated below.
+// Only static relative imports are allowed in a mod, so the formatters are repeated below.
+// `/odd-changes` (R46) opens a pane with the working-tree summary of src/lib/changes.ts (git status + diff --stat,
+// read-only, bounded timeout), refreshed on a timer; `/odd-claude:changes` prints the same text without mods.
 
 type Rec = { id: string; type: string; startedAt?: number; endedAt?: number };
 
 const COMMAND = 'odd-agents';
 const PANE = 'odd-agents';
+const CHANGES_COMMAND = 'odd-changes';
+const CHANGES_PANE = 'odd-changes';
+const NOT_A_REPO = 'Not a git repository; no changes to summarize.';
 
 function duration(ms: number): string {
   const s = Math.floor(Math.max(0, ms) / 1000);
@@ -35,6 +40,55 @@ export function tableLines(records: Rec[], now: number): string[] {
   return [...lines, `${records.length} subagent${records.length === 1 ? '' : 's'} (${running} running)`];
 }
 
+// eslint-disable-next-line no-control-regex
+const CONTROL = /[\u0000-\u001f\u007f-\u009f\u200e\u200f\u061c\u2028\u2029\u202a-\u202e\u2066-\u2069]/g;
+const clean = (s: string) => s.replace(CONTROL, '').trim().slice(0, 200);
+
+export function summarizeChanges(statusZ: string, stat: string | undefined): string {
+  const tokens = statusZ.split('\0');
+  let branch = '';
+  const entries: string[] = [];
+  let untracked = 0;
+  for (let i = 0; i < tokens.length; i++) {
+    const t = tokens[i];
+    if (t === '') continue;
+    if (t.startsWith('## ')) {
+      branch = clean(t.slice(3).split('...')[0].replace(/^No commits yet on /, '').replace(/^Initial commit on /, ''));
+      continue;
+    }
+    const code = t.slice(0, 2);
+    const path = clean(t.slice(3));
+    if (code === '??') untracked++;
+    if (/[RC]/.test(code)) entries.push(`${code} ${clean(tokens[++i] ?? '')} -> ${path}`);
+    else entries.push(`${code} ${path}`);
+  }
+  const head = `odd-claude changes${branch === '' ? '' : ` · branch ${branch}`}`;
+  if (entries.length === 0) return `${head}\nWorking tree clean.`;
+  const out = [head, ...entries.slice(0, 50)];
+  if (entries.length > 50) out.push(`… and ${entries.length - 50} more`);
+  out.push(`${entries.length} changed, ${untracked} untracked`);
+  const lines = (stat ?? '').split('\n').map(clean).filter((l) => l !== '');
+  const statLines = lines.length <= 40 ? lines : [...lines.slice(0, 39), '…', lines[lines.length - 1]];
+  if (statLines.length > 0) out.push('', ...statLines);
+  return out.join('\n');
+}
+
+async function git($: any, args: string[]): Promise<string | undefined> {
+  try {
+    const r = await $.process.run(['git', '-c', 'core.fsmonitor=false', '-c', 'core.quotepath=false', ...args], { timeoutMs: 5000 });
+    return r && r.exitCode === 0 && typeof r.stdout === 'string' ? r.stdout : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+async function changesText($: any): Promise<string> {
+  const status = await git($, ['status', '--porcelain=v1', '-z', '--branch']);
+  if (status === undefined) return NOT_A_REPO;
+  const stat = (await git($, ['diff', '--stat', '--no-color', 'HEAD'])) ?? (await git($, ['diff', '--stat', '--no-color']));
+  return summarizeChanges(status, stat);
+}
+
 async function load($: any): Promise<Rec[]> {
   try {
     const env = await $.process.hookEnv();
@@ -52,12 +106,26 @@ async function load($: any): Promise<Rec[]> {
 
 export function register(on: any) {
   let timer: any;
+  let changesTimer: any;
+  const cancel = (t: any) => {
+    try {
+      if (typeof t === 'function') t();
+      else t?.cancel?.();
+    } catch {
+      // ignore
+    }
+  };
 
   on('session.start', async ($: any, e: any, next: any) => {
     try {
       await $.command.register({ name: COMMAND, description: 'Live pane of this session\'s subagents (odd-claude)' });
     } catch {
       // API missing: the /odd-claude:agents skill is the fallback
+    }
+    try {
+      await $.command.register({ name: CHANGES_COMMAND, description: 'Working-tree changes pane (odd-claude)' });
+    } catch {
+      // API missing: the /odd-claude:changes skill is the fallback
     }
     return next(e);
   });
@@ -73,6 +141,24 @@ export function register(on: any) {
     return { text };
   }).catch(() => ({ text: 'odd-agents: unavailable (see /odd-claude:agents)' }));
 
+  on('command.run', { command: CHANGES_COMMAND }, async ($: any) => {
+    const text = await changesText($);
+    try {
+      await $.ui.open({ id: CHANGES_PANE, title: 'odd changes', focus: true, closeOnEscape: true });
+      if (changesTimer === undefined) changesTimer = $.clock.every(5000, () => $.ui.invalidate('ui.render'));
+    } catch {
+      // no panes here: the text answer below is the whole output
+    }
+    return { text };
+  }).catch(() => ({ text: 'odd-changes: unavailable (see /odd-claude:changes)' }));
+
+  on('ui.render', { component: 'Pane' }, async ($: any, e: any, next: any) => {
+    if (e.requestId !== CHANGES_PANE) return next(e);
+    const { Box, Text } = $.ui.resolve(e);
+    const lines = (await changesText($)).split('\n');
+    return Box({ key: 'root' }, ...lines.map((l, i) => Text({ key: `l${i}` }, l)));
+  });
+
   on('ui.render', { component: 'Pane' }, async ($: any, e: any, next: any) => {
     if (e.requestId !== PANE) return next(e);
     const { Box, Text } = $.ui.resolve(e);
@@ -82,13 +168,12 @@ export function register(on: any) {
 
   on('ui.close', async ($: any, e: any, next: any) => {
     if (e?.id === PANE || e?.requestId === PANE) {
-      try {
-        if (typeof timer === 'function') timer();
-        else timer?.cancel?.();
-      } catch {
-        // ignore
-      }
+      cancel(timer);
       timer = undefined;
+    }
+    if (e?.id === CHANGES_PANE || e?.requestId === CHANGES_PANE) {
+      cancel(changesTimer);
+      changesTimer = undefined;
     }
     return next(e);
   }).catch(($: any, e: any, next: any) => (next.called ? undefined : next(e)));

@@ -102,6 +102,20 @@ test("admission cards and the Judgment Day skill state their rules without claim
   }
 });
 
+test("SessionStart with the banner on carries only a systemMessage on top of the context: no decision, block or continue:false",  () => {
+  const dir = mkdtempSync(join(tmpdir(), "odd-nodeny-banner-"));
+  try {
+    const r = runHook("SessionStart", JSON.stringify({ session_id: "s", source: "startup", cwd: "/w/p" }), { dataDir: dir, env: {} });
+    assert.equal(r.exitCode, 0);
+    const out = JSON.parse(r.stdout) as Record<string, unknown>;
+    assert.deepEqual(Object.keys(out).sort(), ["hookSpecificOutput", "systemMessage", "terminalSequence"]);
+    assert.doesNotMatch(r.stdout, FORBIDDEN);
+    for (const k of ["decision", "continue", "stopReason", "permissionDecision", "reason"]) assert.equal(Object.hasOwn(out, k), false, k);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test("the mod source never hooks prompt/tool events nor returns a decision (S2)", () => {
   const dir = join(root, "hooks");
   const sources = readdirSync(dir).filter((f) => /\.(ts|mts|js|mjs)$/.test(f) && !/\.(spec|test)\./.test(f));
@@ -114,6 +128,6 @@ test("the mod source never hooks prompt/tool events nor returns a decision (S2)"
     assert.doesNotMatch(text, bad, f);
     // every hook it registers is one of its own advisory surfaces
     const events = [...text.matchAll(/\bon\(\s*'([a-z.]+)'/g)].map((m) => m[1]).sort();
-    assert.deepEqual(events, ["command.run", "session.start", "ui.close", "ui.render"], f);
+    assert.deepEqual(events, ["command.run", "command.run", "session.start", "ui.close", "ui.render", "ui.render"], f);
   }
 });
