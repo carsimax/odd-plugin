@@ -4,7 +4,8 @@ import { mkdtempSync, rmSync, readFileSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
-import { runHook, type Handlers } from "./run.js";
+import { defaultHandlers, runHook, type Handlers } from "./run.js";
+import { writePersona } from "../lib/persona.js";
 import { readSessionState } from "../lib/state.js";
 
 const runJs = new URL("./run.js", import.meta.url).pathname;
@@ -69,7 +70,7 @@ test("invalid stdin JSON fails safe and is logged", () => {
   }
 });
 
-test("CLI: SessionStart fixture records session start in state, no stdout", () => {
+test("CLI: SessionStart fixture records session start in state and emits context", () => {
   const dir = tmp();
   try {
     const r = spawnSync(process.execPath, [runJs, "SessionStart"], {
@@ -78,7 +79,9 @@ test("CLI: SessionStart fixture records session start in state, no stdout", () =
       encoding: "utf8",
     });
     assert.equal(r.status, 0);
-    assert.equal(r.stdout, "");
+    const out = JSON.parse(r.stdout);
+    assert.equal(out.hookSpecificOutput.hookEventName, "SessionStart");
+    assert.match(out.hookSpecificOutput.additionalContext, /Persona mode: mentor/);
     const state = readSessionState("sess-1", { dataDir: dir });
     assert.equal(typeof state.startedAt, "string");
     assert.equal(state.source, "startup");
@@ -95,5 +98,48 @@ test("CLI: unknown event and missing data dir exit 0", () => {
   assert.equal(a.stdout, "");
   const b = spawnSync(process.execPath, [runJs, "SessionStart"], { input: '{"session_id":"x"}', env, encoding: "utf8" });
   assert.equal(b.status, 0);
-  assert.equal(b.stdout, "");
+  // no data dir: state is skipped, the context still goes out with the default persona
+  assert.match(JSON.parse(b.stdout).hookSpecificOutput.additionalContext, /Persona mode: mentor/);
+});
+
+test("SessionStart context follows the stored persona and covers every source", () => {
+  const dir = tmp();
+  try {
+    writePersona("neutral", { dataDir: dir });
+    for (const source of ["startup", "resume", "clear", "compact", undefined]) {
+      const r = runHook("SessionStart", JSON.stringify({ session_id: "s", source }), { dataDir: dir, env: { CLAUDE_PLUGIN_ROOT: "/r/odd" } });
+      const ctx = JSON.parse(r.stdout).hookSpecificOutput.additionalContext as string;
+      assert.match(ctx, /Persona mode: neutral/);
+      assert.match(ctx, /\/r\/odd\/cards/);
+      assert.ok(ctx.length < 10000);
+    }
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("UserPromptSubmit emits a bounded language anchor for human prompts only", () => {
+  const dir = tmp();
+  try {
+    const r = runHook("UserPromptSubmit", JSON.stringify({ session_id: "s", prompt: "hola, qué tal" }), { dataDir: dir });
+    const out = JSON.parse(r.stdout).hookSpecificOutput;
+    assert.equal(out.hookEventName, "UserPromptSubmit");
+    assert.match(out.additionalContext, /"hola, qué tal"/);
+    assert.deepEqual(runHook("UserPromptSubmit", JSON.stringify({ prompt: "/odd-claude:status" }), { dataDir: dir }), { exitCode: 0, stdout: "" });
+    assert.deepEqual(runHook("UserPromptSubmit", "{}", { dataDir: dir }), { exitCode: 0, stdout: "" });
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("hooks.json registers exactly the default handlers via the run.js dispatcher", () => {
+  const raw = JSON.parse(readFileSync(new URL("../../hooks/hooks.json", import.meta.url), "utf8")) as {
+    hooks: Record<string, { hooks: { type: string; command: string }[] }[]>;
+  };
+  assert.deepEqual(Object.keys(raw.hooks).sort(), Object.keys(defaultHandlers).sort());
+  for (const [event, groups] of Object.entries(raw.hooks)) {
+    const cmds = groups.flatMap((g) => g.hooks.map((h) => h.command));
+    assert.deepEqual(cmds, [`node "\${CLAUDE_PLUGIN_ROOT}/dist/hooks/run.js" ${event}`]);
+  }
+  assert.ok(!JSON.stringify(raw).includes("prompt.compose"));
 });

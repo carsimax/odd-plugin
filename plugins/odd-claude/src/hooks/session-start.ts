@@ -1,17 +1,33 @@
 import { updateSessionState, type StateOptions } from "../lib/state.js";
-import type { HookInput } from "./run.js";
+import { buildSessionContext, readDelegationMode, resolveCardsDir } from "../lib/context.js";
+import { readPersona } from "../lib/persona.js";
+import type { HookInput, HookOutput } from "./run.js";
 
-/** Records the session start in state; emits no output (no context policy yet). */
-export function sessionStart(input: HookInput, opts: StateOptions = {}): undefined {
-  if (typeof input.session_id !== "string" || input.session_id === "") return undefined;
-  updateSessionState(
-    input.session_id,
-    (s) => ({
-      ...s,
-      startedAt: new Date().toISOString(),
-      source: typeof input.source === "string" ? input.source : null,
-    }),
-    opts,
-  );
-  return undefined;
+/**
+ * Records the session start in state (when a session id and data dir exist) and injects the
+ * odd-claude context (persona, delegation mode, cards dir, reply-language rule) as additionalContext.
+ * Runs for every source (startup, resume, clear, compact).
+ */
+export function sessionStart(input: HookInput, opts: StateOptions = {}): HookOutput {
+  if (typeof input.session_id === "string" && input.session_id !== "") {
+    try {
+      updateSessionState(
+        input.session_id,
+        (s) => ({
+          ...s,
+          startedAt: new Date().toISOString(),
+          source: typeof input.source === "string" ? input.source : null,
+        }),
+        opts,
+      );
+    } catch {
+      // no data dir: the context must still be injected
+    }
+  }
+  const additionalContext = buildSessionContext({
+    persona: readPersona(opts),
+    delegationMode: readDelegationMode(opts),
+    cardsDir: resolveCardsDir(opts.env ?? process.env),
+  });
+  return { hookSpecificOutput: { hookEventName: "SessionStart", additionalContext } };
 }

@@ -5,6 +5,7 @@ import { readFileSync, realpathSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { logError, type StateOptions } from "../lib/state.js";
 import { sessionStart } from "./session-start.js";
+import { userPromptSubmit } from "./user-prompt-submit.js";
 
 export interface HookInput {
   session_id?: string;
@@ -19,6 +20,7 @@ export type Handlers = Record<string, Handler>;
 /** Registered events. Keep minimal: hooks/hooks.json must list exactly these. */
 export const defaultHandlers: Handlers = {
   SessionStart: sessionStart,
+  UserPromptSubmit: userPromptSubmit,
 };
 
 export interface RunOptions extends StateOptions {
