@@ -3,6 +3,7 @@
 // Layout: <dataDir>/sessions/<session>.json  and  <dataDir>/logs/hooks.log
 import { appendFileSync, chmodSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
+import { acquireLock, releaseLock } from "./lock.js";
 export const STATE_SCHEMA_VERSION = 1;
 export function resolveDataDir(opts = {}) {
     const dir = opts.dataDir ?? (opts.env ?? process.env).CLAUDE_PLUGIN_DATA;
@@ -65,10 +66,34 @@ export function writePluginState(name, data, opts = {}) {
     const body = { version: STATE_SCHEMA_VERSION, sessionId: name, data };
     atomicWriteFile(join(resolveDataDir(opts), `${safeSegment(name)}.json`), JSON.stringify(body, null, 2) + "\n");
 }
+const LOCK_WAIT_MS = 1000;
+const LOCK_STALE_MS = 2000;
+function sleepSync(ms) {
+    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+}
+/**
+ * Read-modify-write under a short cross-process lock (`<session>.json.lock`, shared lock.ts semantics), so parallel
+ * hook processes neither lose counts nor double-fire a once-per-turn notice. Spins up to ~1s; on timeout it throws
+ * and the caller (run.js) fails open: no output, nothing blocked. Returning the same object skips the write.
+ */
 export function updateSessionState(sessionId, update, opts = {}) {
-    const next = update(readSessionState(sessionId, opts));
-    writeSessionState(sessionId, next, opts);
-    return next;
+    const lock = `${sessionStatePath(sessionId, opts)}.lock`;
+    const deadline = Date.now() + LOCK_WAIT_MS;
+    while (!acquireLock(lock, process.pid, { staleMs: LOCK_STALE_MS })) {
+        if (Date.now() >= deadline)
+            throw new Error("session state lock timeout");
+        sleepSync(5);
+    }
+    try {
+        const current = readSessionState(sessionId, opts);
+        const next = update(current);
+        if (next !== current)
+            writeSessionState(sessionId, next, opts);
+        return next;
+    }
+    finally {
+        releaseLock(lock, process.pid);
+    }
 }
 /** Appends one line to <dataDir>/logs/hooks.log. Never throws. */
 export function logError(message, opts = {}) {

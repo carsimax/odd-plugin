@@ -5,7 +5,7 @@
 // (input + cache_creation + cache_read tokens = the prompt the model just saw), or, when no usage line is in
 // the tail, a heuristic of file bytes / 4. The window size is unknown, so only the absolute cap applies.
 import { closeSync, fstatSync, openSync, readSync, statSync } from "node:fs";
-import { readSessionState, updateSessionState } from "./state.js";
+import { updateSessionState } from "./state.js";
 export const CONTEXT_BACKSTOP_TOKENS = 150_000;
 export const CONTEXT_BACKSTOP_TOKENS_ENV = "ODD_CLAUDE_CONTEXT_BACKSTOP_TOKENS";
 /** Rough tokens-per-byte for the size fallback (the transcript also carries JSON overhead, so it overestimates). */
@@ -16,6 +16,8 @@ export function contextBackstopThreshold(env = process.env) {
     return Number.isFinite(v) && v > 0 ? v : CONTEXT_BACKSTOP_TOKENS;
 }
 function tail(path) {
+    if (!statSync(path).isFile())
+        return undefined; // a FIFO or device would hang openSync / block reads
     const fd = openSync(path, "r");
     try {
         const size = fstatSync(fd).size;
@@ -57,6 +59,8 @@ function lastUsageTokens(path) {
 /** Context tokens for a transcript path; undefined when unreadable. `measured` is true for a real usage figure. */
 export function measureContext(path) {
     try {
+        if (!statSync(path).isFile())
+            return undefined;
         const real = lastUsageTokens(path);
         if (real !== undefined)
             return { tokens: real, measured: true };
@@ -88,14 +92,20 @@ export function checkContextBackstop(sessionId, transcriptPath, fullDelegation, 
     if (!m)
         return undefined;
     const threshold = contextBackstopThreshold(env);
-    const notified = readSessionState(sessionId, opts).contextBackstop === true;
     if (m.tokens < threshold) {
-        if (notified && m.measured)
-            updateSessionState(sessionId, (s) => ({ ...s, contextBackstop: false }), opts);
+        // re-arm only on a measured reading; no write when already disarmed
+        if (m.measured)
+            updateSessionState(sessionId, (s) => (s.contextBackstop === true ? { ...s, contextBackstop: false } : s), opts);
         return undefined;
     }
-    if (notified)
+    let fire = false;
+    updateSessionState(sessionId, (s) => {
+        if (s.contextBackstop === true)
+            return s;
+        fire = true;
+        return { ...s, contextBackstop: true };
+    }, opts);
+    if (!fire)
         return undefined;
-    updateSessionState(sessionId, (s) => ({ ...s, contextBackstop: true }), opts);
     return contextBackstopNotice(m.tokens, threshold, m.measured, fullDelegation);
 }

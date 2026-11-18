@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { mkdtempSync, rmSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { spawnSync } from "node:child_process";
+import { execFileSync, spawn, spawnSync } from "node:child_process";
 import { runHook } from "./run.js";
 import { writeDelegationMode } from "../lib/context.js";
 import { readSessionState } from "../lib/state.js";
@@ -226,6 +226,75 @@ test("CLI: PostToolUse fixture exits 0 with advisory-only JSON; hooks.json regis
     assert.ok(!m.test("Bash"));
     assert.ok((g.hooks[0].timeout ?? 999) <= 10);
     assert.match(g.hooks[0].command, /run\.js" PostToolUse$/);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("F2: a FIFO transcript_path is ignored without hanging", () => {
+  const dir = tmp();
+  try {
+    const fifo = join(dir, "fifo");
+    execFileSync("mkfifo", [fifo]);
+    const t0 = Date.now();
+    const r = spawnSync(process.execPath, [runJs, "PostToolUse"], {
+      input: JSON.stringify({ session_id: "f1", tool_name: "Bash", tool_response: "x", transcript_path: fifo }),
+      env: { ...process.env, CLAUDE_PLUGIN_DATA: dir },
+      encoding: "utf8",
+      timeout: 2000,
+    });
+    assert.equal(r.status, 0);
+    assert.equal(r.stdout, "");
+    assert.ok(Date.now() - t0 < 1000, `took ${Date.now() - t0} ms`);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("backstop reads only the transcript tail: an old usage line is not used", () => {
+  const dir = tmp();
+  try {
+    const p = join(dir, "big.jsonl");
+    writeFileSync(p, JSON.stringify(usageLine(999_999)) + "\n" + "p".repeat(640_000) + "\n");
+    const out = ctxOf(post(dir, { tool_name: "Bash", tool_response: "x", transcript_path: p }));
+    assert.match(out, /estimated at 160,0\d\d tokens/);
+    assert.ok(!out.includes("999,999"));
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("backstop never leaks transcript content into the notice", () => {
+  const dir = tmp();
+  try {
+    const t = transcript(dir, [
+      { type: "user", message: { role: "user", content: "SECRET_X" } },
+      { type: "assistant", message: { role: "assistant", content: [{ type: "text", text: "SECRET_X" }], usage: usageLine(160_000).message.usage } },
+    ]);
+    const r = post(dir, { tool_name: "Bash", tool_response: "x", transcript_path: t });
+    assert.match(ctxOf(r), /Context backstop/);
+    assert.ok(!r.stdout.includes("SECRET_X"));
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("F1: 10 parallel PostToolUse processes count exactly and notify exactly once", async () => {
+  const dir = tmp();
+  try {
+    const input = JSON.stringify({ session_id: "par", tool_name: "Read", tool_response: "x" });
+    const runOne = () =>
+      new Promise<string>((resolve, reject) => {
+        const c = spawn(process.execPath, [runJs, "PostToolUse"], { env: { ...process.env, CLAUDE_PLUGIN_DATA: dir } });
+        let out = "";
+        c.stdout.on("data", (d) => (out += d));
+        c.on("error", reject);
+        c.on("close", (code) => (code === 0 ? resolve(out) : reject(new Error(`exit ${code}`))));
+        c.stdin.end(input);
+      });
+    const outs = await Promise.all(Array.from({ length: 10 }, runOne));
+    assert.equal(outs.filter((o) => o.includes("Exploration budget")).length, 1);
+    assert.equal((readSessionState("par", { dataDir: dir }).exploration as { lookups: number }).lookups, 10);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
