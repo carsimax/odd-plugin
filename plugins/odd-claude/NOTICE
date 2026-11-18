@@ -29,3 +29,13 @@ naming for Claude Code and set `metadata.author` to odd-claude.
 Changes are made without warranty; the Apache-2.0 text applies to those files
 only as stated above. The tui-design skill is original text with its own
 attribution in skills/tui-design/NOTICE.md.
+
+Ported review agents and chain (MIT License)
+--------------------------------------------
+The agents odd-review-risk, odd-review-resilience, odd-review-readability and
+odd-review-reliability and the skill 4r-review are adapted from the upstream
+review lens agents and the 4R review chain (MIT License, same project as
+above). odd-claude removed the upstream review tools and lineage machinery,
+passes the candidate change in the prompt, and restricts the agents to
+Read, Grep and Glob. The checklists, severity scale and finding format keep
+the upstream wording where possible.

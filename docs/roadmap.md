@@ -213,7 +213,7 @@ Excluded rows (every other matrix ID is in a phase above, v2 included). Out-of-s
 | 1 | Skeleton, setup, doctor, engram | Q2, Q6 | v0.1 | done (v0.1, branch feat/v0.1-skeleton) |
 | 2 | Core declarative layer | Phase 1; Q2, Q3, Q6 | v0.2 | done (v0.2, branch feat/v0.2-core) |
 | 3 | Coordinator, advisory budget, permission modes (no deny hooks) | Phase 2; Q3 | v0.5 | done (v0.5, branch feat/v0.5-guards) |
-| 4 | Advisory review (agents) | Phases 1–3 | v0.8 | not started |
+| 4 | Advisory review (agents) | Phases 1–3 | v0.8 | done (v0.8, branch feat/v0.8-review) |
 | 5 | Mods UX (optional) | Phase 2; Q1, Q7 | v1.1 | not started |
 | 6 | Web tools | Phase 2 | v1.2 | not started |
 | 7 | Cosmetic and small | Phase 1 | v1.0 | not started |

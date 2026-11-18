@@ -7,8 +7,8 @@ A Claude Code plugin that ports the ODD harness of gentle-shell (MIT) <!-- odd-c
 - **Persona / output style `odd`** (`output-styles/odd.md`, `force-for-plugin: true`, so no `/setup` is needed). SessionStart and UserPromptSubmit hooks add `additionalContext` with the rest of the prompt and the path of the cards. Replies follow the user's language.
 - **Persona modes**: `/odd-claude:persona [mentor|neutral]` stores the mode in the plugin data dir; it applies from the next session start (or `/clear`).
 - **Cards** (`cards/*.md`): orchestrator rules loaded on demand (delegation, tracking, verification, memory, skills, prompts, writer, quota recovery), with tool names mapped to Claude Code (`Agent`, `TodoWrite`, `AskUserQuestion`, `Bash` with `run_in_background`, `Monitor`, worktree tools). See `cards/SOURCES.md`.
-- **Agents** (listed as `odd-claude:<agent>`): `odd-explore` (read-only), `odd-verify` (runs checks), `odd-worker` (scoped writer), `odd-jd-fix`, `odd-jd-judge-a`, `odd-jd-judge-b` (Judgment Day).
-- **Skills** (`odd-claude:<skill>`): `odd`, `branch-pr`, `chained-pr`, `cognitive-doc-design`, `comment-writer`, `issue-creation`, `judgment-day`, `skill-creator`, `skill-creation`, `skill-improver`, `skill-registry`, `tui-design`, `ui-design`, `work-unit-commits`, plus the commands `doctor`, `status`, `setup`, `persona`, `background-subagents`, `coordinator`.
+- **Agents** (listed as `odd-claude:<agent>`): `odd-explore` (read-only), `odd-verify` (runs checks), `odd-worker` (scoped writer), `odd-jd-fix`, `odd-jd-judge-a`, `odd-jd-judge-b` (Judgment Day), and the four advisory review lenses `odd-review-risk`, `odd-review-resilience`, `odd-review-readability`, `odd-review-reliability`.
+- **Skills** (`odd-claude:<skill>`): `odd`, `branch-pr`, `chained-pr`, `cognitive-doc-design`, `comment-writer`, `issue-creation`, `judgment-day`, `skill-creator`, `skill-creation`, `skill-improver`, `skill-registry`, `tui-design`, `ui-design`, `work-unit-commits`, `4r-review`, plus the commands `doctor`, `status`, `setup`, `persona`, `background-subagents`, `coordinator`.
 - **Support docs** (`support/`): test-first policy and the `odd/tasks/<feature>.md` format. **Sounds**: `assets/sounds/` (original tones, see its LICENSE).
 
 ### Background subagents
@@ -46,6 +46,14 @@ When trusted and an index exists, SessionStart syncs it. Repeated starts do not 
 ### Engram tool names
 
 Memory tools are `mem_*`: `mcp__engram__mem_*` when the engram MCP is configured at user level, or `mcp__plugin_engram_engram__mem_*` if an engram plugin ships its own server (`engram@engram` 0.1.22 does not). `odd-worker` lists both `mem_save` names.
+
+### Advisory review (v0.8)
+
+`/odd-claude:4r-review [git range]` (empty = working tree against `HEAD`) runs four independent lens reviewers in parallel via `Agent`: `odd-review-risk` (R1), `odd-review-resilience` (R4), `odd-review-readability` (R2) and `odd-review-reliability` (R3). The skill gathers the diff (it validates a git range argument itself), passes it in each prompt, and merges the findings into one deduplicated, severity-sorted report. It defaults to all four lenses and may skip irrelevant ones, saying so.
+
+- **Advisory only:** the report gates nothing and approves nothing; there is no approval state and no publication gating. It needs no external review binary and no review tools.
+- **Read-only reviewers:** the lens agents allow only `Read`, `Grep`, `Glob` (plus codegraph) and list `Edit`, `Write`, `NotebookEdit` and `Bash` under `disallowedTools`; `src/lib/agents-guard.test.ts` enforces this for them and for the Judgment Day judges.
+- **Judgment Day** (`/odd-claude:judgment-day`) stays independent: two blind judges and at most two fix rounds; it neither requires nor replaces `4r-review`.
 
 ### Subagents cannot ask questions
 
