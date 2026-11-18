@@ -26,10 +26,7 @@ The plugin declares a `codegraph` MCP server (`.mcp.json`, needs the `codegraph`
 - plugin server: `mcp__plugin_odd-claude_codegraph__codegraph_explore`
 - user-level `codegraph` server: Claude Code suppresses the plugin one ("duplicates manually-configured") and the tool is `mcp__codegraph__codegraph_explore`.
 
-Agent allowlists list both names; a name that is not connected is ignored. The SessionStart warm-up (detached `codegraph sync`) is **off by default**: a `.codegraph/` directory comes from the repository and is not a trust signal. Opt in with one of:
-
-- per project: `node "${CLAUDE_PLUGIN_ROOT}/dist/cli/codegraph-trust.js" --action trust --cwd <project>` (records the path in plugin state; `--action untrust` / `--action list`);
-- every project: `ODD_CLAUDE_CODEGRAPH_WARMUP=1` in your own environment (do not set it from a repository's settings).
+Agent allowlists list both names; a name that is not connected is ignored. The SessionStart warm-up (detached `codegraph sync`) is **off by default**: a `.codegraph/` directory comes from the repository and is not a trust signal. Opt in per project: `node "${CLAUDE_PLUGIN_ROOT}/dist/cli/codegraph-trust.js" --action trust --cwd <project>` (records the path in plugin state; `--action untrust` / `--action list`). There is no environment-variable opt-in: a repository can set env through its own `.claude/settings.json`, so only the trust list the user writes counts.
 
 When trusted and an index exists, SessionStart syncs it. Repeated starts do not overlap: an in-flight lock per project (`<data dir>/locks`, replaced when its process is gone or after 6 minutes) skips the spawn. Other flags: `ODD_CLAUDE_CODEGRAPH_INIT=1` also runs `codegraph init` in a trusted project with no index (opt-in); `ODD_CLAUDE_NO_CODEGRAPH_WARMUP=1` disables the warm-up. It never runs in a home or broad directory.
 

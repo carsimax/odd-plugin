@@ -2,7 +2,7 @@
 // Here: sync an index that already exists; `init` only with ODD_CLAUDE_CODEGRAPH_INIT=1;
 // ODD_CLAUDE_NO_CODEGRAPH_WARMUP=1 disables it; never in a home/broad directory.
 // Needs explicit trust (R1-001): a `.codegraph/` dir is repository content, so it alone never warms up
-// (see codegraph-trust.ts: per-project trust recorded by the user, or ODD_CLAUDE_CODEGRAPH_WARMUP=1).
+// (see codegraph-trust.ts: per-project trust recorded by the user; no env signal).
 // Pure + injected: exec/hasIndex/log are provided by the caller. Never throws.
 import { spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";

@@ -51,3 +51,29 @@ test("lock: stale by age or dead pid is replaced; corrupt lock is replaced", () 
     t.done();
   }
 });
+
+test("lock: stale takeover is exclusive under interleaving (S5 R4-warmup-no-dedupe)", () => {
+  const t = tmp();
+  try {
+    const p = lockPath(t.dir, "warm", "/x/proj");
+    acquireLock(p, 1, { staleMs: 1000 });
+    writeFileSync(p, JSON.stringify({ pid: 999999, startedAt: Date.now() }));
+    let b: boolean | undefined;
+    const a = acquireLock(p, 111, { staleMs: 360000, isAlive: (pid) => {
+      if (pid === 999999 && b === undefined) b = acquireLock(p, 222, { staleMs: 360000, isAlive: () => false });
+      return pid !== 999999;
+    } });
+    assert.equal([a, b].filter(Boolean).length, 1);
+  } finally { t.done(); }
+});
+
+test("lock: a child that exits before setLockPid leaves no lock (S5)", () => {
+  const t = tmp();
+  try {
+    const p = lockPath(t.dir, "warm", "/x/proj");
+    assert.equal(acquireLock(p, 111, { staleMs: 360000 }), true);
+    releaseLock(p, 333);
+    setLockPid(p, 333);
+    assert.equal(existsSync(p), false);
+  } finally { t.done(); }
+});

@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { isTrustedProject, listTrustedProjects, trustProject, untrustProject, WARMUP_TRUST_ENV } from "./codegraph-trust.js";
+import { isTrustedProject, listTrustedProjects, trustProject, untrustProject } from "./codegraph-trust.js";
 import { codegraphTrustCli } from "../cli/codegraph-trust.js";
 
 function tmp(): { dir: string; done: () => void } {
@@ -29,8 +29,8 @@ test("trust: default untrusted; explicit trust is per project path; untrust reve
   }
 });
 
-test("trust: env ODD_CLAUDE_CODEGRAPH_WARMUP=1 trusts every project; no data dir means untrusted, never throws", () => {
-  assert.equal(isTrustedProject("/x", { [WARMUP_TRUST_ENV]: "1" }, { dataDir: "/nonexistent-odd-dir" }), true);
+test("trust: the env var ODD_CLAUDE_CODEGRAPH_WARMUP is ignored (repo settings can set env); no data dir means untrusted, never throws", () => {
+  assert.equal(isTrustedProject("/x", { ODD_CLAUDE_CODEGRAPH_WARMUP: "1" }, { dataDir: "/nonexistent-odd-dir" }), false);
   assert.equal(isTrustedProject("/x", {}, { env: {} }), false);
 });
 
