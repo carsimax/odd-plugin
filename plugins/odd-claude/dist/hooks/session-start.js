@@ -23,9 +23,9 @@ export function sessionStart(input, opts = {}) {
         }
     }
     const env = opts.env ?? process.env;
-    // Registry refresh + codegraph warm-up only when the host reports a project dir (never in tests without cwd).
+    // Detached registry refresh + trusted codegraph warm-up only when the host reports a project dir (never in tests without cwd).
     const extraLines = typeof input.cwd === "string" && input.cwd !== ""
-        ? runSessionIntegrations(input.cwd, realIntegrationDeps(env.HOME || homedir(), env, (m) => logError(m, opts))).extraLines
+        ? runSessionIntegrations(input.cwd, realIntegrationDeps(env.HOME || homedir(), env, (m) => logError(m, opts), opts)).extraLines
         : [];
     const additionalContext = buildSessionContext({
         persona: readPersona(opts),

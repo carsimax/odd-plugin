@@ -287,6 +287,13 @@ export function refreshRegistry(deps: RefreshDeps): RefreshResult {
   };
 }
 
+/** Cheap read of an existing registry (no scan, no git): path and row count, or undefined when absent. */
+export function peekRegistry(cwd: string): { registryPath: string; skillCount: number } | undefined {
+  const registryPath = join(resolve(cwd), REGISTRY_REL_PATH);
+  const bytes = readOptional(registryPath);
+  return bytes ? { registryPath, skillCount: countRows(bytes.toString("utf8")) } : undefined;
+}
+
 function countRows(md: string): number {
   return md.split("\n").filter((l) => /^\| `/.test(l)).length;
 }

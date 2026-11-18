@@ -8,6 +8,7 @@ function deps(over: Partial<WarmupDeps> & { exec?: WarmupDeps["exec"] } = {}): W
   return {
     env: {},
     hasIndex: () => true,
+    isTrusted: () => true,
     isBroadDir: () => false,
     exec: (cmd, args): ExecOutcome => { calls.push([cmd, ...args]); return { kind: "ok" }; },
     log: (m) => logs.push(m),
@@ -73,4 +74,13 @@ test(".mcp.json ships a `codegraph` stdio server that runs `codegraph serve --mc
   };
   assert.deepEqual(Object.keys(raw.mcpServers), ["codegraph"]);
   assert.deepEqual(raw.mcpServers.codegraph, { command: "codegraph", args: ["serve", "--mcp"] });
+});
+
+test("plan: a .codegraph index alone never warms up; trust is required (R1-001)", () => {
+  assert.deepEqual(planWarmup("/p", deps({ isTrusted: () => false })), { action: "skip", reason: "untrusted" });
+  // init opt-in does not bypass trust either
+  const d = deps({ isTrusted: () => false, hasIndex: () => false, env: { ODD_CLAUDE_CODEGRAPH_INIT: "1" } });
+  assert.deepEqual(planWarmup("/p", d), { action: "skip", reason: "untrusted" });
+  const r = runWarmup("/p", deps({ isTrusted: () => false }));
+  assert.equal(r.outcome, "skipped");
 });

@@ -17,7 +17,7 @@ A Claude Code plugin that ports the ODD harness of gentle-shell (MIT) <!-- odd-c
 
 ### Skill registry
 
-On SessionStart a hook writes `.atl/skill-registry.md` in the project (an index of project, user and plugin skills by trigger and path, plus `.atl/.gitignore`). Run it on demand with `/odd-claude:skill-registry`. Another tool may also write `.atl/skill-registry.md`; to stop odd-claude from touching it set `ODD_CLAUDE_NO_SKILL_REGISTRY=1`. Git-tracked registries are preserved on automatic refresh.
+On SessionStart the hook reads the existing `.atl/skill-registry.md` (one context line) and starts a detached, locked refresh in the background, so the registry is written or updated without delaying session start (the first start in a project has no line yet; the next start does). The registry is an index of project, user and plugin skills by trigger and path, plus `.atl/.gitignore`. Run it on demand with `/odd-claude:skill-registry`. Another tool may also write `.atl/skill-registry.md`; to stop odd-claude from touching it set `ODD_CLAUDE_NO_SKILL_REGISTRY=1`. Git-tracked registries are preserved on automatic refresh.
 
 ### codegraph MCP
 
@@ -26,7 +26,12 @@ The plugin declares a `codegraph` MCP server (`.mcp.json`, needs the `codegraph`
 - plugin server: `mcp__plugin_odd-claude_codegraph__codegraph_explore`
 - user-level `codegraph` server: Claude Code suppresses the plugin one ("duplicates manually-configured") and the tool is `mcp__codegraph__codegraph_explore`.
 
-Agent allowlists list both names; a name that is not connected is ignored. SessionStart syncs an existing `.codegraph/` index. Env flags: `ODD_CLAUDE_CODEGRAPH_INIT=1` also runs `codegraph init` when no index exists (opt-in); `ODD_CLAUDE_NO_CODEGRAPH_WARMUP=1` disables the warm-up. It never runs in a home or broad directory.
+Agent allowlists list both names; a name that is not connected is ignored. The SessionStart warm-up (detached `codegraph sync`) is **off by default**: a `.codegraph/` directory comes from the repository and is not a trust signal. Opt in with one of:
+
+- per project: `node "${CLAUDE_PLUGIN_ROOT}/dist/cli/codegraph-trust.js" --action trust --cwd <project>` (records the path in plugin state; `--action untrust` / `--action list`);
+- every project: `ODD_CLAUDE_CODEGRAPH_WARMUP=1` in your own environment (do not set it from a repository's settings).
+
+When trusted and an index exists, SessionStart syncs it. Repeated starts do not overlap: an in-flight lock per project (`<data dir>/locks`, replaced when its process is gone or after 6 minutes) skips the spawn. Other flags: `ODD_CLAUDE_CODEGRAPH_INIT=1` also runs `codegraph init` in a trusted project with no index (opt-in); `ODD_CLAUDE_NO_CODEGRAPH_WARMUP=1` disables the warm-up. It never runs in a home or broad directory.
 
 ### Engram tool names
 
