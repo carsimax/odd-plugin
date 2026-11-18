@@ -7,7 +7,7 @@ export const MODES = ["default", "acceptEdits", "auto", "plan", "bypassPermissio
 /** Explicit risk note shown with a mode (dry run and apply); undefined when the mode needs none. */
 export function modeWarning(mode: string): string | undefined {
   if (mode !== "bypassPermissions") return undefined;
-  return "WARNING: bypassPermissions skips every permission prompt: Claude Code runs any tool, including destructive shell commands and edits of sensitive files, without asking. odd-claude ships no hook that blocks tools (hooks stay active in this mode, but none of them denies anything), so nothing else stands between a mistaken or injected instruction and your machine. Use it only in a sandbox or a disposable checkout. Undo with `/odd-claude:setup restore`.";
+  return "WARNING: bypassPermissions skips every permission prompt: Claude Code runs any tool, including destructive shell commands and edits of sensitive files, without asking. odd-claude ships no hook that blocks tools: hooks stay active in this mode (observed in the Q3 spike on Claude Code 2.1.326, docs/research/open-questions.md), but none of them denies anything, so they protect nothing here and nothing else stands between a mistaken or injected instruction and your machine. Use it only in a sandbox or a disposable checkout. Undo with `/odd-claude:setup restore`.";
 }
 export type Mode = (typeof MODES)[number];
 

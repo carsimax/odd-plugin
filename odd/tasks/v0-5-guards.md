@@ -22,7 +22,25 @@ Runner: `node:test` via `npm test` inside `plugins/odd-claude` + `claude plugin 
 
 ### S3 Delivery conventions (docs/roadmap.md, "## Delivery conventions")
 
-- **Feature docs:** one per feature at `odd/tasks/<feature>.md` in the A54 format (header, `## Specs` `S#`, `## Tasks` `T#`, `## Delivery`, `## Risks`, `## Log` `L#`). Upstream's 230 task docs are not copied.
+- **Feature docs:** one per feature at `odd/tasks/<feature>.md` in the A54 format (header, `## Specs` `S#`, `## Tasks` `T#`, `## Delivery`, `## Risks`, `## Delivery
+
+- Commits on `feat/v0.5-guards`: T0 `fcd0ec8` + `fb5bf55`; T1 `8473945` reverted by `d15cb6b` (S6); T4+T5 `d17995c`; T6 `813df63`; T7 pending commit. T2 and T3 were never built (dropped, S6).
+- Slice note: 6+ commits and about 2400 authored lines (non-reverted insertions: 852 + 211 + 561 + 699 = 2323, plus T7), above the ~400-line unit guideline of S3; the overshoot comes from T0/T6 volume and from the T1 build and revert, which was a user-decision reversal and not a split failure.
+- Verification: T4+T5 independently verified (S4/S6 met). Advisory A1 (README and `modeWarning` cited an E2E that lived in the reverted commit) closed in T7 by citing the Q3 spike. T0, T6 and T7 verified by the writer's own checks only.
+
+## Risks
+
+- By decision S6 nothing in odd-claude blocks destructive or sensitive actions; `bypassPermissions` (offered via setup, with an explicit warning) removes every prompt. Other installed plugins or user hooks may still act; odd-claude does not rely on them.
+
+## Log
+
+- L1 2026-11-18 T7 covers S1 (as amended by S6), S3 and S6; no linked S# left unsatisfied. A1: surviving evidence for "hooks active in bypassPermissions": `spikes/03-subagent-hooks/hook-log.jsonl` (local, untracked) has `permission_mode: bypassPermissions` on a `PreToolUse` for the main-thread `Agent` call and for the subagent `Write` (`agent_type` `odd-subhook:odd-probe`), documented in `docs/research/open-questions.md` Q3 (Claude Code 2.1.326). No re-run was needed. README and `modeWarning` now cite it and say it gives no protection (odd-claude has no blocking hook).
+- L2 Regression tests added (all passed on current code, no code fix needed): setup symlink + 0600 + backups + WARNING, four near-miss invalid modes with exact stderr, corrupt `delegation.json` (`{garbage` reads `on (default)`, `--action ON` exit 1, sha256 unchanged), run.js emits `{exitCode:0, stdout:""}` for PreToolUse/Stop/SubagentStop/PostToolUse with a destructive Bash input.
+- L3 `npm test` now runs `clean:test` first (`node -e "require('fs').rmSync('dist-test',{recursive:true,force:true})"`). Proof: a dummy `dist-test/stale.test.js` that throws exits 1 alone; `npm test` then exits green (188 tests, 188 pass, 0 fail) and the file is gone.
+- L4 Exit criteria: `npm run check` -> `check-naming: ok`. `claude plugin validate plugins/odd-claude` -> passed with 2 warnings (plugin name reads as Anthropic's own; no icon). `grep -rn 'permissionDecision\|"deny"\|decision.*block' plugins/odd-claude/src plugins/odd-claude/dist plugins/odd-claude/hooks --exclude=*.test.*` -> no matches (exit 1). `hooks.json` events: SessionStart, UserPromptSubmit, PostToolUse (no Stop, no PreToolUse), so hooks cannot loop. `claude plugin test plugins/odd-claude` -> `no hooks module to load; hooks/hooks.json names none in "modules"` (expected, no mods).
+- L5 E2E fresh session (`claude -p --model haiku --plugin-dir plugins/odd-claude --permission-mode bypassPermissions --output-format stream-json --verbose --include-hook-events`, cwd a temp dir): the model answered "Coordinator mode is ON (full delegation)" from the SessionStart context; `rm -r <tmp>/victim` ran, exit 0, and the directory was gone. Stream: every PreToolUse/Stop hook response had exit 0 and empty or `{}` stdout; the only `decision` fields were Claude Code's own `permission_decision: accept` by mode. Loaded plugins in that environment: odd-claude, orca-agent-view, engram, cc-plugin-sec-default; the PreToolUse and Stop hooks seen come from those other plugins or user config, since odd-claude registers neither. A host-level Gentle AI policy hook did block a later shell `rm` of my scratch files in the writer session, which is the environment and not odd-claude.
+- L6 Docs: `docs/roadmap.md` Phase 3 section, Milestones v0.5 row and Status row updated (IDs R21, R22, R23, R26, R27, R28 kept and marked dropped by user decision 2026-11-18); `docs/README.md` Decisions gained items 4 and 5.
+- L7 Scratch left behind outside the worktree (removal blocked by the host policy): `/tmp/odd-e2e.jsonl`, `/tmp/odd-e2e.err`, and the empty temp dir `/var/folders/3f/3v9dql657451v90kmmjx7nwr0000gn/T/tmp.otMOupxrZx`.` `L#`). Upstream's 230 task docs are not copied.
 - **Work-unit commits:** one reviewable unit per commit, about 400 lines of change at most, with its tests and docs together (skill `work-unit-commits`).
 - **Tests with behaviour:** behaviour changes ship with tests written first where a deterministic runner applies; guards reuse upstream tests adapted to Node (A58). Docs-only changes state the exception.
 - **Checks on every change:** `claude plugin validate` and `claude plugin test` must pass, plus the focused tests of the touched unit.
@@ -53,14 +71,14 @@ Runner: `node:test` via `npm test` inside `plugins/odd-claude` + `claude plugin 
 
 ## Tasks
 
-- T0 | S5 | writer | pending-commit — Harden v0.2 integrations per S5 (warm-up opt-in/trust, registry off the critical path or bounded, warm-up lock/dedupe).
-- T1 | S1 | writer, high risk | dropped (user decision) — Bash guard (R21) + child guard (R23): PreToolUse Bash destructive-command policy ported from upstream lib/destructive-command-guard.ts, ask/deny, subagent-stricter by agent_type.
+- T0 | S5 | writer | done (fcd0ec8, fb5bf55) — Harden v0.2 integrations per S5 (warm-up opt-in/trust, registry off the critical path or bounded, warm-up lock/dedupe).
+- T1 | S1 | writer, high risk | dropped (user decision; built in 8473945, reverted by d15cb6b) — Bash guard (R21) + child guard (R23): PreToolUse Bash destructive-command policy ported from upstream lib/destructive-command-guard.ts, ask/deny, subagent-stricter by agent_type.
 - T2 | S1 | writer, high risk | dropped (user decision) — Sensitive-path guard (R22) for Read/Edit/Write/MultiEdit/NotebookEdit/Grep/Glob/Bash, main thread and subagents.
 - T3 | S1 | writer, high risk | dropped (user decision) — Agent admission: writer (R26), verifier (R27), JD fix dispatch (R28) + digest helper in bin/.
-- T4 | S1,S4,S6 | writer, high risk | pending-commit — Coordinator mode (A15/A16) as a prompt mode, ON by default, with no deny hook: `/odd-claude:coordinator on|off|status` (skill + CLI) stores the delegation mode in plugin state; SessionStart context states the active mode and points to `cards/full-delegation.md`; admission rules (R26/R27/R28) stay as text in cards and the judgment-day skill, never enforced.
-- T5 | S1,S6 | writer | pending-commit — Permission modes mapping (R20, R24, R25): upstream normal/auto/yolo/super-yolo to native default/auto/acceptEdits/bypassPermissions, `bypassPermissions` added to `/odd-claude:setup` with an explicit warning in the dry run, README mapping and risk note; hooks confirmed active in bypassPermissions (T1 E2E).
-- T6 | S1 | writer | pending-commit — Exploration budget (R14) + context backstop (R34) via PostToolUse additionalContext.
-- T7 | S1,S3 | writer | pending-commit — Exit-criteria E2E, loop-safety check, README, roadmap Status Phase 3, `claude plugin test` status.
+- T4 | S1,S4,S6 | writer, high risk | done (d17995c, independently verified: S4/S6 met) — Coordinator mode (A15/A16) as a prompt mode, ON by default, with no deny hook: `/odd-claude:coordinator on|off|status` (skill + CLI) stores the delegation mode in plugin state; SessionStart context states the active mode and points to `cards/full-delegation.md`; admission rules (R26/R27/R28) stay as text in cards and the judgment-day skill, never enforced.
+- T5 | S1,S6 | writer | done (d17995c, independently verified: S6 met; advisory A1 closed in T7) — Permission modes mapping (R20, R24, R25): upstream normal/auto/yolo/super-yolo to native default/auto/acceptEdits/bypassPermissions, `bypassPermissions` added to `/odd-claude:setup` with an explicit warning in the dry run, README mapping and risk note; hooks observed active in bypassPermissions (Q3 spike evidence; the T1 E2E was reverted).
+- T6 | S1 | writer | done (813df63) — Exploration budget (R14) + context backstop (R34) via PostToolUse additionalContext.
+- T7 | S1,S3,S6 | writer | done-pending-commit — Exit-criteria E2E, loop-safety check, README, roadmap Status Phase 3, `claude plugin test` status.
 
 ## Log
 

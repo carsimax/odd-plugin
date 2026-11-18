@@ -66,15 +66,18 @@ Effort = count of matrix S/M/L items (S ≤ 1 day, M ≈ days, L ≈ weeks/spike
 - **Effort:** 42 S + 4 M (R01, R05, A12, A14).
 - **Risk:** medium-low; volume rather than difficulty. Watch rewrite drift in cards (A12, A14) and the overlap between A12 and A35.
 
-### Phase 3: Guards
+### Phase 3: Coordinator, advisory budget and permission modes (no deny hooks)
 
-- **Goal:** enforcement of destructive-command, sensitive-path, child-safety, writer/verifier admission and JD dispatch through plugin hooks, plus coordinator mode.
+Originally "Guards" (enforcement through deny/ask hooks). Superseded by user decision S6 (2026-11-18, `odd/tasks/v0-5-guards.md`): the plugin ships **no** hook that returns deny, ask or block; protection relies on Claude Code native permissions. The original goal and exit criteria are kept in the feature doc (S1) as the historical record.
+
+- **Goal:** coordinator mode and admission as prompt rules, advisory exploration budget and context backstop, and the permission-mode mapping through setup. No enforcement hooks.
 - **Matrix IDs:** R14, R20, R21, R22, R23, R24, R25, R26, R27, R28, R34, A15, A16, A58
-- **Deliverables:** hooks `odd-bash-guard` (R21), `odd-path-guard` (R22), `odd-child-guard` (R23), `odd-writer-admission` (R26), `odd-verifier-admission` (R27), `odd-jd-dispatch` (R28) with digest helper in `bin/`, `odd-explore-budget` (R14), `odd-context-backstop` (R34); coordinator mode (A15, A16: PreToolUse deny `Edit|Write|MultiEdit|NotebookEdit` in the main thread); permission-mode mapping to native `default`/`auto`/`bypassPermissions` with `defaultMode` through setup (R20, R24, R25); upstream pure-TS logic ported as-is; tests adapted from upstream to Node test runner (A58).
-- **Dependencies / gates:** Phase 2 (agent names), Q3 (answered: hooks fire in subagents; guards target subagents by `agent_type` `odd-claude:<agent>`); also verify whether hooks stay active in `bypassPermissions` (R25).
-- **Exit criteria:** adapted upstream tests for R21–R28 pass; destructive `Bash` fixtures return `ask`/`deny`; sensitive-path reads/writes are denied for the main thread and for subagents (Q3 outcome); a writer `Agent` call without `## Allowed edit surfaces` is denied; a JD fix dispatch with a bad section order or a wrong SHA-256 is denied; coordinator mode denies main-thread Edit/Write and allows them in `odd-worker`; Stop/PreToolUse hooks cannot loop; `claude plugin test` passes.
-- **Effort:** 7 S + 7 M (R20, R21, R22, R26, R27, R28, A58).
-- **Risk:** **HIGH, security-sensitive.** Guards are the only enforcement point (plugins cannot ship `permissions.deny`); a hook error or timeout must fail safe for destructive/sensitive paths; bypass-mode behaviour is still unverified (subagent hooks confirmed by Q3). A16 is generated from A15 and moves with it. Candidate for independent verification (`odd-verify`) per unit.
+- **Dropped by user decision 2026-11-18 (IDs kept in place, not deleted):** R21 (bash guard), R22 (path guard), R23 (child guard), R26 (writer admission), R27 (verifier admission), R28 (JD dispatch hook + digest helper). Admission and JD dispatch stay as text in cards and the judgment-day skill; they are never enforced.
+- **Deliverables (as shipped):** coordinator mode (A15, A16) as a prompt mode ON by default, stored in plugin state and stated in the SessionStart context, `/odd-claude:coordinator on|off|status`; `odd-explore-budget` (R14) and `odd-context-backstop` (R34) as advisory PostToolUse `additionalContext`; permission-mode mapping to native `default`/`acceptEdits`/`auto`/`plan`/`bypassPermissions` with `defaultMode` through setup, with an explicit `bypassPermissions` warning (R20, R24, R25); tests in the Node test runner (A58).
+- **Dependencies / gates:** Phase 2 (agent names), Q3 (hooks fire in subagents, and under `bypassPermissions`).
+- **Exit criteria (as amended by S6):** `npm test`, `npm run check` and `claude plugin validate` pass; no `permissionDecision`/`"deny"`/block output in plugin source, dist or hooks; no Stop hook is registered, so hooks cannot loop; a fresh session states coordinator ON and a destructive command in a temp dir is not blocked by odd-claude; `claude plugin test` reports "no hooks module" (the plugin ships no mods).
+- **Effort:** 3 S + 3 M (R14, R20, R34, A15, A16, A58 and the setup mapping).
+- **Risk:** medium. No enforcement exists by decision: `bypassPermissions` removes every prompt and nothing in odd-claude catches a destructive or sensitive action. The setup dry run says so explicitly.
 
 ### Phase 4: Advisory review (agent-based)
 
@@ -142,7 +145,7 @@ Effort = count of matrix S/M/L items (S ≤ 1 day, M ≈ days, L ≈ weeks/spike
 |---|---|---|---|
 | v0.1 | Installable skeleton: loads, engram dependency, `doctor`, `status`, `setup` | 0 + 1 | `claude plugin validate`/`test` green |
 | v0.2 | ODD core: persona, cards, agents, skills | 2 | usable without enforcement |
-| v0.5 | ODD core + guards + coordinator mode | 2 + 3 | first release where safety claims are made; independent verification of guards |
+| v0.5 | ODD core + coordinator mode (prompt) + advisory budget + permission-mode mapping | 2 + 3 | no deny hooks by user decision (S6); makes no safety claims, protection relies on Claude Code native permissions; independent verification of the delivered units |
 | v0.8 | Advisory review: four lenses + Judgment Day as agents and skills | 4 | per Q4; no native RDD, no external binary |
 | v1.0 | Parity target (below) | 1–4 + 7 | |
 | v1.1 | Mods UX | 5 | optional layer |
@@ -209,7 +212,7 @@ Excluded rows (every other matrix ID is in a phase above, v2 included). Out-of-s
 | 0 | Gates | – | – | Q1, Q2, Q3, Q6, Q7 answered; Q4, Q5 decided (2026-11-18) |
 | 1 | Skeleton, setup, doctor, engram | Q2, Q6 | v0.1 | done (v0.1, branch feat/v0.1-skeleton) |
 | 2 | Core declarative layer | Phase 1; Q2, Q3, Q6 | v0.2 | done (v0.2, branch feat/v0.2-core) |
-| 3 | Guards | Phase 2; Q3 | v0.5 | not started |
+| 3 | Coordinator, advisory budget, permission modes (no deny hooks) | Phase 2; Q3 | v0.5 | done (v0.5, branch feat/v0.5-guards) |
 | 4 | Advisory review (agents) | Phases 1–3 | v0.8 | not started |
 | 5 | Mods UX (optional) | Phase 2; Q1, Q7 | v1.1 | not started |
 | 6 | Web tools | Phase 2 | v1.2 | not started |

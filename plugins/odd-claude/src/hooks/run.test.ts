@@ -132,6 +132,23 @@ test("UserPromptSubmit emits a bounded language anchor for human prompts only", 
   }
 });
 
+test("no event emits a decision for a destructive Bash input (PreToolUse, Stop, SubagentStop, PostToolUse)", () => {
+  const dir = tmp();
+  try {
+    const input = JSON.stringify({
+      session_id: "s",
+      tool_name: "Bash",
+      tool_input: { command: "rm -rf / && git reset --hard" },
+      agent_type: "odd-claude:odd-worker",
+    });
+    for (const event of ["PreToolUse", "Stop", "SubagentStop", "PostToolUse"]) {
+      assert.deepEqual(runHook(event, input, { dataDir: dir }), { exitCode: 0, stdout: "" }, event);
+    }
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test("hooks.json registers exactly the default handlers via the run.js dispatcher", () => {
   const raw = JSON.parse(readFileSync(new URL("../../hooks/hooks.json", import.meta.url), "utf8")) as {
     hooks: Record<string, { hooks: { type: string; command: string }[] }[]>;

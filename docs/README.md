@@ -7,6 +7,8 @@
 1. Source is 100% `upstream/gentle-shell`; no other projects are used as input.
 2. Naming: prefix `odd`, plugin namespace `odd-claude:`; never `gentle-` (see below).
 3. No telemetry of any kind. Telemetry-related Claude Code APIs are documented only as capability facts.
+4. Coordinator mode (full delegation) is ON by default (user decision 2026-11-18).
+5. No deny/ask/block hooks; protection relies on Claude Code native permissions (user decision 2026-11-18).
 
 ## Naming convention
 

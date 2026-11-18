@@ -97,7 +97,7 @@ odd-claude has no permission system of its own: the upstream modes map onto Clau
 
 `plan` (read-only planning) has no upstream counterpart and stays available.
 
-**Risk of `bypassPermissions`:** it removes every permission prompt, including for destructive shell commands and sensitive files, and odd-claude adds no deny hook to catch them (by decision: the user wants that block permissive). Hooks do stay active in this mode (verified in the v0.5 E2E), but none of the plugin's hooks denies anything. The setup dry run prints this warning with the diff. Use it only in a sandbox or disposable checkout; `/odd-claude:setup restore` undoes it.
+**Risk of `bypassPermissions`:** it removes every permission prompt, including for destructive shell commands and sensitive files, and odd-claude adds no deny hook to catch them (by decision: the user wants that block permissive). Hooks do stay active in this mode (observed in the Q3 spike on Claude Code 2.1.326: a `PreToolUse` hook fired under `--permission-mode bypassPermissions`; see `docs/research/open-questions.md`), but none of the plugin's hooks denies anything, so that gives no protection. The setup dry run prints this warning with the diff. Use it only in a sandbox or disposable checkout; `/odd-claude:setup restore` undoes it.
 
 ### Setup limitations
 

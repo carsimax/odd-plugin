@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync, readFileSync, writeFileSync, existsSync } from "node:fs";
+import { mkdtempSync, rmSync, readFileSync, writeFileSync, existsSync, symlinkSync, lstatSync, statSync, chmodSync, readdirSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -110,6 +110,41 @@ test("bypassPermissions is accepted: dry run shows the diff plus an explicit war
     assert.equal(ap.exitCode, 0);
     assert.match(ap.stdout, /WARNING: bypassPermissions/);
     assert.equal(JSON.parse(readFileSync(b.settings, "utf8")).permissions.defaultMode, "bypassPermissions");
+  } finally {
+    b.cleanup();
+  }
+});
+
+test("bypassPermissions apply through a symlink keeps the link and the 0600 target; backups are 0600; WARNING shown", { skip: process.platform === "win32" }, () => {
+  const b = box();
+  try {
+    const link = join(b.dir, "link.json");
+    chmodSync(b.settings, 0o600);
+    symlinkSync(b.settings, link);
+    const ap = setupCli(["--mode", "bypassPermissions", "--apply", "--settings", link, "--data-dir", b.data], {});
+    assert.equal(ap.exitCode, 0);
+    assert.match(ap.stdout, /WARNING: bypassPermissions/);
+    assert.equal(lstatSync(link).isSymbolicLink(), true);
+    assert.equal(JSON.parse(readFileSync(b.settings, "utf8")).permissions.defaultMode, "bypassPermissions");
+    assert.equal(statSync(b.settings).mode & 0o777, 0o600);
+    const files = readdirSync(b.data, { recursive: true, withFileTypes: true }).filter((e) => e.isFile() && /settings\..*\.json$/.test(e.name));
+    assert.ok(files.length >= 1);
+    for (const f of files) assert.equal(statSync(join(f.parentPath, f.name)).mode & 0o777, 0o600);
+  } finally {
+    b.cleanup();
+  }
+});
+
+test("near-miss invalid modes are rejected with the exact error and leave settings untouched", () => {
+  const b = box();
+  try {
+    const before = sha(b.settings);
+    for (const m of ["dontAsk", "BypassPermissions", "bypasspermissions", "bypassPermissions "]) {
+      const r = setupCli(["--mode", m, "--apply", "--settings", b.settings, "--data-dir", b.data], {});
+      assert.equal(r.exitCode, 1, m);
+      assert.equal(r.stderr, `error: invalid mode ${JSON.stringify(m)}; valid modes: default, acceptEdits, auto, plan, bypassPermissions`);
+      assert.equal(sha(b.settings), before, m);
+    }
   } finally {
     b.cleanup();
   }

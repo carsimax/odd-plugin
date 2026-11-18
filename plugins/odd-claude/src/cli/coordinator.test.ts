@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync, readFileSync, writeFileSync } from "node:fs";
+import { createHash } from "node:crypto";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { coordinatorCli } from "./coordinator.js";
@@ -64,6 +65,26 @@ test("invalid action: exit 1, stderr error, stored mode unchanged", () => {
     assert.equal(r.stdout, "");
     assert.match(r.stderr, /^error: invalid action "maybe"; available actions: on, off, status$/);
     assert.equal(readDelegationMode({ dataDir: dir }), "organic");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("corrupt delegation.json reads as the default ON; --action ON is rejected and leaves the state bytes unchanged", () => {
+  const dir = tmp();
+  try {
+    const file = join(dir, "delegation.json");
+    writeFileSync(file, "{garbage");
+    const digest = (): string => createHash("sha256").update(readFileSync(file)).digest("hex");
+    const before = digest();
+    const st = coordinatorCli(["--data-dir", dir], {});
+    assert.equal(st.exitCode, 0);
+    assert.match(st.stdout, /^coordinator mode: on \(default\)/);
+    const r = coordinatorCli(["--action", "ON", "--data-dir", dir], {});
+    assert.equal(r.exitCode, 1);
+    assert.equal(r.stdout, "");
+    assert.match(r.stderr, /^error: invalid action "ON"/);
+    assert.equal(digest(), before);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
