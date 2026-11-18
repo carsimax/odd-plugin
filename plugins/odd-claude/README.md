@@ -4,9 +4,9 @@ A Claude Code plugin that ports the ODD harness of gentle-shell (MIT) <!-- odd-c
 
 ## What's in v1.0
 
-- **Commands / skills** (`/odd-claude:<name>`): `odd`, `doctor`, `status`, `setup`, `persona`, `coordinator`, `background-subagents`, `scratch`, `skill-registry`, `skill-creation`, `skill-creator`, `skill-improver`, `4r-review`, `judgment-day`, `branch-pr`, `chained-pr`, `work-unit-commits`, `issue-creation`, `comment-writer`, `cognitive-doc-design`, `tui-design`, `ui-design`.
+- **Commands / skills** (`/odd-claude:<name>`): `odd`, `doctor`, `status`, `setup`, `persona`, `coordinator`, `background-subagents`, `scratch`, `agents`, `skill-registry`, `skill-creation`, `skill-creator`, `skill-improver`, `4r-review`, `judgment-day`, `branch-pr`, `chained-pr`, `work-unit-commits`, `issue-creation`, `comment-writer`, `cognitive-doc-design`, `tui-design`, `ui-design`.
 - **Agents** (`odd-claude:<agent>`): `odd-explore`, `odd-verify`, `odd-worker`, `odd-jd-fix`, `odd-jd-judge-a`, `odd-jd-judge-b`, `odd-review-risk`, `odd-review-resilience`, `odd-review-readability`, `odd-review-reliability`.
-- **Hooks** (all advisory, none denies): `SessionStart` (context, scratch dir, title, status file, skill registry, optional codegraph warm-up), `UserPromptSubmit` (context, quota advisory), `PostToolUse` (exploration budget, context backstop), `StopFailure` (quota advisory), `Stop` (status file only; empty output), `SessionEnd` (scratch cleanup, resume hint, status file).
+- **Hooks** (all advisory, none denies): `SessionStart` (context, scratch dir, title, status file, skill registry, optional codegraph warm-up), `UserPromptSubmit` (context, quota advisory), `PostToolUse` (exploration budget, context backstop), `StopFailure` (quota advisory), `Stop` (status file only; empty output), `SubagentStart`/`SubagentStop` (record the subagent in session state; silent), `SessionEnd` (scratch cleanup, resume hint, status file).
 - **Themes**: `odd`, `odd cute`, `odd bold`. **Output style**: `odd`. **Cards**, **support docs** and **sounds assets** (see below).
 - **Not implemented, by user decision (2026-11-18):** R57 (notification sounds; the `assets/sounds/` files are only shipped assets) and R63 (GitHub star prompt). Native RDD and inter-session peers are v2.
 - **No deny:** the plugin ships no hook that denies, asks or blocks (see the statement above and [Permission modes](#permission-modes)).
@@ -107,6 +107,7 @@ claude --plugin-dir plugins/odd-claude
 ## Commands
 
 - `/odd-claude:doctor`: checks node, git, engram, codegraph, plugin version and data dir; lists what is missing.
+- `/odd-claude:agents`: table of this session's subagents (agent_type, started UTC, status, duration), from the `SubagentStart`/`SubagentStop` events recorded in session state (`subagents`, newest 50). Works everywhere. With mods enabled, `/odd-agents` additionally opens a live pane with the same table (`hooks/register.ts`, `modules` in `hooks/hooks.json`); the mod is optional, never touches prompts or tool calls, and does nothing when mods are off.
 - `/odd-claude:status`: shows the current session state, registered hooks and the roadmap position.
 - `/odd-claude:coordinator [on|off|status]`: shows or switches coordinator mode (see above).
 - `/odd-claude:setup [default|acceptEdits|auto|plan|bypassPermissions|restore [backup]]`: opt-in writer for `permissions.defaultMode` in `~/.claude/settings.json` (the only key it handles).

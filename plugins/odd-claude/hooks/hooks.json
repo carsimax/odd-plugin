@@ -64,6 +64,31 @@
           }
         ]
       }
+    ],
+    "SubagentStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/dist/hooks/run.js\" SubagentStart",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "SubagentStop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/dist/hooks/run.js\" SubagentStop",
+            "timeout": 5
+          }
+        ]
+      }
     ]
-  }
+  },
+  "modules": [
+    "./register.ts"
+  ]
 }

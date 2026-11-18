@@ -33,7 +33,7 @@ test("no source or hook config returns or declares a deny/ask/block decision", (
 
 test("hooks.json registers only advisory events (no PreToolUse/PermissionRequest); Stop output is empty", () => {
   const cfg = JSON.parse(readFileSync(join(root, "hooks", "hooks.json"), "utf8")) as { hooks: Record<string, unknown> };
-  assert.deepEqual(Object.keys(cfg.hooks).sort(), ["PostToolUse", "SessionEnd", "SessionStart", "Stop", "StopFailure", "UserPromptSubmit"]);
+  assert.deepEqual(Object.keys(cfg.hooks).sort(), ["PostToolUse", "SessionEnd", "SessionStart", "Stop", "StopFailure", "SubagentStart", "SubagentStop", "UserPromptSubmit"]);
 });
 
 test("PostToolUse outputs are advisory: only hookSpecificOutput.additionalContext, exit 0, never a decision", () => {
@@ -99,5 +99,21 @@ test("admission cards and the Judgment Day skill state their rules without claim
     const text = readFileSync(join(root, f), "utf8");
     assert.match(text, /No hook enforces/, f);
     assert.doesNotMatch(text, /hook for this dispatch is planned|Phase 3 hook/i, f);
+  }
+});
+
+test("the mod source never hooks prompt/tool events nor returns a decision (S2)", () => {
+  const dir = join(root, "hooks");
+  const sources = readdirSync(dir).filter((f) => /\.(ts|mts|js|mjs)$/.test(f) && !/\.test\./.test(f));
+  assert.ok(sources.includes("register.ts"));
+  const cfg = JSON.parse(readFileSync(join(dir, "hooks.json"), "utf8")) as { modules?: string[] };
+  assert.deepEqual(cfg.modules, ["./register.ts"]);
+  const bad = new RegExp(["\\bde" + "ny\\b", "\\bdeci" + "sion\\b", "tool\\.ch" + "eck", "tool\\.ca" + "ll", "prompt\\.", "agent\\.sp" + "awn", "\\bblo" + "ck\\b", "continue\\s*:\\s*false", "stopReason", "\\bas" + "k\\b"].join("|"));
+  for (const f of sources) {
+    const text = readFileSync(join(dir, f), "utf8");
+    assert.doesNotMatch(text, bad, f);
+    // every hook it registers is one of its own advisory surfaces
+    const events = [...text.matchAll(/\bon\(\s*'([a-z.]+)'/g)].map((m) => m[1]).sort();
+    assert.deepEqual(events, ["command.run", "session.start", "ui.close", "ui.render"], f);
   }
 });

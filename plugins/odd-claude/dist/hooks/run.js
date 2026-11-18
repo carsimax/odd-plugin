@@ -9,6 +9,7 @@ import { sessionEnd } from "./session-end.js";
 import { sessionStart } from "./session-start.js";
 import { stop } from "./stop.js";
 import { stopFailure } from "./stop-failure.js";
+import { subagentStart, subagentStop } from "./subagents.js";
 import { userPromptSubmit } from "./user-prompt-submit.js";
 /** Registered events. Keep minimal: hooks/hooks.json must list exactly these. */
 export const defaultHandlers = {
@@ -17,6 +18,8 @@ export const defaultHandlers = {
     PostToolUse: postToolUse,
     StopFailure: stopFailure,
     Stop: stop,
+    SubagentStart: subagentStart,
+    SubagentStop: subagentStop,
     SessionEnd: sessionEnd,
 };
 export function runHook(event, stdin, opts = {}) {
