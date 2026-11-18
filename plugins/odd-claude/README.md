@@ -70,21 +70,6 @@ claude --plugin-dir plugins/odd-claude
   - `restore` shows the diff back to the latest backup (or the named one) and applies it after confirmation. The current file is backed up first, so a restore is itself reversible.
   - Any other argument is refused.
 
-### Bash guard (R21) and child guard (R23)
-
-A PreToolUse hook on `Bash` (`dist/hooks/run.js PreToolUse`, 10 s timeout) classifies every command with a pure classifier ported from upstream (`src/lib/bash-guard.ts`). It is a lexical guard, not a sandbox.
-
-| Caller | Hard-deny class | Destructive or guarded | Everything else |
-| --- | --- | --- | --- |
-| Main thread | `deny` | `ask` (with a reason) | no output (normal permission flow) |
-| Subagent (`agent_id` or `agent_type` present, e.g. `odd-claude:odd-worker`) | `deny` | `deny`, no UI override | no output |
-
-- Hard-deny: recursive removal of `/`, `~`, `$HOME`, `.`/`..`, hard `git reset`, `git clean -fd`, forced `git push`, `chmod -R 777`, `chown -R`.
-- Ask: other recursive `rm`, `find -delete`, destructive SQL (`DROP`/`TRUNCATE`/unfiltered `DELETE`), `git restore`/`checkout --`/`stash drop`/`rebase`/`branch -D`, `git push`, `npm publish`. odd-claude additions beyond upstream: `mkfs*`, `dd of=/dev/<device>`, a fetcher piped into a shell.
-- Fail safe: if the guard throws or its input is malformed for a Bash call, the answer is `ask` (main thread) or `deny` (subagent); unreadable hook input is `deny`. A command over 100 000 characters is not classified and asks. Other hook events keep failing open.
-- "Allow always" (upstream `saveGuardedCommandAllowAlways`) is not implemented here. To stop being asked for a command, add a native allow rule in your Claude Code settings (for example `Bash(git push:*)`); hard-deny classes are still denied by the hook.
-- Permission modes (observed with `claude -p`, Claude Code 2.1.327, temp dir): the hook runs and its `ask` is **not** auto-approved in `default`, `auto` or `bypassPermissions`. In `-p` there is no prompt host, so the command does not run and the hook reason comes back as the tool result; the file survived in all three modes. Interactive prompting under `bypassPermissions` is not probed yet (T5).
-
 ### Setup limitations
 
 - Re-serialization: the settings file is rewritten as JSON. Integers beyond 2^53 lose precision, `-0` becomes `0`, duplicate keys collapse, number forms are normalized and the file may be reformatted (indent is preserved). All of this is visible in the diff before you confirm.

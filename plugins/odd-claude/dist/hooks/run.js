@@ -1,22 +1,15 @@
 // Single hook entrypoint: `node dist/hooks/run.js <event>`. Reads the hook JSON on stdin,
 // dispatches to the handler registered for <event>, prints the handler's JSON output.
-// Fails open by default: any error is logged under the data dir and the process exits 0 with no output.
-// Guard events register a fail-safe (PreToolUse) that answers ask/deny instead when the handler fails.
+// Fails safe: any error is logged under the data dir and the process exits 0 with no output.
 import { readFileSync, realpathSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { logError } from "../lib/state.js";
-import { preToolUse, preToolUseFailSafe } from "./pre-tool-use.js";
 import { sessionStart } from "./session-start.js";
 import { userPromptSubmit } from "./user-prompt-submit.js";
 /** Registered events. Keep minimal: hooks/hooks.json must list exactly these. */
 export const defaultHandlers = {
     SessionStart: sessionStart,
     UserPromptSubmit: userPromptSubmit,
-    PreToolUse: preToolUse,
-};
-/** Events whose failure must not allow the action: guard hooks (never silently allow). */
-export const defaultFailSafes = {
-    PreToolUse: preToolUseFailSafe,
 };
 export function runHook(event, stdin, opts = {}) {
     const handlers = opts.handlers ?? defaultHandlers;
@@ -31,12 +24,7 @@ export function runHook(event, stdin, opts = {}) {
     catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         logError(`${event}: ${msg}`, opts);
-        const failSafes = opts.failSafes ?? defaultFailSafes;
-        const failSafe = Object.hasOwn(failSafes, event) ? failSafes[event] : undefined;
-        if (!failSafe)
-            return { exitCode: 0, stdout: "" };
-        const out = failSafe(stdin);
-        return { exitCode: 0, stdout: out === undefined ? "" : JSON.stringify(out) };
+        return { exitCode: 0, stdout: "" };
     }
 }
 function main() {
