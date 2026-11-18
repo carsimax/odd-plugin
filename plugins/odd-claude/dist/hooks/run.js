@@ -4,12 +4,14 @@
 import { readFileSync, realpathSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { logError } from "../lib/state.js";
+import { postToolUse } from "./post-tool-use.js";
 import { sessionStart } from "./session-start.js";
 import { userPromptSubmit } from "./user-prompt-submit.js";
 /** Registered events. Keep minimal: hooks/hooks.json must list exactly these. */
 export const defaultHandlers = {
     SessionStart: sessionStart,
     UserPromptSubmit: userPromptSubmit,
+    PostToolUse: postToolUse,
 };
 export function runHook(event, stdin, opts = {}) {
     const handlers = opts.handlers ?? defaultHandlers;

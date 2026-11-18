@@ -21,6 +21,13 @@ A Claude Code plugin that ports the ODD harness of gentle-shell (MIT) <!-- odd-c
 
 This is a **rule the orchestrator follows, not enforcement**: no hook blocks `Edit`/`Write` in either mode. The same holds for the writer `## Allowed edit surfaces` section, the verifier `Risk:` line and the Judgment Day fix dispatch shape: `cards/writer.md`, `cards/delegation.md`, `cards/verification.md` and the `judgment-day` skill state them as rules.
 
+### Exploration budget and context backstop (advisory)
+
+A `PostToolUse` hook (matcher `Read|Grep|Glob|WebFetch|WebSearch` plus the codegraph MCP tools, both `mcp__codegraph__*` and `mcp__plugin_odd-claude_codegraph__*`) adds `additionalContext` notices. It **never blocks, asks or denies**: errors are logged and ignored, the timeout is 5 s.
+
+- **Exploration budget (R14).** Counts exploration calls and result text bytes per turn, main thread only (calls from subagents carry `agent_id`/`agent_type` and are skipped). The counters live in session state and `UserPromptSubmit` resets them each turn. With coordinator mode ON, the first time a turn passes the upstream thresholds (more than 3 lookups or 40,000 text bytes) it suggests delegating discovery to one `odd-claude:odd-explore`; one notice per turn. Coordinator OFF: no notice.
+- **Context backstop (R34).** Claude Code gives hooks no context-usage number, so the hook reads `transcript_path`: the prompt tokens (`input + cache_creation + cache_read`) of the last assistant `usage` line, or, if none is in the last 512 KB, `file bytes / 4` as a rough estimate. Past 150,000 tokens (override: `ODD_CLAUDE_CONTEXT_BACKSTOP_TOKENS`) it emits one notice per session suggesting delegating the next bounded unit. A measured reading below the threshold (after compaction) re-arms it. The window size is unknown, so upstream's fraction-of-window rule is not applied. It only runs on the events matched above.
+
 ### Skill registry
 
 On SessionStart the hook reads the existing `.atl/skill-registry.md` (one context line) and starts a detached, locked refresh in the background, so the registry is written or updated without delaying session start (the first start in a project has no line yet; the next start does). The registry is an index of project, user and plugin skills by trigger and path, plus `.atl/.gitignore`. Run it on demand with `/odd-claude:skill-registry`. Another tool may also write `.atl/skill-registry.md`; to stop odd-claude from touching it set `ODD_CLAUDE_NO_SKILL_REGISTRY=1`. Git-tracked registries are preserved on automatic refresh.

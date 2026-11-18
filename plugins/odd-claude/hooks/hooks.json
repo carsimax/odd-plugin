@@ -19,6 +19,18 @@
           }
         ]
       }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Read|Grep|Glob|WebFetch|WebSearch|mcp__codegraph__.*|mcp__plugin_odd-claude_codegraph__.*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/dist/hooks/run.js\" PostToolUse",
+            "timeout": 5
+          }
+        ]
+      }
     ]
   }
 }

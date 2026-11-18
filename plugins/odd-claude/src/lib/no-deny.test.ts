@@ -2,9 +2,11 @@
 // rules exist only as prompt text. This pins that no shipped hook code or config can block a tool.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
+import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { runHook } from "../hooks/run.js";
 
 // Pattern assembled from parts so a repo-wide grep for the literals only finds real decisions.
 const q = String.fromCharCode(34);
@@ -29,9 +31,35 @@ test("no source or hook config returns or declares a deny/ask/block decision", (
   }
 });
 
-test("hooks.json registers only SessionStart and UserPromptSubmit (no PreToolUse/PostToolUse/Stop)", () => {
+test("hooks.json registers only SessionStart, UserPromptSubmit and advisory PostToolUse (no PreToolUse/Stop)", () => {
   const cfg = JSON.parse(readFileSync(join(root, "hooks", "hooks.json"), "utf8")) as { hooks: Record<string, unknown> };
-  assert.deepEqual(Object.keys(cfg.hooks).sort(), ["SessionStart", "UserPromptSubmit"]);
+  assert.deepEqual(Object.keys(cfg.hooks).sort(), ["PostToolUse", "SessionStart", "UserPromptSubmit"]);
+});
+
+test("PostToolUse outputs are advisory: only hookSpecificOutput.additionalContext, exit 0, never a decision", () => {
+  const dir = mkdtempSync(join(tmpdir(), "odd-nodeny-"));
+  try {
+    const tr = join(dir, "t.jsonl");
+    writeFileSync(tr, JSON.stringify({ message: { usage: { input_tokens: 999_999 } } }) + "\n");
+    for (let i = 0; i < 6; i++) {
+      for (const input of [
+        { session_id: "s", tool_name: "Read", tool_response: "x".repeat(50_000), transcript_path: tr },
+        { session_id: "s", tool_name: "Grep", tool_response: "x" },
+        { session_id: "s", tool_name: "Read", agent_id: "a" },
+        { session_id: "s" },
+      ]) {
+        const r = runHook("PostToolUse", JSON.stringify(input), { dataDir: dir });
+        assert.equal(r.exitCode, 0);
+        if (r.stdout === "") continue;
+        const out = JSON.parse(r.stdout) as Record<string, unknown>;
+        assert.deepEqual(Object.keys(out), ["hookSpecificOutput"]);
+        assert.deepEqual(Object.keys(out.hookSpecificOutput as object).sort(), ["additionalContext", "hookEventName"]);
+        assert.doesNotMatch(r.stdout, FORBIDDEN);
+      }
+    }
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 test("the full-delegation card exists, is listed in SOURCES and claims no enforcement", () => {
