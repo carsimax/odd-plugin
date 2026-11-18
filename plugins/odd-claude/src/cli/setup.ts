@@ -8,7 +8,7 @@ import { readFileSync, existsSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { MODES, currentMode, planModeChange } from "../lib/setup.js";
+import { MODES, currentMode, modeWarning, planModeChange } from "../lib/setup.js";
 import { applyMode, applyRestore, listBackups, planRestore } from "../lib/setup-fs.js";
 
 type Env = Record<string, string | undefined>;
@@ -118,13 +118,19 @@ function run(argv: string[], env: Env): CliResult {
     const text = existsSync(settingsPath) ? readFileSync(settingsPath, "utf8") : null;
     const p = planModeChange(text, args.mode!, settingsPath);
     if (!p.ok) return fail(argv, p.error, 1);
+    const w = modeWarning(args.mode!);
+    const tail = w === undefined ? "" : `\n\n${w}`;
     return out(
-      { status: "dry-run", changed: p.changed, diff: p.diff },
-      p.changed ? `${p.diff}\n\ndry run: nothing written. Re-run with --apply to write it` : `${p.diff}\n\ndry run: nothing to do`,
+      { status: "dry-run", changed: p.changed, diff: p.diff, ...(w === undefined ? {} : { warning: w }) },
+      (p.changed ? `${p.diff}\n\ndry run: nothing written. Re-run with --apply to write it` : `${p.diff}\n\ndry run: nothing to do`) + tail,
       0,
     );
   }
-  return render(argv, applyMode({ ...base, mode: args.mode! }), "applied", out);
+  const applied = render(argv, applyMode({ ...base, mode: args.mode! }), "applied", out);
+  const w = modeWarning(args.mode!);
+  if (w === undefined || applied.exitCode !== 0) return applied;
+  if (argv.includes("--json")) return { ...applied, stdout: JSON.stringify({ ...JSON.parse(applied.stdout), warning: w }, null, 2) };
+  return { ...applied, stdout: `${applied.stdout}\n\n${w}` };
 }
 
 type OutFn = (o: Record<string, unknown>, text: string, code: number) => CliResult;
@@ -137,7 +143,7 @@ function render(argv: string[], r: ReturnType<typeof applyMode>, verb: string, o
 }
 
 const USAGE =
-  "usage: setup.js [--mode default|acceptEdits|auto|plan] [--apply] [--restore [backup]] [--settings <path>] [--data-dir <dir>] [--json] [--help]";
+  "usage: setup.js [--mode default|acceptEdits|auto|plan|bypassPermissions] [--apply] [--restore [backup]] [--settings <path>] [--data-dir <dir>] [--json] [--help]";
 
 const HELP = `${USAGE}
 

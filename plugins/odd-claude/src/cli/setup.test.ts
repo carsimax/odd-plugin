@@ -62,7 +62,7 @@ test("invalid mode exits 1; usage errors exit 2; no args lists state and modes",
     assert.equal(setupCli(["--bogus"], {}).exitCode, 2);
     const info = setupCli(["--settings", b.settings, "--data-dir", b.data], {});
     assert.equal(info.exitCode, 0);
-    assert.match(info.stdout, /default, acceptEdits, auto, plan/);
+    assert.match(info.stdout, /default, acceptEdits, auto, plan, bypassPermissions/);
     assert.equal(sha(b.settings), before);
   } finally {
     b.cleanup();
@@ -89,6 +89,38 @@ test("--json emits a machine-readable result", () => {
     assert.equal(o.status, "dry-run");
     assert.equal(o.changed, true);
     assert.equal(typeof o.diff, "string");
+  } finally {
+    b.cleanup();
+  }
+});
+
+test("bypassPermissions is accepted: dry run shows the diff plus an explicit warning and writes nothing; apply writes it", () => {
+  const b = box();
+  try {
+    const before = sha(b.settings);
+    const dry = setupCli(["--mode", "bypassPermissions", "--settings", b.settings, "--data-dir", b.data], {});
+    assert.equal(dry.exitCode, 0);
+    assert.match(dry.stdout, /\+.*"defaultMode": "bypassPermissions"/);
+    assert.match(dry.stdout, /WARNING: bypassPermissions/);
+    assert.match(dry.stdout, /hooks stay active/);
+    assert.equal(sha(b.settings), before);
+    const json = JSON.parse(setupCli(["--mode", "bypassPermissions", "--json", "--settings", b.settings, "--data-dir", b.data], {}).stdout);
+    assert.match(json.warning, /bypassPermissions/);
+    const ap = setupCli(["--mode", "bypassPermissions", "--apply", "--settings", b.settings, "--data-dir", b.data], {});
+    assert.equal(ap.exitCode, 0);
+    assert.match(ap.stdout, /WARNING: bypassPermissions/);
+    assert.equal(JSON.parse(readFileSync(b.settings, "utf8")).permissions.defaultMode, "bypassPermissions");
+  } finally {
+    b.cleanup();
+  }
+});
+
+test("the other modes carry no warning", () => {
+  const b = box();
+  try {
+    const dry = setupCli(["--mode", "acceptEdits", "--settings", b.settings, "--data-dir", b.data], {});
+    assert.equal(dry.exitCode, 0);
+    assert.doesNotMatch(dry.stdout, /WARNING/);
   } finally {
     b.cleanup();
   }

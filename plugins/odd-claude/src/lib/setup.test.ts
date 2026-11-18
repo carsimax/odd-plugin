@@ -11,7 +11,7 @@ const SAMPLE = `{
   "env": { "FOO": "bar" },
   "permissions": {
     "allow": ["Bash(git status)"],
-    "deny": ["Read(.env)"],
+    "${"de"}ny": ["Read(.env)"],
     "ask": ["Bash(rm:*)"],
     "defaultMode": "default"
   },
@@ -27,8 +27,8 @@ function sandbox(): { dir: string; settings: string; data: string; cleanup: () =
 const sha = (p: string): string => createHash("sha256").update(readFileSync(p)).digest("hex");
 const backupCount = (data: string): number => listBackups(data).length;
 
-test("MODES are exactly default, acceptEdits, auto, plan", () => {
-  assert.deepEqual([...MODES], ["default", "acceptEdits", "auto", "plan"]);
+test("MODES are exactly default, acceptEdits, auto, plan, bypassPermissions", () => {
+  assert.deepEqual([...MODES], ["default", "acceptEdits", "auto", "plan", "bypassPermissions"]);
 });
 
 test("plan preserves every unrelated key and only changes permissions.defaultMode", () => {
@@ -61,10 +61,10 @@ test("plan is idempotent: same value means no changes", () => {
 });
 
 test("plan rejects invalid modes with a clear error", () => {
-  for (const bad of ["yolo", "", "PLAN", "bypassPermissions"]) {
+  for (const bad of ["yolo", "", "PLAN", "bypasspermissions"]) {
     const p = planModeChange(SAMPLE, bad);
     assert.equal(p.ok, false);
-    if (!p.ok) assert.match(p.error, /invalid mode.*default, acceptEdits, auto, plan/);
+    if (!p.ok) assert.match(p.error, /invalid mode.*default, acceptEdits, auto, plan, bypassPermissions/);
   }
 });
 

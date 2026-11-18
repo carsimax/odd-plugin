@@ -55,7 +55,7 @@ Use only BLOCKER, CRITICAL, WARNING, or SUGGESTION as severity values. BLOCKER a
 
 ## Fix Boundary
 
-Launch the fix agent with the `Agent` tool, `subagent_type: "odd-claude:odd-jd-fix"`, once per round, as one standalone agent with this exact Markdown shape. A validation hook for this dispatch is planned; until it exists, the parent follows the shape by discipline. The `## Judgment Day activation` section contains only `User explicitly requested Judgment Day.`. The parent replaces the example ID, frozen ledger hash, row data, and surface with parent-authorized values. The correction batch contains only one round (`1 of 2` or `2 of 2`) and one lowercase SHA-256. The exact frozen finding rows are one JSON object per line, use only the canonical row fields, and exactly match the authorized IDs.
+Launch the fix agent with the `Agent` tool, `subagent_type: "odd-claude:odd-jd-fix"`, once per round, as one standalone agent with this exact Markdown shape. No hook enforces this dispatch shape: it is a rule the parent follows. The `## Judgment Day activation` section contains only `User explicitly requested Judgment Day.`. The parent replaces the example ID, frozen ledger hash, row data, and surface with parent-authorized values. The correction batch contains only one round (`1 of 2` or `2 of 2`) and one lowercase SHA-256. The exact frozen finding rows are one JSON object per line, use only the canonical row fields, and exactly match the authorized IDs.
 
 ```markdown
 ## Judgment Day activation

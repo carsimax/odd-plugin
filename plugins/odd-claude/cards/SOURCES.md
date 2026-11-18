@@ -13,3 +13,4 @@ Each card is a port of an upstream asset (MIT). Provenance lives here only, so t
 | cards/tracking.md | upstream/gentle-shell/assets/orchestrator-tracking.md | <!-- odd-check: allow -->
 | cards/verification.md | upstream/gentle-shell/assets/orchestrator-verification.md | <!-- odd-check: allow -->
 | cards/writer.md | upstream/gentle-shell/assets/orchestrator-writer.md | <!-- odd-check: allow -->
+| cards/full-delegation.md | upstream/gentle-shell/assets/orchestrator-full-delegation.md + orchestrator-full-delegation-card.md | <!-- odd-check: allow -->

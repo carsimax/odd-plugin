@@ -42,14 +42,23 @@ Runner: `node:test` via `npm test` inside `plugins/odd-claude` + `claude plugin 
 - R4-sync-registry-on-hook-path: "The skill-registry refresh runs synchronously inside the SessionStart hook. Each start walks nine project dirs, three user dirs and every installed plugin's skills dir, stats every SKILL.md, and runs `git ls-files` with a 3000 ms timeout. A hung or slow git (for example a lock or a network filesystem) can delay session start by up to 3s on each start, even though the code comments say nothing here may slow session start. No latency measurement was given to rule it out."
 - R4-warmup-no-dedupe: "Every SessionStart event (startup, resume, clear, compact) on an indexed project spawns a new detached `codegraph sync` process (up to a 60s bound, 300s for init) with no lock, pid file or in-flight check. Repeated /clear or compact events, or several sessions in the same project, can run overlapping syncs against the same `.codegraph` index. This risks contention or redundant CPU load, and nothing records that a previous warm-up is still running."
 
+### S6 User decisions, no deny (user, verbatim, 2026-11-18)
+
+- Message: "Por cierto se me olvido mencionar no quiero el tema del deny, se que es riesgoso pero así lo requiero que dejemos permisible el bloque de denegaciones que tiene originalmente gentle-shell"
+- Question: "¿Qué hacemos con los comandos que hoy se deniegan (rm -rf /, git reset --hard, etc.)?" Answer: "Quitar el guard: todo permitido"
+- Question: "¿Aplica también a los subagentes (child guard), que hoy niegan todo lo destructivo sin override?" Answer: "Sí, mismo criterio que el hilo principal"
+- Question: "¿Y el guard de rutas sensibles (T2: secretos, .env, .ssh, keychains)?" Answer: "Igual: sin deny"
+- Question: "Quedan otros dos mecanismos de la Fase 3 que también responden 'deny', aunque no por seguridad del sistema sino por disciplina ODD. ¿Los mantenemos?" Answer: "Ninguno: ni T3 ni T4". Option text: "Cero deny en el plugin. Admisión y coordinator quedan solo como reglas de texto en el prompt."
+- Effect: the plugin contains no hook that returns deny/ask/block. T1, T2, T3 are dropped; T4 keeps coordinator mode only as prompt text; the S1 deliverables and exit criteria that require deny/ask/block are superseded by this decision (S1 text is kept unchanged as the original roadmap record).
+
 ## Tasks
 
 - T0 | S5 | writer | pending-commit — Harden v0.2 integrations per S5 (warm-up opt-in/trust, registry off the critical path or bounded, warm-up lock/dedupe).
-- T1 | S1 | writer, high risk | pending-commit — Bash guard (R21) + child guard (R23): PreToolUse Bash destructive-command policy ported from upstream lib/destructive-command-guard.ts, ask/deny, subagent-stricter by agent_type.
-- T2 | S1 | writer, high risk | pending-commit — Sensitive-path guard (R22) for Read/Edit/Write/MultiEdit/NotebookEdit/Grep/Glob/Bash, main thread and subagents.
-- T3 | S1 | writer, high risk | pending-commit — Agent admission: writer (R26), verifier (R27), JD fix dispatch (R28) + digest helper in bin/.
-- T4 | S1,S4 | writer, high risk | pending-commit — Coordinator mode (A15/A16) ON by default: PreToolUse deny Edit/Write/MultiEdit/NotebookEdit in the main thread, allowed in odd-worker/odd-jd-fix; `/odd-claude:coordinator on|off|status`; card.
-- T5 | S1 | writer | pending-commit — Permission modes mapping (R20, R24, R25): native default/auto/bypassPermissions, verify hooks stay active in bypassPermissions, docs.
+- T1 | S1 | writer, high risk | dropped (user decision) — Bash guard (R21) + child guard (R23): PreToolUse Bash destructive-command policy ported from upstream lib/destructive-command-guard.ts, ask/deny, subagent-stricter by agent_type.
+- T2 | S1 | writer, high risk | dropped (user decision) — Sensitive-path guard (R22) for Read/Edit/Write/MultiEdit/NotebookEdit/Grep/Glob/Bash, main thread and subagents.
+- T3 | S1 | writer, high risk | dropped (user decision) — Agent admission: writer (R26), verifier (R27), JD fix dispatch (R28) + digest helper in bin/.
+- T4 | S1,S4,S6 | writer, high risk | pending-commit — Coordinator mode (A15/A16) as a prompt mode, ON by default, with no deny hook: `/odd-claude:coordinator on|off|status` (skill + CLI) stores the delegation mode in plugin state; SessionStart context states the active mode and points to `cards/full-delegation.md`; admission rules (R26/R27/R28) stay as text in cards and the judgment-day skill, never enforced.
+- T5 | S1,S6 | writer | pending-commit — Permission modes mapping (R20, R24, R25): upstream normal/auto/yolo/super-yolo to native default/auto/acceptEdits/bypassPermissions, `bypassPermissions` added to `/odd-claude:setup` with an explicit warning in the dry run, README mapping and risk note; hooks confirmed active in bypassPermissions (T1 E2E).
 - T6 | S1 | writer | pending-commit — Exploration budget (R14) + context backstop (R34) via PostToolUse additionalContext.
 - T7 | S1,S3 | writer | pending-commit — Exit-criteria E2E, loop-safety check, README, roadmap Status Phase 3, `claude plugin test` status.
 
@@ -58,3 +67,5 @@ Runner: `node:test` via `npm test` inside `plugins/odd-claude` + `claude plugin 
 - L1: user's original request: "ok sigamos" (reply to "¿Arranco?" for Phase 3 guards).
 - L2: coordinator default decision (S4), 2026-11-18.
 - L3: v0.2 merged to main at 7b4fc32.
+- L4: user decision S6 (no deny anywhere), 2026-11-18. The T1 bash guard (commit 8473945) was reverted in d15cb6b; T1, T2, T3 dropped; T4 rewritten to prompt-only coordinator mode; T5 now adds `bypassPermissions` to setup with a warning.
+- L5: T4/T5 implemented (not committed): coordinator CLI + skill + card, context default ON, setup `bypassPermissions`, README mapping. A grep for a deny decision or `permissionDecision` over `src` and `hooks` returns nothing, and hooks.json registers only SessionStart and UserPromptSubmit.

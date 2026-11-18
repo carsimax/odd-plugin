@@ -37,7 +37,7 @@ For a large task's bounded writes, prefer `odd-claude:odd-worker`. If it is unav
 
 ## Launch
 
-- Derive nonempty `## Allowed edit surfaces` before launching a writer (`${CLAUDE_PLUGIN_ROOT}/cards/writer.md`). Parallel writers only with disjoint Allowed edit surfaces or isolated worktrees (`EnterWorktree`).
+- Derive nonempty `## Allowed edit surfaces` before launching a writer (`${CLAUDE_PLUGIN_ROOT}/cards/writer.md`). No hook enforces this: it is a rule the parent follows. Parallel writers only with disjoint Allowed edit surfaces or isolated worktrees (`EnterWorktree`).
 - Pass the session's resolved skill paths under `## Skills to load before work`; children read them first (`${CLAUDE_PLUGIN_ROOT}/cards/skills.md`).
 - A child must be able to do the task it is given. Check the agent's declared `tools` before launching (its definition under the plugin `agents/` directory): never give a read-only explorer shell work, and never assume your own tools transfer to the child. With no qualified agent, report the capability gap; a fired trigger is never replaced by inline work.
 - Background: launch with the `Agent` tool and `run_in_background: true`; it returns at once. End the turn and resume when the completion notification arrives; never sleep or poll for it. Otherwise run in the foreground. Detail: reference.

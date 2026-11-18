@@ -1,6 +1,6 @@
 # odd-claude
 
-A Claude Code plugin that ports the ODD harness of gentle-shell (MIT) <!-- odd-check: allow --> to Claude Code. **v0.2 is the declarative core**: the ODD persona, orchestrator cards, agents, skills and native integrations, all as text and configuration. Guards (enforcement code) arrive in later phases (see [docs/roadmap.md](../../docs/roadmap.md)). The plugin collects no data and sends nothing anywhere.
+A Claude Code plugin that ports the ODD harness of gentle-shell (MIT) <!-- odd-check: allow --> to Claude Code. **v0.2 is the declarative core**: the ODD persona, orchestrator cards, agents, skills and native integrations, all as text and configuration. The plugin ships **no deny/ask/block hook** (user decision, v0.5): its hooks only add context. Coordinator mode and the admission rules are prompt text, not enforcement; the only enforcement is Claude Code's native permission system (see [Permission modes](#permission-modes)). The plugin collects no data and sends nothing anywhere.
 
 ## What v0.2 ships
 
@@ -8,12 +8,18 @@ A Claude Code plugin that ports the ODD harness of gentle-shell (MIT) <!-- odd-c
 - **Persona modes**: `/odd-claude:persona [mentor|neutral]` stores the mode in the plugin data dir; it applies from the next session start (or `/clear`).
 - **Cards** (`cards/*.md`): orchestrator rules loaded on demand (delegation, tracking, verification, memory, skills, prompts, writer, quota recovery), with tool names mapped to Claude Code (`Agent`, `TodoWrite`, `AskUserQuestion`, `Bash` with `run_in_background`, `Monitor`, worktree tools). See `cards/SOURCES.md`.
 - **Agents** (listed as `odd-claude:<agent>`): `odd-explore` (read-only), `odd-verify` (runs checks), `odd-worker` (scoped writer), `odd-jd-fix`, `odd-jd-judge-a`, `odd-jd-judge-b` (Judgment Day).
-- **Skills** (`odd-claude:<skill>`): `odd`, `branch-pr`, `chained-pr`, `cognitive-doc-design`, `comment-writer`, `issue-creation`, `judgment-day`, `skill-creator`, `skill-creation`, `skill-improver`, `skill-registry`, `tui-design`, `ui-design`, `work-unit-commits`, plus the commands `doctor`, `status`, `setup`, `persona`, `background-subagents`.
+- **Skills** (`odd-claude:<skill>`): `odd`, `branch-pr`, `chained-pr`, `cognitive-doc-design`, `comment-writer`, `issue-creation`, `judgment-day`, `skill-creator`, `skill-creation`, `skill-improver`, `skill-registry`, `tui-design`, `ui-design`, `work-unit-commits`, plus the commands `doctor`, `status`, `setup`, `persona`, `background-subagents`, `coordinator`.
 - **Support docs** (`support/`): test-first policy and the `odd/tasks/<feature>.md` format. **Sounds**: `assets/sounds/` (original tones, see its LICENSE).
 
 ### Background subagents
 
 `/odd-claude:background-subagents [enable|disable|status]` sets a policy (default off; env `ODD_CLAUDE_BACKGROUND_SUBAGENTS=on|off` is the fallback). When on, the session context tells the orchestrator to launch independent `Agent` work with `run_in_background: true`. Note that Claude Code itself runs subagents in the background by default.
+
+### Coordinator mode (full delegation)
+
+`/odd-claude:coordinator [on|off|status]` switches the delegation mode; **ON by default**. When on, the session context says `Coordinator mode: ON` and points to `cards/full-delegation.md`: the main thread does not implement and sends every authorized change to a bounded `odd-worker` (a general-purpose `Agent` is the reported fallback). When off, the orchestrator works inline and delegates only when a trigger fires. The mode is stored in the plugin data dir (`delegation.json`) and applies from the next session start (or `/clear`).
+
+This is a **rule the orchestrator follows, not enforcement**: no hook blocks `Edit`/`Write` in either mode. The same holds for the writer `## Allowed edit surfaces` section, the verifier `Risk:` line and the Judgment Day fix dispatch shape: `cards/writer.md`, `cards/delegation.md`, `cards/verification.md` and the `judgment-day` skill state them as rules.
 
 ### Skill registry
 
@@ -64,11 +70,27 @@ claude --plugin-dir plugins/odd-claude
 
 - `/odd-claude:doctor`: checks node, git, engram, codegraph, plugin version and data dir; lists what is missing.
 - `/odd-claude:status`: shows the current session state, registered hooks and the roadmap position.
-- `/odd-claude:setup [default|acceptEdits|auto|plan|restore [backup]]`: opt-in writer for `permissions.defaultMode` in `~/.claude/settings.json` (the only key handled in v0.1).
+- `/odd-claude:coordinator [on|off|status]`: shows or switches coordinator mode (see above).
+- `/odd-claude:setup [default|acceptEdits|auto|plan|bypassPermissions|restore [backup]]`: opt-in writer for `permissions.defaultMode` in `~/.claude/settings.json` (the only key it handles).
   - Always shows a diff first and writes nothing until you explicitly confirm.
   - Before writing, the original file is copied to a backup under the plugin data dir (`backups/`), and only the listed key changes.
   - `restore` shows the diff back to the latest backup (or the named one) and applies it after confirmation. The current file is backed up first, so a restore is itself reversible.
   - Any other argument is refused.
+
+### Permission modes
+
+odd-claude has no permission system of its own: the upstream modes map onto Claude Code's native `permissions.defaultMode`, which `/odd-claude:setup` writes after a diff and a confirmation.
+
+| Upstream mode | Native `defaultMode` | Notes |
+|---|---|---|
+| Normal | `default` | Claude Code asks before edits and commands. |
+| Auto | `auto` | A separate classifier reviews actions instead of prompting. |
+| YOLO | `acceptEdits` | Standing approval for file edits; commands still follow the normal rules. Closest native equivalent. |
+| Super Yolo | `bypassPermissions` | No permission prompts at all. |
+
+`plan` (read-only planning) has no upstream counterpart and stays available.
+
+**Risk of `bypassPermissions`:** it removes every permission prompt, including for destructive shell commands and sensitive files, and odd-claude adds no deny hook to catch them (by decision: the user wants that block permissive). Hooks do stay active in this mode (verified in the v0.5 E2E), but none of the plugin's hooks denies anything. The setup dry run prints this warning with the diff. Use it only in a sandbox or disposable checkout; `/odd-claude:setup restore` undoes it.
 
 ### Setup limitations
 
