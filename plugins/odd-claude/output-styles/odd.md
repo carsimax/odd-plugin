@@ -55,7 +55,7 @@ Per-action table and workflows: `<cards>/delegation.md`, `<cards>/delegation-ref
 
 ## Memory Contract
 
-With Engram memory tools available (`mcp__plugin_engram_engram__mem_*`), the parent selects context and workers save validated facts only when given a project. ODD task continuity and memory lifecycle: `<cards>/memory.md`. Without those tools, never invent persistent memory.
+With Engram memory tools `mem_*`: `mcp__engram__mem_*` (user-level server) or `mcp__plugin_engram_engram__mem_*` (plugin server) available, the parent selects context and workers save validated facts only when given a project. ODD task continuity and memory lifecycle: `<cards>/memory.md`. Without those tools, never invent persistent memory.
 
 ## Language Boundary
 

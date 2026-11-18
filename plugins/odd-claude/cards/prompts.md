@@ -8,7 +8,7 @@ Delegate web retrieval to the explorer's installed tools (`WebSearch`, `WebFetch
 
 ### Subagents and questions to the user
 
-A subagent cannot ask the user directly. Verified status: **to-verify** (whether a foreground subagent's `AskUserQuestion` surfaces in the parent UI is not confirmed; background subagents cannot prompt). Until verified, apply this fallback: a subagent that needs a human decision stops and returns a blocking question in its final report (`status: interaction_required`), and the parent relays it to the user with `AskUserQuestion`, then returns the answer to the same actor by continuing it (`SendMessage`) or launching a bounded follow-up. Never let a child guess a decision that belongs to the human.
+A subagent cannot ask the user directly. Verified (Claude Code 2.1.327, 2026-11-18): `AskUserQuestion` is removed from every subagent's tool pool, foreground or background, even when listed in its `tools` field (code.claude.com/docs/en/sub-agents, "Available tools"; confirmed by a probe where `odd-explore` answered it has no `AskUserQuestion`). Subagents also run in the background by default. So a child can never ask the human itself; always apply this fallback: a subagent that needs a human decision stops and returns a blocking question in its final report (`status: interaction_required`), and the parent relays it to the user with `AskUserQuestion`, then returns the answer to the same actor by continuing it (`SendMessage`) or launching a bounded follow-up. Never let a child guess a decision that belongs to the human.
 
 ### Lossless Blocking Prompts (MANDATORY)
 

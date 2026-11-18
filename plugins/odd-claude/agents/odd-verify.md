@@ -1,7 +1,7 @@
 ---
 name: odd-verify
 description: Read-only technical verification for generic ODD work. Use for an independent check of a change against its spec, running only authorized commands and scratch-copy probes.
-tools: Read, Grep, Glob, Bash, mcp__codegraph__codegraph_explore
+tools: Read, Grep, Glob, Bash, mcp__codegraph__codegraph_explore, mcp__plugin_odd-claude_codegraph__codegraph_explore
 disallowedTools: Edit, Write, NotebookEdit
 maxTurns: 60
 ---

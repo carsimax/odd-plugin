@@ -1,6 +1,40 @@
 # odd-claude
 
-A Claude Code plugin that ports the ODD harness of gentle-shell (MIT) <!-- odd-check: allow --> to Claude Code. **v0.1 is the skeleton**: an installable plugin that declares its Engram dependency and can diagnose and configure itself. Personas, guards and review agents arrive in later phases (see [docs/roadmap.md](../../docs/roadmap.md)). The plugin collects no data and sends nothing anywhere.
+A Claude Code plugin that ports the ODD harness of gentle-shell (MIT) <!-- odd-check: allow --> to Claude Code. **v0.2 is the declarative core**: the ODD persona, orchestrator cards, agents, skills and native integrations, all as text and configuration. Guards (enforcement code) arrive in later phases (see [docs/roadmap.md](../../docs/roadmap.md)). The plugin collects no data and sends nothing anywhere.
+
+## What v0.2 ships
+
+- **Persona / output style `odd`** (`output-styles/odd.md`, `force-for-plugin: true`, so no `/setup` is needed). SessionStart and UserPromptSubmit hooks add `additionalContext` with the rest of the prompt and the path of the cards. Replies follow the user's language.
+- **Persona modes**: `/odd-claude:persona [mentor|neutral]` stores the mode in the plugin data dir; it applies from the next session start (or `/clear`).
+- **Cards** (`cards/*.md`): orchestrator rules loaded on demand (delegation, tracking, verification, memory, skills, prompts, writer, quota recovery), with tool names mapped to Claude Code (`Agent`, `TodoWrite`, `AskUserQuestion`, `Bash` with `run_in_background`, `Monitor`, worktree tools). See `cards/SOURCES.md`.
+- **Agents** (listed as `odd-claude:<agent>`): `odd-explore` (read-only), `odd-verify` (runs checks), `odd-worker` (scoped writer), `odd-jd-fix`, `odd-jd-judge-a`, `odd-jd-judge-b` (Judgment Day).
+- **Skills** (`odd-claude:<skill>`): `odd`, `branch-pr`, `chained-pr`, `cognitive-doc-design`, `comment-writer`, `issue-creation`, `judgment-day`, `skill-creator`, `skill-creation`, `skill-improver`, `skill-registry`, `tui-design`, `ui-design`, `work-unit-commits`, plus the commands `doctor`, `status`, `setup`, `persona`, `background-subagents`.
+- **Support docs** (`support/`): test-first policy and the `odd/tasks/<feature>.md` format. **Sounds**: `assets/sounds/` (original tones, see its LICENSE).
+
+### Background subagents
+
+`/odd-claude:background-subagents [enable|disable|status]` sets a policy (default off; env `ODD_CLAUDE_BACKGROUND_SUBAGENTS=on|off` is the fallback). When on, the session context tells the orchestrator to launch independent `Agent` work with `run_in_background: true`. Note that Claude Code itself runs subagents in the background by default.
+
+### Skill registry
+
+On SessionStart a hook writes `.atl/skill-registry.md` in the project (an index of project, user and plugin skills by trigger and path, plus `.atl/.gitignore`). Run it on demand with `/odd-claude:skill-registry`. Another tool may also write `.atl/skill-registry.md`; to stop odd-claude from touching it set `ODD_CLAUDE_NO_SKILL_REGISTRY=1`. Git-tracked registries are preserved on automatic refresh.
+
+### codegraph MCP
+
+The plugin declares a `codegraph` MCP server (`.mcp.json`, needs the `codegraph` binary). Tool names depend on who provides the server:
+
+- plugin server: `mcp__plugin_odd-claude_codegraph__codegraph_explore`
+- user-level `codegraph` server: Claude Code suppresses the plugin one ("duplicates manually-configured") and the tool is `mcp__codegraph__codegraph_explore`.
+
+Agent allowlists list both names; a name that is not connected is ignored. SessionStart syncs an existing `.codegraph/` index. Env flags: `ODD_CLAUDE_CODEGRAPH_INIT=1` also runs `codegraph init` when no index exists (opt-in); `ODD_CLAUDE_NO_CODEGRAPH_WARMUP=1` disables the warm-up. It never runs in a home or broad directory.
+
+### Engram tool names
+
+Memory tools are `mem_*`: `mcp__engram__mem_*` when the engram MCP is configured at user level, or `mcp__plugin_engram_engram__mem_*` if an engram plugin ships its own server (`engram@engram` 0.1.22 does not). `odd-worker` lists both `mem_save` names.
+
+### Subagents cannot ask questions
+
+Claude Code removes `AskUserQuestion` from every subagent (verified on 2.1.327). A child that needs a human decision returns `status: interaction_required` and the orchestrator relays it; see `cards/prompts.md`.
 
 ## Requirements
 

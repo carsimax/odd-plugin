@@ -5,3 +5,27 @@ odd-claude is a port to Claude Code of the ODD harness distributed as
 gentle-shell (upstream, MIT License). Behaviour, semantics and the design of
 the doctor/status commands are derived from that project. All upstream
 copyright and permission notices remain those of their authors.
+
+Ported skills (Apache License, Version 2.0)
+-------------------------------------------
+The following skills under skills/ are adapted from the upstream skills
+distributed with that project, which are licensed under the Apache License,
+Version 2.0 (https://www.apache.org/licenses/LICENSE-2.0). They keep the
+`license: Apache-2.0` frontmatter field. The original text and ideas were
+written by the upstream authors; odd-claude changed the tool names, paths and
+naming for Claude Code and set `metadata.author` to odd-claude.
+
+  - branch-pr
+  - chained-pr
+  - cognitive-doc-design
+  - comment-writer
+  - issue-creation
+  - judgment-day
+  - skill-creator
+  - skill-improver
+  - ui-design
+  - work-unit-commits
+
+Changes are made without warranty; the Apache-2.0 text applies to those files
+only as stated above. The tui-design skill is original text with its own
+attribution in skills/tui-design/NOTICE.md.

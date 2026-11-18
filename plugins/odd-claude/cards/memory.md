@@ -2,9 +2,9 @@
 
 Bind this to the parent (main-thread) session only, on organic progress/recovery. Not always-on; loaded on demand from the always-on core's `## Memory Contract` pointer.
 
-Memory tools are the Engram MCP tools `mcp__plugin_engram_engram__mem_*` (for example `mem_context`, `mem_search`, `mem_get_observation`, `mem_save`, `mem_update`). They are available only when the engram server is connected; never invent availability.
+Memory tools are the Engram memory tools `mem_*`: `mcp__engram__mem_*` (user-level server) or `mcp__plugin_engram_engram__mem_*` (plugin server) (for example `mem_context`, `mem_search`, `mem_get_observation`, `mem_save`, `mem_update`). They are available only when the engram server is connected; never invent availability.
 
-### Organic feature continuity
+### ODD feature continuity
 
 For large authorized implementation (Task Size in the always-on core), the parent maintains `odd/tasks/<feature-name>.md` and an Engram recovery copy under topic `odd/<feature-name>/tasks`, scoped to the current project. The feature document is canonical; the Engram mirror and the task list (`TodoWrite`) are projections refreshed at task transitions. Use a descriptive filename-safe feature name, reuse the same identity, and never overwrite another feature. Keep one feature document, not a separate plan file or topic. It is the specification subagents read by reference, so keep this fixed order, stable content first and the growing log last:
 

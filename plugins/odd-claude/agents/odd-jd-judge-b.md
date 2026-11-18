@@ -1,7 +1,7 @@
 ---
 name: odd-jd-judge-b
 description: Judgment Day blind adversarial reviewer B. Read-only; independently reports findings and does not fix code.
-tools: Read, Grep, Glob, Bash, mcp__codegraph__codegraph_explore
+tools: Read, Grep, Glob, Bash, mcp__codegraph__codegraph_explore, mcp__plugin_odd-claude_codegraph__codegraph_explore
 disallowedTools: Edit, Write, NotebookEdit
 maxTurns: 40
 ---

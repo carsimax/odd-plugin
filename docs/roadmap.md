@@ -208,7 +208,7 @@ Excluded rows (every other matrix ID is in a phase above, v2 included). Out-of-s
 |---|---|---|---|---|
 | 0 | Gates | – | – | Q1, Q2, Q3, Q6, Q7 answered; Q4, Q5 decided (2026-11-18) |
 | 1 | Skeleton, setup, doctor, engram | Q2, Q6 | v0.1 | done (v0.1, branch feat/v0.1-skeleton) |
-| 2 | Core declarative layer | Phase 1; Q2, Q3, Q6 | v0.2 | not started |
+| 2 | Core declarative layer | Phase 1; Q2, Q3, Q6 | v0.2 | done (v0.2, branch feat/v0.2-core) |
 | 3 | Guards | Phase 2; Q3 | v0.5 | not started |
 | 4 | Advisory review (agents) | Phases 1–3 | v0.8 | not started |
 | 5 | Mods UX (optional) | Phase 2; Q1, Q7 | v1.1 | not started |
