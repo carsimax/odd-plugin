@@ -2,6 +2,8 @@
 
 **odd-claude** ports [gentle-shell](../upstream/gentle-shell) (a Pi-harness distribution, cloned read-only and gitignored under `upstream/gentle-shell`) to Claude Code as a plugin. The upstream repo is the single source of truth for behaviour; these docs capture what Claude Code can host and what is still unknown, as the base for a roadmap.
 
+**Current status:** v1.0 parity reached (Phases 1–4 and 7). Next: v1.1 mods UX, v1.2 web tools, v2 native RDD + peers. See [roadmap.md](roadmap.md).
+
 ## Decisions
 
 1. Source is 100% `upstream/gentle-shell`; no other projects are used as input.

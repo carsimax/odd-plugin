@@ -33,9 +33,9 @@ Runner: `node:test` via `npm test` inside `plugins/odd-claude` + `claude plugin 
 
 ## Tasks
 
-- T1 | S1,S2 | writer | done-pending-commit — Hooks R35 (`StopFailure` advisory quota recovery + `--fallback-model` guidance in `cards/quota-recovery.md`), R56 (per-session scratch + `/odd-claude:scratch`), R62 (terminal title via `terminalSequence`), R64 (resume hint on SessionEnd), R70 (agent status file), through `src/hooks/run.ts` + `hooks/hooks.json`; no-deny test extended to the new events.
-- T2 | S1 | parallel writer | pending — Themes R54/A50 (`plugins/odd-claude/themes/**`, `.claude-plugin/plugin.json`).
-- T3 | S1,S3 | parent/writer | pending — Close: plugin README, roadmap (Phase 7 done; R57 and R63 dropped by user decision, IDs kept and marked dropped; v1.0 milestone reached), validate.
+- T1 | S1,S2 | writer | done (commit 6200171) — Hooks R35 (`StopFailure` advisory quota recovery + `--fallback-model` guidance in `cards/quota-recovery.md`), R56 (per-session scratch + `/odd-claude:scratch`), R62 (terminal title via `terminalSequence`), R64 (resume hint on SessionEnd), R70 (agent status file), through `src/hooks/run.ts` + `hooks/hooks.json`; no-deny test extended to the new events.
+- T2 | S1 | parallel writer | done (commit 76f2b19) — Themes R54/A50 (`plugins/odd-claude/themes/**`, `.claude-plugin/plugin.json`).
+- T3 | S1,S3 | parent/writer | done-pending-commit — Close: plugin README, roadmap (Phase 7 done; R57 and R63 dropped by user decision, IDs kept and marked dropped; v1.0 milestone reached), validate.
 
 ## Log
 
@@ -45,4 +45,8 @@ Runner: `node:test` via `npm test` inside `plugins/odd-claude` + `claude plugin 
 - L4: R56 port is the minimal safe subset: `<data>/scratch/<session>` (0700) created at SessionStart (path injected in context, `/odd-claude:scratch` shows it), removed at SessionEnd only if root and dir are real directories and the realpath is exactly `<realroot>/<session>`; symlinks are refused and never followed. The upstream artifact ledger (recorded clones/worktrees, crashed-session sweep) is not ported.
 - L5: R70 file `<data>/status/<session>.json` (`schema odd-claude.agent-status/v1`, session, cwd, state idle/working/ended, updatedAt; 0600, atomic). SessionEnd writes `ended` instead of deleting (upstream deletes). Stale after 30 s.
 - L6: E2E (`claude -p --model haiku --plugin-dir plugins/odd-claude "say hi" --output-format stream-json --verbose --include-hook-events`, temp cwd, exit 0): the scratch dir appeared during the run (poll) and was gone after exit; status file ended `state: ended`; SessionStart output carried `terminalSequence` `ESC]0;odd-claude · <project> BEL` with no allowlist rejection; Stop outputs empty; no decision/block outputs. SessionEnd hook output is not shown in the `-p` stream, so the resume hint (R64) is invisible there: it is also logged to `hooks.log`; interactive visibility is not verified. StopFailure was not triggered live (needs a real API error); covered by tests.
+- L8: T3 (docs only) covers S1 (Phase 7 done, v1.0 milestone reached, README sections for themes, lifecycle hooks and "What's in v1.0", plugin.json 1.0.0) and S3 (R57 and R63 marked "dropped by user decision 2026-11-18" in roadmap and README, IDs kept). S2 kept: README retains the no-deny statement. T1 commit 6200171, T2 commit 76f2b19.
+
+- L8: T3 (docs only) covers S1 (Phase 7 done, v1.0 milestone reached, README sections for themes, lifecycle hooks and "What's in v1.0", plugin.json 1.0.0) and S3 (R57 and R63 marked "dropped by user decision 2026-11-18" in roadmap and README, IDs kept). S2 kept: README retains the no-deny statement. T1 commit 6200171, T2 commit 76f2b19.
 - L7: Temp dir cleanup blocked: `rm -r` was refused by the child safety policy; the `mktemp -d` dir named in /tmp/odd-e2e-path (`/tmp/odd-e2e-*`) and `/tmp/odd-claude-strings.txt` are left for the parent to remove. The E2E session left `status/<session>.json` under `~/.claude/plugins/data/odd-claude-inline`.
+- L9: T3 alignment to v1.0.0 covers S1: marketplace.json entry, package.json and package-lock.json (root and packages[""]) set to 1.0.0; `ROADMAP_PHASE` now "v1.0: parity reached; next v1.1 mods UX". Test-first: `status.test.ts` expectation changed first, RED = `npm test` failing on the roadmap assertion (old "Phase 1"), GREEN after the change. Log order fixed (L7 before L8).

@@ -1,6 +1,6 @@
 {
   "name": "odd-claude",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "odd-claude: opinionated workflow plugin for Claude Code (Engram memory, review agents, doctor/status/setup).",
   "author": { "name": "carsimax" },
   "license": "MIT",

@@ -2,7 +2,7 @@
 
 **Goal.** odd-claude is [gentle-shell](../upstream/gentle-shell) ported to a Claude Code plugin (`odd-claude`, commands `/odd-claude:<x>`, agents `odd-*`). The upstream repo is the only source of behaviour. Built from [research/portability-matrix.md](research/portability-matrix.md) (132 rows, IDs `R##` runtime / `A##` asset), [research/open-questions.md](research/open-questions.md) and [research/claude-code-extensibility.md](research/claude-code-extensibility.md) §12. Decisions and naming: [README.md](README.md).
 
-Status: **proposal**. Phase contents follow the matrix "Candidate phases" with the adjustments listed under [Deviations](#deviations-from-the-matrix-candidate-phases).
+Status: **v1.0 reached** (Phases 1–4 and 7 done; Phases 5, 6, 8 pending). Phase contents follow the matrix "Candidate phases" with the adjustments listed under [Deviations](#deviations-from-the-matrix-candidate-phases).
 
 ## Guiding principles
 
@@ -112,8 +112,9 @@ Originally "Guards" (enforcement through deny/ask hooks). Superseded by user dec
 ### Phase 7: Cosmetic and small items
 
 - **Goal:** low-value, low-effort extras.
-- **Matrix IDs:** R35, R54, R56, R57, R62, R63, R64, R70, A50
-- **Deliverables:** `--fallback-model` guidance + hook `odd-stop-failure` (R35, same-provider only); themes `odd-*` (R54, A50); `/odd-claude:scratch` + hooks (R56); notification/audio hooks reusing A26 WAVs (R57; `$.audio` mod variant optional); terminal-title hook (R62); star prompt (R63, only if the project decides to keep an outward-facing nudge); resume hint (R64); agent status file hooks (R70).
+- **Matrix IDs:** R35, R54, R56, R57 (dropped by user decision 2026-11-18), R62, R63 (dropped by user decision 2026-11-18), R64, R70, A50
+- **Status:** done (v1.0, branch feat/v1.0-polish). R57 and R63 were not implemented.
+- **Deliverables:** `--fallback-model` guidance + hook `odd-stop-failure` (R35, same-provider only); themes `odd-*` (R54, A50); `/odd-claude:scratch` + hooks (R56); ~~notification/audio hooks reusing A26 WAVs (R57; `$.audio` mod variant optional)~~ dropped by user decision 2026-11-18; terminal-title hook (R62); ~~star prompt (R63)~~ dropped by user decision 2026-11-18; resume hint (R64); agent status file hooks (R70).
 - **Dependencies / gates:** Phase 1; A26 from Phase 2; Q1 only for the optional audio mod.
 - **Exit criteria:** each hook runs without output errors on macOS (and is a no-op where `afplay`/`paplay` is missing); themes load in `claude plugin validate`; scratch dir is created at SessionStart and removed at SessionEnd.
 - **Effort:** 8 S + 1 M (R35).
@@ -147,7 +148,7 @@ Originally "Guards" (enforcement through deny/ask hooks). Superseded by user dec
 | v0.2 | ODD core: persona, cards, agents, skills | 2 | usable without enforcement |
 | v0.5 | ODD core + coordinator mode (prompt) + advisory budget + permission-mode mapping | 2 + 3 | no deny hooks by user decision (S6); makes no safety claims, protection relies on Claude Code native permissions; independent verification of the delivered units |
 | v0.8 | Advisory review: four lenses + Judgment Day as agents and skills | 4 | per Q4; no native RDD, no external binary |
-| v1.0 | Parity target (below) | 1–4 + 7 | |
+| v1.0 | Parity target (below) | 1–4 + 7 | reached (branch feat/v1.0-polish); R57 and R63 dropped by user decision 2026-11-18 |
 | v1.1 | Mods UX | 5 | optional layer |
 | v1.2 | Web tools | 6 | |
 | v2 | Native RDD + peer orchestrators: R03, R07, R29, R30, R31, R32, R33, R74, A39, A40, A47, A48 | 8 | per Q4/Q5; engine and channel chosen at v2 start |
@@ -216,5 +217,5 @@ Excluded rows (every other matrix ID is in a phase above, v2 included). Out-of-s
 | 4 | Advisory review (agents) | Phases 1–3 | v0.8 | done (v0.8, branch feat/v0.8-review) |
 | 5 | Mods UX (optional) | Phase 2; Q1, Q7 | v1.1 | not started |
 | 6 | Web tools | Phase 2 | v1.2 | not started |
-| 7 | Cosmetic and small | Phase 1 | v1.0 | not started |
+| 7 | Cosmetic and small | Phase 1 | v1.0 | done (v1.0, branch feat/v1.0-polish); R57, R63 dropped by user decision 2026-11-18 |
 | 8 | v2: native RDD + peer orchestrators | v1 shipped | v2 | planned (after v1) |

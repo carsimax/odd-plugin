@@ -1,8 +1,31 @@
 # odd-claude
 
-A Claude Code plugin that ports the ODD harness of gentle-shell (MIT) <!-- odd-check: allow --> to Claude Code. **v0.2 is the declarative core**: the ODD persona, orchestrator cards, agents, skills and native integrations, all as text and configuration. The plugin ships **no deny/ask/block hook** (user decision, v0.5): its hooks only add context. Coordinator mode and the admission rules are prompt text, not enforcement; the only enforcement is Claude Code's native permission system (see [Permission modes](#permission-modes)). The plugin collects no data and sends nothing anywhere.
+A Claude Code plugin that ports the ODD harness of gentle-shell (MIT) <!-- odd-check: allow --> to Claude Code. **v1.0** is the parity release: the ODD persona, orchestrator cards, agents, skills, native integrations, advisory review, themes and lifecycle hooks. The plugin ships **no deny/ask/block hook** (user decision, v0.5): its hooks only add context. Coordinator mode and the admission rules are prompt text, not enforcement; the only enforcement is Claude Code's native permission system (see [Permission modes](#permission-modes)). The plugin collects no data and sends nothing anywhere.
 
-## What v0.2 ships
+## What's in v1.0
+
+- **Commands / skills** (`/odd-claude:<name>`): `odd`, `doctor`, `status`, `setup`, `persona`, `coordinator`, `background-subagents`, `scratch`, `skill-registry`, `skill-creation`, `skill-creator`, `skill-improver`, `4r-review`, `judgment-day`, `branch-pr`, `chained-pr`, `work-unit-commits`, `issue-creation`, `comment-writer`, `cognitive-doc-design`, `tui-design`, `ui-design`.
+- **Agents** (`odd-claude:<agent>`): `odd-explore`, `odd-verify`, `odd-worker`, `odd-jd-fix`, `odd-jd-judge-a`, `odd-jd-judge-b`, `odd-review-risk`, `odd-review-resilience`, `odd-review-readability`, `odd-review-reliability`.
+- **Hooks** (all advisory, none denies): `SessionStart` (context, scratch dir, title, status file, skill registry, optional codegraph warm-up), `UserPromptSubmit` (context, quota advisory), `PostToolUse` (exploration budget, context backstop), `StopFailure` (quota advisory), `Stop` (status file only; empty output), `SessionEnd` (scratch cleanup, resume hint, status file).
+- **Themes**: `odd`, `odd cute`, `odd bold`. **Output style**: `odd`. **Cards**, **support docs** and **sounds assets** (see below).
+- **Not implemented, by user decision (2026-11-18):** R57 (notification sounds; the `assets/sounds/` files are only shipped assets) and R63 (GitHub star prompt). Native RDD and inter-session peers are v2.
+- **No deny:** the plugin ships no hook that denies, asks or blocks (see the statement above and [Permission modes](#permission-modes)).
+
+## Themes
+
+Three custom themes ship in `themes/`: `odd`, `odd cute` and `odd bold`. Pick one with `/theme`. Each declares a base preset and overrides colors; the diff word colors fall back to the `dark` base.
+
+## Lifecycle hooks (v1.0)
+
+All of these are advisory: none returns a block decision, `continue:false` or a deny, and the `Stop` hook output is always empty so it never forces continuation.
+
+- **Quota advisory (R35).** `StopFailure` is fire-and-forget in Claude Code, so the hook only logs and arms one advisory shown on the next prompt (30 min cooldown for exhausted quota, 2 min for transient errors). It includes `--fallback-model` guidance (Anthropic models only; see `cards/quota-recovery.md`).
+- **Session scratch (R56).** A per-session directory `<data>/scratch/<session>` (mode 0700) is created at SessionStart and its path is added to the context; `/odd-claude:scratch` shows it. It is removed at SessionEnd only when it is a real directory whose realpath is exactly `<realroot>/<session>`; symlinks are never followed.
+- **Terminal title (R62).** SessionStart sets the title to `odd-claude · <project>` through `terminalSequence` (plain OSC 0).
+- **Resume hint (R64).** SessionEnd prints a resume hint and logs it to `hooks.log`.
+- **Agent status file (R70).** `<data>/status/<session>.json` (`schema odd-claude.agent-status/v1`: session, cwd, state `idle`/`working`/`ended`, `updatedAt`; mode 0600, atomic writes). SessionEnd writes `ended` instead of deleting; readers treat it as stale after 30 s.
+
+## What v0.2 shipped
 
 - **Persona / output style `odd`** (`output-styles/odd.md`, `force-for-plugin: true`, so no `/setup` is needed). SessionStart and UserPromptSubmit hooks add `additionalContext` with the rest of the prompt and the path of the cards. Replies follow the user's language.
 - **Persona modes**: `/odd-claude:persona [mentor|neutral]` stores the mode in the plugin data dir; it applies from the next session start (or `/clear`).
