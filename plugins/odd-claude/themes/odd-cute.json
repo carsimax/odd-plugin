@@ -1,0 +1,33 @@
+{
+  "name": "odd cute",
+  "base": "dark",
+  "overrides": {
+    "claude": "#F095C8",
+    "promptBorder": "#FFB1DD",
+    "permission": "#FFB1DD",
+    "suggestion": "#F095C8",
+    "planMode": "#E0C27A",
+    "remember": "#E0C27A",
+    "text": "#F6EFF3",
+    "inactive": "#A78E9B",
+    "subtle": "#2A1720",
+    "success": "#B4E7C7",
+    "error": "#FF718F",
+    "warning": "#F2B86D",
+    "merged": "#F095C8",
+    "autoAccept": "#B4E7C7",
+    "bashBorder": "#E0C27A",
+    "briefLabelClaude": "#F095C8",
+    "briefLabelYou": "#E0C27A",
+    "rate_limit_fill": "#F095C8",
+    "rate_limit_empty": "#2A1720",
+    "userMessageBackground": "#2A1523",
+    "bashMessageBackgroundColor": "#100A0F",
+    "memoryBackgroundColor": "#100A0F",
+    "selectionBg": "#28121E",
+    "composerSidebarBackground": "#100A0F",
+    "diffAdded": "#151316",
+    "diffRemoved": "#261019",
+    "inverseText": "#060407"
+  }
+}

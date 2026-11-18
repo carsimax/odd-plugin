@@ -39,3 +39,7 @@ above). odd-claude removed the upstream review tools and lineage machinery,
 passes the candidate change in the prompt, and restricts the agents to
 Read, Grep and Glob. The checklists, severity scale and finding format keep
 the upstream wording where possible.
+
+Ported themes (MIT License)
+---------------------------
+The color palettes of themes/odd.json, odd-cute.json and odd-bold.json are converted from the upstream Pi themes of the same project (MIT License), mapped to Claude Code theme tokens.
