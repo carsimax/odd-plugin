@@ -206,3 +206,29 @@ test('quiet rendering is render-only: it registers no tool or permission hooks a
   expect(tree.text).toContain('Bash: 50 lines');
   expect(hooked).toBe(0);
 });
+
+// Panes: the constructors take props only (children go in `children`), so the drawn tree must hold the text.
+test('the odd-agents pane draws its table as Text rows', async ($: any, on: any) => {
+  on('process.hookEnv', () => ({ value: { CLAUDE_PLUGIN_DATA: '/data', CLAUDE_CODE_SESSION_ID: 's1' } }));
+  on('fs.read', () => ({ value: JSON.stringify(NOW_SESSION) }));
+  const ui = await $.ui.mount({ plugin: 'odd-claude', surface: 'terminal', component: 'Pane', requestId: 'odd-agents', props: {} } as any);
+  const texts = (await ui.findAll({ type: 'Text' })).map((f: any) => f.text);
+  expect(texts).toEqual([
+    'AGENT_TYPE              STARTED (UTC)  STATUS  DURATION',
+    'general-purpose         -              done    -',
+    'odd-claude:odd-explore  10:00:00       done    1m05s',
+    '2 subagents (0 running)',
+  ]);
+});
+
+test('the odd-changes pane draws the working-tree summary as Text rows', async ($: any, on: any) => {
+  on('process.run', (_$: any, e: any) => ({ value: { exitCode: 0, stdout: e.argv.includes('status') ? STATUS_Z : STAT, stderr: '' } }));
+  const ui = await $.ui.mount({ plugin: 'odd-claude', surface: 'terminal', component: 'Pane', requestId: 'odd-changes', props: {} } as any);
+  const texts = (await ui.findAll({ type: 'Text' })).map((f: any) => f.text);
+  expect(texts).toEqual(CHANGES_TEXT.split('\n'));
+});
+
+test('a pane that is not ours is left to the default rendering', async ($: any) => {
+  const ui = await $.ui.mount({ plugin: 'odd-claude', surface: 'terminal', component: 'Pane', requestId: 'someone-else', props: {} } as any);
+  expect((await ui.drawn()).type).toBe('engine');
+});

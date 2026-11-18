@@ -234,14 +234,14 @@ export function register(on: any) {
     if (e.requestId !== CHANGES_PANE) return next(e);
     const { Box, Text } = $.ui.resolve(e);
     const lines = (await changesText($)).split('\n');
-    return Box({ key: 'root' }, ...lines.map((l, i) => Text({ key: `l${i}` }, l)));
+    return Box({ key: 'root', children: lines.map((l, i) => Text({ key: `l${i}`, children: l })) });
   });
 
   on('ui.render', { component: 'Pane' }, async ($: any, e: any, next: any) => {
     if (e.requestId !== PANE) return next(e);
     const { Box, Text } = $.ui.resolve(e);
     const lines = tableLines(await load($), Date.now());
-    return Box({ key: 'root' }, ...lines.map((l, i) => Text({ key: `l${i}` }, l)));
+    return Box({ key: 'root', children: lines.map((l, i) => Text({ key: `l${i}`, children: l })) });
   });
 
   on('ui.render', { component: 'ToolResult' }, async ($: any, e: any, next: any) => {
