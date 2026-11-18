@@ -27,7 +27,7 @@ function isObject(v: unknown): v is Record<string, unknown> {
 
 type Parsed = { ok: true; root: Record<string, unknown> } | { ok: false; error: string };
 
-function parseSettings(text: string): Parsed {
+function parseSettings(text: string, checkPermissions = true): Parsed {
   let root: unknown;
   try {
     root = JSON.parse(text);
@@ -35,7 +35,7 @@ function parseSettings(text: string): Parsed {
     return { ok: false, error: `settings file is not valid JSON (${(err as Error).message}); refusing to touch it` };
   }
   if (!isObject(root)) return { ok: false, error: "settings file is not a JSON object; refusing to touch it" };
-  if ("permissions" in root && !isObject(root.permissions)) {
+  if (checkPermissions && "permissions" in root && !isObject(root.permissions)) {
     return { ok: false, error: "settings `permissions` is not an object; refusing to touch it" };
   }
   return { ok: true, root };
@@ -72,6 +72,90 @@ export function planModeChange(text: string | null, mode: string, label = "setti
   root.permissions = perms;
   const after = JSON.stringify(root, null, detectIndent(text)) + (text.endsWith("\n") ? "\n" : "");
   return { ok: true, changed: after !== text, before: text, after, diff: unifiedDiff(text, after, label, label) };
+}
+
+// ---- statusLine key (second managed key; every other key is preserved) ----
+
+export const STATUSLINE_ACTIONS = ["on", "off"] as const;
+export type StatusLineAction = (typeof STATUSLINE_ACTIONS)[number];
+export const SHIM_NAME = "statusline.mjs";
+
+/** The command stored in settings: node running the stable shim under the plugin data dir. */
+export function statusLineCommand(shimPath: string): string {
+  return `node "${shimPath}"`;
+}
+
+/** True for a statusLine odd-claude wrote (shim, or the script inside a plugin root of any version). */
+export function isOwnStatusLine(v: unknown): boolean {
+  return isObject(v) && v.type === "command" && typeof v.command === "string" && /^node "[^"]*[\\/](statusline\.mjs|dist[\\/]cli[\\/]statusline\.js)"$/.test(v.command);
+}
+
+/**
+ * Source of the shim. The plugin root changes on every plugin update, so settings point at this stable
+ * file instead and the SessionStart hook rewrites it when the root moves (refreshStatuslineShim).
+ */
+export function shimSource(pluginRoot: string): string {
+  return `// odd-claude statusLine shim, managed by /odd-claude:setup (--statusline on|off). Safe to delete.
+import { dirname } from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
+const ROOT = ${JSON.stringify(pluginRoot)};
+try {
+  const m = await import(pathToFileURL(ROOT + "/dist/cli/statusline.js").href);
+  m.runStatusline(dirname(fileURLToPath(import.meta.url)));
+} catch {
+  console.log("odd-claude");
+}
+`;
+}
+
+/** Current statusLine value of a settings text, or undefined (absent/invalid). */
+export function currentStatusLine(text: string | null): unknown {
+  if (text === null) return undefined;
+  const p = parseSettings(text, false);
+  return p.ok ? p.root.statusLine : undefined;
+}
+
+export type StatusLinePlan =
+  | { ok: true; changed: boolean; before: string | null; after: string; diff: string; foreign: boolean }
+  | { ok: false; error: string };
+
+/**
+ * `on` sets statusLine to `{type:"command",command}`; a different (foreign) existing value is flagged
+ * `foreign` so the caller can require explicit consent. `off` removes only an own value, or puts back
+ * `previous` (the user's value recorded when ours replaced it). Foreign or absent values are left alone.
+ */
+export function planStatusLineChange(
+  text: string | null,
+  action: StatusLineAction,
+  opts: { command: string; previous?: unknown },
+  label = "settings.json",
+): StatusLinePlan {
+  if (!(STATUSLINE_ACTIONS as readonly string[]).includes(action)) {
+    return { ok: false, error: `invalid statusline action "${action}"; valid actions: ${STATUSLINE_ACTIONS.join(", ")}` };
+  }
+  const desired = { type: "command", command: opts.command };
+  const unchanged = (before: string | null): StatusLinePlan => ({ ok: true, changed: false, before, after: before ?? "", diff: NO_CHANGES, foreign: false });
+  if (text === null) {
+    if (action === "off") return unchanged(null);
+    const after = JSON.stringify({ statusLine: desired }, null, 2) + "\n";
+    return { ok: true, changed: true, before: null, after, diff: unifiedDiff("", after, "/dev/null", label), foreign: false };
+  }
+  const parsed = parseSettings(text, false);
+  if (!parsed.ok) return parsed;
+  const root = parsed.root;
+  const cur = root.statusLine;
+  let foreign = false;
+  if (action === "on") {
+    if (isOwnStatusLine(cur) && JSON.stringify(cur) === JSON.stringify(desired)) return unchanged(text);
+    foreign = "statusLine" in root && !isOwnStatusLine(cur);
+    root.statusLine = desired;
+  } else {
+    if (!isOwnStatusLine(cur)) return unchanged(text);
+    if (opts.previous !== undefined) root.statusLine = opts.previous;
+    else delete root.statusLine;
+  }
+  const after = JSON.stringify(root, null, detectIndent(text)) + (text.endsWith("\n") ? "\n" : "");
+  return { ok: true, changed: after !== text, before: text, after, diff: unifiedDiff(text, after, label, label), foreign };
 }
 
 function lines(s: string): string[] {

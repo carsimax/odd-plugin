@@ -15,7 +15,7 @@ export const NO_CHANGES = "no changes";
 function isObject(v) {
     return typeof v === "object" && v !== null && !Array.isArray(v);
 }
-function parseSettings(text) {
+function parseSettings(text, checkPermissions = true) {
     let root;
     try {
         root = JSON.parse(text);
@@ -25,7 +25,7 @@ function parseSettings(text) {
     }
     if (!isObject(root))
         return { ok: false, error: "settings file is not a JSON object; refusing to touch it" };
-    if ("permissions" in root && !isObject(root.permissions)) {
+    if (checkPermissions && "permissions" in root && !isObject(root.permissions)) {
         return { ok: false, error: "settings `permissions` is not an object; refusing to touch it" };
     }
     return { ok: true, root };
@@ -64,6 +64,81 @@ export function planModeChange(text, mode, label = "settings.json") {
     root.permissions = perms;
     const after = JSON.stringify(root, null, detectIndent(text)) + (text.endsWith("\n") ? "\n" : "");
     return { ok: true, changed: after !== text, before: text, after, diff: unifiedDiff(text, after, label, label) };
+}
+// ---- statusLine key (second managed key; every other key is preserved) ----
+export const STATUSLINE_ACTIONS = ["on", "off"];
+export const SHIM_NAME = "statusline.mjs";
+/** The command stored in settings: node running the stable shim under the plugin data dir. */
+export function statusLineCommand(shimPath) {
+    return `node "${shimPath}"`;
+}
+/** True for a statusLine odd-claude wrote (shim, or the script inside a plugin root of any version). */
+export function isOwnStatusLine(v) {
+    return isObject(v) && v.type === "command" && typeof v.command === "string" && /^node "[^"]*[\\/](statusline\.mjs|dist[\\/]cli[\\/]statusline\.js)"$/.test(v.command);
+}
+/**
+ * Source of the shim. The plugin root changes on every plugin update, so settings point at this stable
+ * file instead and the SessionStart hook rewrites it when the root moves (refreshStatuslineShim).
+ */
+export function shimSource(pluginRoot) {
+    return `// odd-claude statusLine shim, managed by /odd-claude:setup (--statusline on|off). Safe to delete.
+import { dirname } from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
+const ROOT = ${JSON.stringify(pluginRoot)};
+try {
+  const m = await import(pathToFileURL(ROOT + "/dist/cli/statusline.js").href);
+  m.runStatusline(dirname(fileURLToPath(import.meta.url)));
+} catch {
+  console.log("odd-claude");
+}
+`;
+}
+/** Current statusLine value of a settings text, or undefined (absent/invalid). */
+export function currentStatusLine(text) {
+    if (text === null)
+        return undefined;
+    const p = parseSettings(text, false);
+    return p.ok ? p.root.statusLine : undefined;
+}
+/**
+ * `on` sets statusLine to `{type:"command",command}`; a different (foreign) existing value is flagged
+ * `foreign` so the caller can require explicit consent. `off` removes only an own value, or puts back
+ * `previous` (the user's value recorded when ours replaced it). Foreign or absent values are left alone.
+ */
+export function planStatusLineChange(text, action, opts, label = "settings.json") {
+    if (!STATUSLINE_ACTIONS.includes(action)) {
+        return { ok: false, error: `invalid statusline action "${action}"; valid actions: ${STATUSLINE_ACTIONS.join(", ")}` };
+    }
+    const desired = { type: "command", command: opts.command };
+    const unchanged = (before) => ({ ok: true, changed: false, before, after: before ?? "", diff: NO_CHANGES, foreign: false });
+    if (text === null) {
+        if (action === "off")
+            return unchanged(null);
+        const after = JSON.stringify({ statusLine: desired }, null, 2) + "\n";
+        return { ok: true, changed: true, before: null, after, diff: unifiedDiff("", after, "/dev/null", label), foreign: false };
+    }
+    const parsed = parseSettings(text, false);
+    if (!parsed.ok)
+        return parsed;
+    const root = parsed.root;
+    const cur = root.statusLine;
+    let foreign = false;
+    if (action === "on") {
+        if (isOwnStatusLine(cur) && JSON.stringify(cur) === JSON.stringify(desired))
+            return unchanged(text);
+        foreign = "statusLine" in root && !isOwnStatusLine(cur);
+        root.statusLine = desired;
+    }
+    else {
+        if (!isOwnStatusLine(cur))
+            return unchanged(text);
+        if (opts.previous !== undefined)
+            root.statusLine = opts.previous;
+        else
+            delete root.statusLine;
+    }
+    const after = JSON.stringify(root, null, detectIndent(text)) + (text.endsWith("\n") ? "\n" : "");
+    return { ok: true, changed: after !== text, before: text, after, diff: unifiedDiff(text, after, label, label), foreign };
 }
 function lines(s) {
     if (s === "")

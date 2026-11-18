@@ -7,6 +7,7 @@ import { readPersona } from "../lib/persona.js";
 import { recordAgentStatus } from "../lib/agent-status.js";
 import { createSessionScratch, sweepStaleTombstones } from "../lib/scratch.js";
 import { titleSequence } from "../lib/terminal.js";
+import { refreshStatuslineShim } from "../lib/setup-fs.js";
 /**
  * Records the session start in state (when a session id and data dir exist) and injects the
  * odd-claude context (persona, delegation mode, cards dir, reply-language rule) as additionalContext.
@@ -26,6 +27,10 @@ export function sessionStart(input, opts = {}) {
         }
     }
     const env = opts.env ?? process.env;
+    // After a plugin update the root moves: keep an existing statusLine shim (see /odd-claude:setup) pointing at it.
+    const shimData = opts.dataDir ?? env.CLAUDE_PLUGIN_DATA;
+    if (shimData && env.CLAUDE_PLUGIN_ROOT)
+        refreshStatuslineShim(shimData, env.CLAUDE_PLUGIN_ROOT);
     const scratchLines = [];
     if (typeof input.session_id === "string" && input.session_id !== "") {
         sweepStaleTombstones(opts);

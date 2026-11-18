@@ -1,19 +1,20 @@
-// `node dist/cli/setup.js [--mode <m>] [--apply] [--restore [backup]] [--settings <path>]
-//                         [--data-dir <dir>] [--json]`
+// `node dist/cli/setup.js [--mode <m> | --statusline on|off [--replace-statusline]] [--apply]
+//                         [--restore [backup]] [--settings <path>] [--data-dir <dir>]
+//                         [--plugin-root <dir>] [--json]`
 // Without --apply it is a dry run: prints the diff and writes nothing.
 // Exit codes: 0 ok (dry run, applied, unchanged, info); 1 refused/failed (invalid mode,
 // invalid JSON settings, unknown backup, write error); 2 usage error.
 import { realpathSync } from "node:fs";
 import { readFileSync, existsSync } from "node:fs";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { MODES, currentMode, modeWarning, planModeChange } from "../lib/setup.js";
-import { applyMode, applyRestore, listBackups, planRestore } from "../lib/setup-fs.js";
+import { MODES, STATUSLINE_ACTIONS, currentMode, currentStatusLine, isOwnStatusLine, modeWarning, planModeChange, type StatusLineAction } from "../lib/setup.js";
+import { applyMode, applyRestore, applyStatusLine, listBackups, planRestore, planStatusLine } from "../lib/setup-fs.js";
 
 type Env = Record<string, string | undefined>;
-const VALUE_FLAGS = ["--mode", "--settings", "--data-dir"];
-const BOOL_FLAGS = ["--apply", "--json"];
+const VALUE_FLAGS = ["--mode", "--settings", "--data-dir", "--statusline", "--plugin-root"];
+const BOOL_FLAGS = ["--apply", "--json", "--replace-statusline"];
 
 interface Args {
   mode?: string;
@@ -23,20 +24,26 @@ interface Args {
   backup?: string;
   settings?: string;
   dataDir?: string;
+  statusline?: string;
+  pluginRoot?: string;
+  replaceStatusline: boolean;
 }
 
 function parseArgs(argv: string[]): Args | string {
-  const a: Args = { apply: false, json: false, restore: false };
+  const a: Args = { apply: false, json: false, restore: false, replaceStatusline: false };
   for (let i = 0; i < argv.length; i++) {
     const f = argv[i]!;
     if (BOOL_FLAGS.includes(f)) {
       if (f === "--apply") a.apply = true;
-      else a.json = true;
+      else if (f === "--json") a.json = true;
+      else a.replaceStatusline = true;
     } else if (VALUE_FLAGS.includes(f)) {
       const v = argv[++i];
       if (v === undefined || v === "" || v.startsWith("--")) return `${f} needs a value`;
       if (f === "--mode") a.mode = v;
       else if (f === "--settings") a.settings = v;
+      else if (f === "--statusline") a.statusline = v;
+      else if (f === "--plugin-root") a.pluginRoot = v;
       else a.dataDir = v;
     } else if (f === "--restore") {
       a.restore = true;
@@ -45,7 +52,10 @@ function parseArgs(argv: string[]): Args | string {
     } else return `unknown argument ${f}`;
   }
   if (a.restore && a.mode !== undefined) return "--restore and --mode are mutually exclusive";
-  if (a.apply && !a.restore && a.mode === undefined) return "--apply needs --mode <mode> or --restore";
+  if (a.statusline !== undefined && !(STATUSLINE_ACTIONS as readonly string[]).includes(a.statusline)) return `--statusline must be one of: ${STATUSLINE_ACTIONS.join(", ")}`;
+  if (a.statusline !== undefined && (a.restore || a.mode !== undefined)) return "--statusline cannot be combined with --mode or --restore";
+  if (a.replaceStatusline && a.statusline === undefined) return "--replace-statusline needs --statusline on";
+  if (a.apply && !a.restore && a.mode === undefined && a.statusline === undefined) return "--apply needs --mode <mode>, --statusline on|off or --restore";
   return a;
 }
 
@@ -85,21 +95,39 @@ function run(argv: string[], env: Env): CliResult {
   const settingsPath = args.settings ?? join(homedir(), ".claude", "settings.json");
   const dataDir = args.dataDir ?? (env.CLAUDE_PLUGIN_DATA || undefined);
 
-  if (!args.restore && args.mode === undefined) {
+  if (!args.restore && args.mode === undefined && args.statusline === undefined) {
     const text = existsSync(settingsPath) ? readFileSync(settingsPath, "utf8") : null;
     const cur = currentMode(text);
+    const sl = currentStatusLine(text);
+    const slText = sl === undefined ? "(not set)" : `${JSON.stringify(sl)} (${isOwnStatusLine(sl) ? "odd-claude" : "not odd-claude"})`;
     const backups = dataDir ? listBackups(dataDir) : [];
     const lines = [
       `settings: ${settingsPath}${text === null ? " (missing)" : ""}`,
       `permissions.defaultMode: ${cur ?? "(not set)"}`,
+      `statusLine: ${slText}`,
       `available modes: ${MODES.join(", ")}`,
       `backups: ${backups.length}`,
       ...backups.map((b) => `  ${b}`),
     ];
-    return out({ status: "info", settingsPath, currentMode: cur ?? null, modes: [...MODES], backups }, lines.join("\n"), 0);
+    return out({ status: "info", settingsPath, currentMode: cur ?? null, statusLine: sl ?? null, modes: [...MODES], backups }, lines.join("\n"), 0);
   }
   if (dataDir === undefined) return fail(argv, "usage: no data dir (pass --data-dir or set CLAUDE_PLUGIN_DATA)", 2, true);
   const base = { settingsPath, dataDir };
+
+  if (args.statusline !== undefined) {
+    const sl = { ...base, action: args.statusline as StatusLineAction, pluginRoot: resolve(args.pluginRoot ?? env.CLAUDE_PLUGIN_ROOT ?? join(dirname(fileURLToPath(import.meta.url)), "..", "..")), replaceForeign: args.replaceStatusline };
+    if (args.apply) return render(argv, applyStatusLine(sl), "applied", out);
+    const p = planStatusLine(sl);
+    if (!p.ok) return fail(argv, p.error, 1);
+    const w = p.foreign
+      ? "WARNING: settings already has a statusLine that odd-claude did not write (the `-` lines above). Applying replaces it only with --replace-statusline; the original stays in the backup and `--statusline off` puts it back."
+      : undefined;
+    return out(
+      { status: "dry-run", changed: p.changed, foreign: p.foreign, diff: p.diff, ...(w === undefined ? {} : { warning: w }) },
+      (p.changed ? `${p.diff}\n\ndry run: nothing written. Re-run with --apply${p.foreign ? " --replace-statusline" : ""} to write it` : `${p.diff}\n\ndry run: nothing to do`) + (w === undefined ? "" : `\n\n${w}`),
+      0,
+    );
+  }
 
   if (args.restore) {
     if (!args.apply) {
@@ -143,11 +171,16 @@ function render(argv: string[], r: ReturnType<typeof applyMode>, verb: string, o
 }
 
 const USAGE =
-  "usage: setup.js [--mode default|acceptEdits|auto|plan|bypassPermissions] [--apply] [--restore [backup]] [--settings <path>] [--data-dir <dir>] [--json] [--help]";
+  "usage: setup.js [--mode default|acceptEdits|auto|plan|bypassPermissions | --statusline on|off [--replace-statusline]] [--apply] [--restore [backup]] [--settings <path>] [--data-dir <dir>] [--plugin-root <dir>] [--json] [--help]";
 
 const HELP = `${USAGE}
 
-Writes ONLY permissions.defaultMode of the settings file (default ~/.claude/settings.json).
+Writes ONLY permissions.defaultMode or statusLine of the settings file (default ~/.claude/settings.json).
+--statusline on sets statusLine to {"type":"command","command":"node \"<data-dir>/statusline.mjs\""}: a stable shim
+that imports <plugin-root>/dist/cli/statusline.js (the root changes on plugin updates; the SessionStart hook
+refreshes the shim, so settings never need to be rewritten). A statusLine odd-claude did not write is shown in the
+diff and replaced only with --replace-statusline. --statusline off removes only odd-claude's own statusLine, or
+puts back the user's previous one that --replace-statusline displaced.
 Without --apply it is a dry run: prints the diff and writes nothing.
 --apply backs up the original to <data-dir>/backups (mode 0600) first, then writes atomically,
 keeping the file mode and following a symlinked settings file. A read-only file is refused.
