@@ -1,0 +1,1 @@
+{ "description": "odd hello mod", "modules": ["./register.ts"] }

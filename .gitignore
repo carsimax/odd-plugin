@@ -1,0 +1,9 @@
+# upstream/ holds read-only reference clones (e.g. Gentleman-Programming/gentle-shell)
+# that are not part of this project.
+/upstream/
+# Spike debug logs, scratch and generated mod types are local, not versioned.
+spikes/**/*.log
+spikes/**/hook-log.jsonl
+spikes/scratch/
+spikes/**/.claude-plugin/types/
+spikes/**/latest

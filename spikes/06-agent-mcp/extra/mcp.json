@@ -1,0 +1,1 @@
+{ "mcpServers": { "oddsrv2": { "command": "node", "args": ["../06-agent-mcp/server/server.js"] } } }
