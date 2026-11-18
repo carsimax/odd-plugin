@@ -1,0 +1,51 @@
+# v0.1 skeleton: installable odd-claude plugin (Phase 1)
+Goal: an installable `odd-claude` plugin that loads, declares Engram, and can diagnose and configure itself. Branch: `feat/v0.1-skeleton`.
+Runner: `node:test` via `npm test` inside `plugins/odd-claude` + `claude plugin validate` / `claude plugin test`.
+
+## Specs
+
+### S1 Roadmap Phase 1 (docs/roadmap.md, "### Phase 1: Skeleton, setup, doctor, engram dependency")
+
+- **Goal:** an installable `odd-claude` plugin that loads, declares Engram, and can diagnose and configure itself.
+- **Deliverables:** `.claude-plugin/plugin.json` (+ marketplace entry), `dependencies` on `engram@engram`, `${CLAUDE_PLUGIN_ROOT}` layout (`cards/`, `agents/`, `skills/`, `hooks/`, `bin/`), `/odd-claude:doctor`, `/odd-claude:status` (R38), `/odd-claude:setup` (opt-in settings writer: statusLine, `defaultMode`; the persona does not need it: forced output style per Q2), hooks scaffolding with shared state-file helper.
+- **Exit criteria:** `claude plugin validate` passes; `claude plugin test` passes; `/odd-claude:doctor` reports engram/codegraph/git presence and exits with the missing items listed; `/odd-claude:setup` shows a diff and writes nothing without confirmation (tested with a declined run and an accepted run on a temp settings file).
+
+### S2 Layout decision (user answer, 2026-11-18)
+
+Answer: "Marketplace en raíz + plugins/odd-claude/ (Rec.)"
+Option text: "La raíz tiene .claude-plugin/marketplace.json y el plugin vive en plugins/odd-claude/. Instalas con /plugin marketplace add <repo> y después pueden convivir otros plugins."
+
+### S3 Runtime decision (user answer, 2026-11-18)
+
+Answer: "Node + TypeScript compilado (Recomendado)"
+Option text: "Permite portar la lógica TS del upstream casi tal cual y es el mismo lenguaje que los mods. Se versiona un build a JS para no depender de un tsc local, que en tu máquina hoy está roto. Requiere Node ≥ 20."
+
+### S4 Project decisions (user, verbatim)
+
+- "El proyecto se llamara odd-claude no gentle-ai o gentle-shell"
+- "ignora completamente otros proyectos como gentle-py tomaremos todo 100% del upstream de este repo"
+- "no usaremos nada de prefijo gentle- o gentle-ai todo sera odd-claude nuestro plugin entonces el prefijo sera odd"
+- "y sin nada de telemetria"
+
+### S5 Delivery conventions (docs/roadmap.md, "## Delivery conventions")
+
+- **Work-unit commits:** one reviewable unit per commit, about 400 lines of change at most, with its tests and docs together (skill `work-unit-commits`).
+- **Tests with behaviour:** behaviour changes ship with tests written first where a deterministic runner applies; guards reuse upstream tests adapted to Node (A58). Docs-only changes state the exception.
+- **Checks on every change:** `claude plugin validate` and `claude plugin test` must pass, plus the focused tests of the touched unit.
+- **Naming and telemetry checks:** no `gentle-` identifiers we name (attributed notices excepted) and no telemetry code, enforced by grep in checks.
+
+## Tasks
+
+- T1 | S1,S2,S3,S4,S5 | writer | done-pending-commit (commit: pending) — Scaffold: root `.claude-plugin/marketplace.json` (plugin source `./plugins/odd-claude`, cross-marketplace dependency allowance for engram), `plugins/odd-claude/.claude-plugin/plugin.json` (name `odd-claude`, version `0.1.0`, engines `claude-code`, dependencies `engram@engram`), Node+TS build (`package.json`, `tsconfig`, `src/` → committed `dist/`), `npm test` with `node:test`, naming/telemetry grep check script; `claude plugin validate` passes.
+- T2 | S1,S5 | writer | pending — Hooks scaffolding + shared state-file helper under `${CLAUDE_PLUGIN_DATA}`, with tests.
+- T3 | S1 | writer | pending — `/odd-claude:doctor` (port upstream R38 doctor semantics): reports engram/codegraph/git presence and lists missing items; tests.
+- T4 | S1 | writer | pending — `/odd-claude:status` (port upstream R38 status semantics); tests.
+- T5 | S1 | writer (own commit, independent verify: writes user settings) | pending — `/odd-claude:setup`: opt-in settings writer (statusLine, `defaultMode`) that shows a diff and writes nothing without confirmation; idempotent, reversible, write scope limited to listed keys; tested with a declined run and an accepted run on a temp settings file.
+- T6 | S1,S5 | writer | pending — Plugin README/install docs, `claude plugin test` green, roadmap Status row Phase 1 updated.
+
+## Log
+
+- L1: user's original request: "3. si vemos con 0.1" (in reply to "¿Arrancamos v0.1 (el esqueleto instalable) como primera feature ODD?").
+- L2: "2. dejemos para la v2" (conflict-marker gate stays v2 with R32).
+- L3: 2026-11-18: decisions S2 (layout) and S3 (runtime) taken by the user.
+- L4: T1 scaffold done (uncommitted), covers S1 (manifest, marketplace entry, `dependencies: ["engram@engram"]`), S2 (root marketplace + `plugins/odd-claude/`), S3 (Node+TS, committed `dist/`, shipped dist excludes tests; tests build to git-ignored `dist-test/`), S4/S5 (`scripts/check-naming.mjs` via `npm run check`, tested by `check-naming.test.ts`). Evidence: RED `tsc` TS2307 missing `./version.js`, then GREEN `npm test` 6 pass/0 fail; `npm run check` ok; `claude plugin validate plugins/odd-claude` and `claude plugin validate .` pass with warnings only (name reads as Anthropic's own: user-mandated name; README missing and icon missing are T6; no unknown-field warning for `allowCrossMarketplaceDependenciesOn`). `claude -p --plugin-dir` loaded (result `OK`); engram was already installed locally so it resolved from the existing cache, fresh resolution not proven. `claude plugin test` not run (no mod yet).

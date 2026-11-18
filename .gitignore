@@ -7,3 +7,6 @@ spikes/**/hook-log.jsonl
 spikes/scratch/
 spikes/**/.claude-plugin/types/
 spikes/**/latest
+# odd-claude plugin: local deps and test build output (dist/ IS committed)
+plugins/odd-claude/node_modules/
+plugins/odd-claude/dist-test/

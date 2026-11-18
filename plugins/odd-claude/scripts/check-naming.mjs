@@ -1,0 +1,55 @@
+// Naming/telemetry guard (S4/S5): fails when authored files under the plugin contain
+// forbidden `gentle-`/`gentle_`/`GENTLE_` identifiers or telemetry markers.
+// Attributed notices are allowed on lines containing `odd-check: allow` or in files
+// named LICENSE / NOTICE*.
+import { readdirSync, readFileSync, statSync } from "node:fs";
+import { join, basename, relative, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+
+const SKIP_DIRS = new Set(["node_modules", "dist-test", ".git"]);
+const SKIP_FILES = new Set(["package-lock.json"]);
+const PATTERNS = [
+  { name: "gentle- identifier", re: /gentle[-_]/i },
+  { name: "telemetry marker", re: /telemetry/i },
+];
+
+export function walk(dir) {
+  const out = [];
+  for (const entry of readdirSync(dir)) {
+    const p = join(dir, entry);
+    if (statSync(p).isDirectory()) {
+      if (!SKIP_DIRS.has(entry)) out.push(...walk(p));
+    } else if (!SKIP_FILES.has(entry)) out.push(p);
+  }
+  return out;
+}
+
+export function scan(root) {
+  const violations = [];
+  for (const file of walk(root)) {
+    const base = basename(file);
+    if (base === "LICENSE" || base.startsWith("NOTICE")) continue;
+    if (relative(root, file) === join("scripts", "check-naming.mjs")) continue;
+    const lines = readFileSync(file, "utf8").split("\n");
+    lines.forEach((line, i) => {
+      if (line.includes("odd-check: allow")) return;
+      for (const { name, re } of PATTERNS) {
+        if (re.test(line)) {
+          violations.push(`${relative(root, file)}:${i + 1}: ${name}: ${line.trim()}`);
+        }
+      }
+    });
+  }
+  return violations;
+}
+
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  const root = resolve(process.argv[2] ?? join(fileURLToPath(import.meta.url), "..", ".."));
+  const violations = scan(root);
+  if (violations.length > 0) {
+    console.error(`check-naming: ${violations.length} violation(s)`);
+    for (const v of violations) console.error(`  ${v}`);
+    process.exit(1);
+  }
+  console.log("check-naming: ok");
+}

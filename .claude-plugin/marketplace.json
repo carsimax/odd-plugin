@@ -1,0 +1,14 @@
+{
+  "name": "odd-claude",
+  "description": "Marketplace for the odd-claude plugin.",
+  "owner": { "name": "carsimax" },
+  "allowCrossMarketplaceDependenciesOn": ["engram"],
+  "plugins": [
+    {
+      "name": "odd-claude",
+      "source": "./plugins/odd-claude",
+      "description": "odd-claude: opinionated workflow plugin for Claude Code (Engram memory, review agents, doctor/status/setup).",
+      "version": "0.1.0"
+    }
+  ]
+}
