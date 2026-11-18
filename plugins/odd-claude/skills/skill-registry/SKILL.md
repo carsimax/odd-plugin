@@ -32,10 +32,18 @@ Use this skill after installing, removing, creating, moving, or renaming skills,
 
 ## Execution Steps
 
-1. Use `/odd-claude:skill-registry` for a deliberate disk-index refresh. It scans known project and user roots, reads frontmatter, and publishes deterministic rows and a non-authoritative cache.
+1. Use `/odd-claude:skill-registry` for a deliberate disk-index refresh. It scans known project, user and plugin skill roots, reads frontmatter, and publishes deterministic rows and a non-authoritative cache. The SessionStart hook already refreshes the same file automatically (cheap, mtime/size fingerprint); set `ODD_CLAUDE_NO_SKILL_REGISTRY=1` to opt out. Automatic refresh (hook and the injection below) never overwrites Git-tracked targets; `--force` does.
 2. For selection, consult the effective view: the session skill list plus the registry rows.
 3. Pass selected exact paths to subagents and require them to read each `SKILL.md` before work.
 4. Return the registry path, disk skill count, and whether bytes changed.
+
+## Deliberate refresh
+
+Result of the refresh just run for this project (read-only injection; no user text is part of the command):
+
+!`node "${CLAUDE_PLUGIN_ROOT}/dist/cli/skill-registry.js" || true`
+
+Show that line to the user and report it per the Output Contract. If it says `skipped` for `tracked-target` and the user deliberately asked for the refresh, run `node "${CLAUDE_PLUGIN_ROOT}/dist/cli/skill-registry.js" --force` with the Bash tool (it overrides the Git-tracked guard); otherwise relay the reason.
 
 ## Output Contract
 

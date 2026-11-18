@@ -49,3 +49,12 @@ test("prompt anchor quotes the start of a human prompt, bounded", () => {
 test("prompt anchor is skipped for empty, slash-command and shell-escape prompts", () => {
   for (const p of ["", "   ", "/odd-claude:status", "!ls", undefined, 42]) assert.equal(buildPromptAnchor(p), undefined);
 });
+
+test("session context carries the background-subagents policy line (default off) and extra lines", () => {
+  assert.match(buildSessionContext(base), /Background subagents: off/);
+  const on = buildSessionContext({ ...base, backgroundSubagents: "on", extraLines: ["Skill registry: /p/.atl/skill-registry.md (3 skills)"] });
+  assert.match(on, /Background subagents: on/);
+  assert.match(on, /run_in_background/);
+  assert.match(on, /Skill registry: \/p\/\.atl\/skill-registry\.md \(3 skills\)/);
+  assert.ok(on.length < 10000);
+});

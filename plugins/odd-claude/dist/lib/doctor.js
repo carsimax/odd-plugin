@@ -31,7 +31,7 @@ export function collectDoctor(deps) {
     ].filter((p) => p !== undefined);
     items.push(item("engram", "engram", false, engramParts.length > 0, engramParts.join(", ") || "no binary on PATH and no engram plugin installed"));
     const cg = probeBinary(deps, "codegraph", ["--version"]);
-    items.push(item("codegraph", "codegraph", false, cg !== undefined, cg ?? "not found on PATH"));
+    items.push(item("codegraph", "codegraph", false, cg !== undefined, cg !== undefined ? `${cg} (plugin MCP server codegraph: serve --mcp)` : "not found on PATH (optional: the plugin codegraph MCP server stays disconnected; install @colbymchenry/codegraph to enable it)"));
     items.push(item("plugin", "odd-claude plugin", false, true, `version ${deps.pluginVersion}`));
     const dataDir = deps.env.CLAUDE_PLUGIN_DATA;
     if (!dataDir)

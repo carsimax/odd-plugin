@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { personaText } from "./persona.js";
 import { readPluginState } from "./state.js";
+import { backgroundSubagentsLine } from "./background-subagents.js";
 export const DELEGATION_MODES = ["organic", "full"];
 /** Plugin-wide state `delegation` ({ mode }); anything unknown reads as organic. */
 export function readDelegationMode(opts = {}) {
@@ -30,6 +31,8 @@ export function buildSessionContext(i) {
         `Persona mode: ${i.persona}\n${personaText(i.persona)}`,
         `Delegation mode: ${i.delegationMode}`,
         i.delegationMode === "full" ? FULL_DELEGATION : "",
+        backgroundSubagentsLine(i.backgroundSubagents ?? "off"),
+        ...(i.extraLines ?? []),
         LANGUAGE_RULE,
     ];
     return parts.filter((p) => p !== "").join("\n\n");

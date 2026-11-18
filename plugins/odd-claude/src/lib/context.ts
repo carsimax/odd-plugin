@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { personaText, type PersonaMode } from "./persona.js";
 import { readPluginState, type StateOptions } from "./state.js";
+import { backgroundSubagentsLine, type BackgroundPolicy } from "./background-subagents.js";
 
 export const DELEGATION_MODES = ["organic", "full"] as const;
 export type DelegationMode = (typeof DELEGATION_MODES)[number];
@@ -12,6 +13,10 @@ export interface SessionContextInput {
   persona: PersonaMode;
   delegationMode: DelegationMode;
   cardsDir: string;
+  /** Background subagents policy (R12); defaults to off. */
+  backgroundSubagents?: BackgroundPolicy;
+  /** Extra single-line facts (e.g. the skill registry path). */
+  extraLines?: string[];
 }
 
 /** Plugin-wide state `delegation` ({ mode }); anything unknown reads as organic. */
@@ -41,6 +46,8 @@ export function buildSessionContext(i: SessionContextInput): string {
     `Persona mode: ${i.persona}\n${personaText(i.persona)}`,
     `Delegation mode: ${i.delegationMode}`,
     i.delegationMode === "full" ? FULL_DELEGATION : "",
+    backgroundSubagentsLine(i.backgroundSubagents ?? "off"),
+    ...(i.extraLines ?? []),
     LANGUAGE_RULE,
   ];
   return parts.filter((p) => p !== "").join("\n\n");

@@ -1,4 +1,7 @@
-import { updateSessionState, type StateOptions } from "../lib/state.js";
+import { homedir } from "node:os";
+import { logError, updateSessionState, type StateOptions } from "../lib/state.js";
+import { readBackgroundSubagents } from "../lib/background-subagents.js";
+import { realIntegrationDeps, runSessionIntegrations } from "../lib/session-integrations.js";
 import { buildSessionContext, readDelegationMode, resolveCardsDir } from "../lib/context.js";
 import { readPersona } from "../lib/persona.js";
 import type { HookInput, HookOutput } from "./run.js";
@@ -24,10 +27,18 @@ export function sessionStart(input: HookInput, opts: StateOptions = {}): HookOut
       // no data dir: the context must still be injected
     }
   }
+  const env = opts.env ?? process.env;
+  // Registry refresh + codegraph warm-up only when the host reports a project dir (never in tests without cwd).
+  const extraLines =
+    typeof input.cwd === "string" && input.cwd !== ""
+      ? runSessionIntegrations(input.cwd, realIntegrationDeps(env.HOME || homedir(), env, (m) => logError(m, opts))).extraLines
+      : [];
   const additionalContext = buildSessionContext({
     persona: readPersona(opts),
     delegationMode: readDelegationMode(opts),
-    cardsDir: resolveCardsDir(opts.env ?? process.env),
+    cardsDir: resolveCardsDir(env),
+    backgroundSubagents: readBackgroundSubagents(opts),
+    extraLines,
   });
   return { hookSpecificOutput: { hookEventName: "SessionStart", additionalContext } };
 }

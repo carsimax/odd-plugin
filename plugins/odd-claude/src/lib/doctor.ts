@@ -72,7 +72,7 @@ export function collectDoctor(deps: DoctorDeps): DoctorReport {
   );
 
   const cg = probeBinary(deps, "codegraph", ["--version"]);
-  items.push(item("codegraph", "codegraph", false, cg !== undefined, cg ?? "not found on PATH"));
+  items.push(item("codegraph", "codegraph", false, cg !== undefined, cg !== undefined ? `${cg} (plugin MCP server codegraph: serve --mcp)` : "not found on PATH (optional: the plugin codegraph MCP server stays disconnected; install @colbymchenry/codegraph to enable it)"));
 
   items.push(item("plugin", "odd-claude plugin", false, true, `version ${deps.pluginVersion}`));
 
