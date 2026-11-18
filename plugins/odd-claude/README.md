@@ -1,6 +1,32 @@
 # odd-claude
 
-A Claude Code plugin that ports the ODD harness of gentle-shell (MIT) <!-- odd-check: allow --> to Claude Code. **v1.0** is the parity release: the ODD persona, orchestrator cards, agents, skills, native integrations, advisory review, themes and lifecycle hooks. The plugin ships **no deny/ask/block hook** (user decision, v0.5): its hooks only add context. Coordinator mode and the admission rules are prompt text, not enforcement; the only enforcement is Claude Code's native permission system (see [Permission modes](#permission-modes)). The plugin collects no data and sends nothing anywhere.
+A Claude Code plugin that ports the ODD harness of gentle-shell (MIT) <!-- odd-check: allow --> to Claude Code. **v1.1** adds the mods UX on top of **v1.0**, the parity release: the ODD persona, orchestrator cards, agents, skills, native integrations, advisory review, themes and lifecycle hooks. The plugin ships **no deny/ask/block hook** (user decision, v0.5): its hooks only add context. Coordinator mode and the admission rules are prompt text, not enforcement; the only enforcement is Claude Code's native permission system (see [Permission modes](#permission-modes)). The plugin collects no data and sends nothing anywhere.
+
+## What's in v1.1
+
+The mods UX (Phase 5). Every feature ships a non-mod version that works everywhere (including `claude -p`); the mod variant only adds a pane or render tweak when mods are enabled. No mod touches prompts, and none refuses or blocks anything (`src/lib/no-deny.spec.ts`).
+
+- `/odd-claude:agents` (R09): this session's subagents.
+- `/odd-claude:changes` (R46): working-tree summary from read-only git.
+- `/odd-claude:stats` (R36): local session stats from the transcript.
+- `/odd-claude:profiles` (R39/R40): model profiles and per-spawn routing.
+- `/odd-claude:quiet` (R51): compact rendering of long tool results.
+- `/odd-claude:banner` (R45): startup banner.
+- statusLine `odd-status` via `/odd-claude:setup statusline on` (R44, with the R42 tokens/s segment).
+
+| Feature | With mods | Fallback (no mods, `-p`, safe mode) |
+|---|---|---|
+| agents | `/odd-agents` live pane | `/odd-claude:agents` text table |
+| changes | `/odd-changes` pane, refreshed every 5 s | `/odd-claude:changes` text summary |
+| stats | none | `/odd-claude:stats` text |
+| profiles / routing | `agent.spawn` hook rewrites `model` immediately | session context lists the profile and the orchestrator passes `model`; applies from the next session start or `/clear` |
+| quiet | `ui.render` hook draws one summary line | command only stores the flag and says it needs mods |
+| banner | none (same `systemMessage` with or without mods) | same |
+| statusline | none (the `$.ui.status` mod is not shipped) | `setup statusline on` (a statusLine setting, not a mod) |
+
+**Enabling mods.** Mods are gated by Claude Code. Enable them in your Claude Code build/account (see `docs/research/open-questions.md`, Q1) and load the plugin; the `modules` entry in `hooks/hooks.json` points at `hooks/register.ts`. With mods off the plugin loads without errors and only the fallbacks apply. `claude plugin test plugins/odd-claude` runs the mod tests.
+
+**Interactive checks still pending.** These could not be observed in `claude -p` and have not been verified in an interactive session: the `/odd-agents` and `/odd-changes` panes, quiet rendering, banner visibility (`systemMessage`) and the statusLine against a live payload (the fields come from the public documentation and fixtures).
 
 ## What's in v1.0
 
@@ -161,7 +187,7 @@ npm run check   # naming / data-collection guard
 
 `dist/` is committed so the plugin runs without a local `tsc`: **rebuild it (`npm run build`) and commit it with every source change.**
 
-`claude plugin test plugins/odd-claude` applies once the mods layer (Phase 5) provides a hooks module; until then it reports `no hooks module to load`, and `npm test` is the test suite. Validate the manifests with `claude plugin validate plugins/odd-claude` and `claude plugin validate .`.
+`claude plugin test plugins/odd-claude` runs the mod tests (`hooks/register.test.ts`); `npm test` is the main node:test suite. Validate the manifests with `claude plugin validate plugins/odd-claude` and `claude plugin validate .`.
 
 ## License and attribution
 

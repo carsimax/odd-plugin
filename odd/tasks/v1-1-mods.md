@@ -40,12 +40,12 @@ Runner: `node:test` via `npm test` inside `plugins/odd-claude` + `npm run check`
 ## Tasks
 
 - T0 | S4 | writer | done (b023644, verified: S4/S2 met) — v1.0 follow-ups: verifier regression tests for the tombstone (planted entry, read-only root, foreign leftover), bounded stale-tombstone sweep at SessionStart + README note (A-T1), extra terminal-title strips (A-T2), A-R1 accepted and logged.
-- T1 | S1,S2 | writer | done (98efc0b, HEAD on feat/v1.1-mods) — Mod skeleton + `/odd-claude:agents` (R09).
-- T2 | S1,S2,S3 | writer | todo | Risk: high (setup writes `statusLine` to the user's settings.json) — statusLine `odd-status` + setup `statusLine` key + TPS segment (R44, R42).
-- T3 | S1,S2 | writer | todo — `/odd-claude:changes` + startup banner (R46, R45).
-- T4 | S1,S2 | writer | todo — `/odd-claude:stats` + profiles + dynamic routing (R36, R39, R40).
-- T5 | S1,S2 | writer | todo — Tool-render tweaks (R51).
-- T6 | S1 | parent/writer | todo — Close: README, roadmap, `claude plugin test`, version 1.1.0.
+- T1 | S1,S2 | writer | done (98efc0b; test rename + sweep polish 97e7c44) — Mod skeleton + `/odd-claude:agents` (R09).
+- T2 | S1,S2,S3 | writer | done (36bdebd + fix c9e0b30, verified twice: 2 BLOCKERs fixed) | Risk: high (setup writes `statusLine` to the user's settings.json) — statusLine `odd-status` + setup `statusLine` key + TPS segment (R44, R42).
+- T3 | S1,S2 | writer | done (3a30c20) — `/odd-claude:changes` + startup banner (R46, R45).
+- T4 | S1,S2 | writer | done (cae5c5f) — `/odd-claude:stats` + profiles + dynamic routing (R36, R39, R40).
+- T5 | S1,S2 | writer | done (e972313; pane children fix 7746432) — Tool-render tweaks (R51).
+- T6 | S1 | parent/writer | done-pending-commit (version 1.1.0, README, roadmap) — Close: README, roadmap, `claude plugin test`, version 1.1.0.
 
 ## Log
 
@@ -55,3 +55,6 @@ Runner: `node:test` via `npm test` inside `plugins/odd-claude` + `npm run check`
 - L4: Part A (S1): `claude plugin test` runs every `*.test.ts` under the plugin and refused the node:test files, so all node:test files under `src/**` were `git mv`ed to `*.spec.ts`; `hooks/register.test.ts` stays the mod test. Updated `tsconfig.json` exclude, `package.json` test glob (`node --test "dist-test/**/*.spec.js"`), `agents-guard`/`no-deny` specs and README. `npm test` 270 pass (265 + 5 new), `claude plugin test plugins/odd-claude` exit 0 (3 mod tests pass). Part B: `.gitignore` ignores `plugins/odd-claude/.claude-plugin/types/` (git check-ignore confirmed).
 - L5: Part C (S4 polish, T0 follow-up), test-first: added specs for symlinks inside a stale tombstone (victim MARKER survives), malformed/future-dated names ignored, 200 cap (250 stale → 200 then 50), 250 non-tombstone dirs not starving the sweep, and concurrent sweeps not logging ENOENT. RED: the concurrent-sweep test failed (ENOENT logged). GREEN: the sweep now filters tombstone-matching entries before applying the 200 cap and skips ENOENT silently; `npm test` 270 pass x3, `npm run check` ok, `claude plugin validate` passed with warnings.
 - L6: R3 accepted as residual risk next to A-R1 (no code change): a same-user attacker with exact timing can swap the tombstone root for a symlink between `realpath(p)` and `rmSync` in the sweep, provided a victim directory is named like a stale tombstone; Node has no fd-based `unlinkat`. A same-user attacker can already delete the victim directly, so the boundary is not widened.
+- L7: slice note: 9 commits (T0 b023644, T1 98efc0b, rename 97e7c44, T2 36bdebd + c9e0b30, T3 3a30c20, T4 cae5c5f, T5 e972313, pane fix 7746432, plus the T6 close), about 5400 authored lines, one work unit each. A pane-children bug (panes rendered nothing) was found during T5 and fixed in 7746432.
+- L8: T6 covers S1 (Phase 5 closed; mods and fallbacks documented) and keeps S2 (no deny added). Version 1.1.0 in plugin.json, marketplace.json, package.json and package-lock.json root fields; `ROADMAP_PHASE` is now "v1.1: mods UX shipped; next v1.2 web tools", test-first (RED: status.spec.ts failed on the roadmap line; GREEN after the change); dist rebuilt. S3 was met by T2 (statusLine through setup).
+- L9: pending interactive checks (not observable in `claude -p`): panes `/odd-agents` and `/odd-changes`, quiet rendering, banner visibility, and the statusLine with a live payload.

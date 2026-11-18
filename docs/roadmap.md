@@ -2,7 +2,7 @@
 
 **Goal.** odd-claude is [gentle-shell](../upstream/gentle-shell) ported to a Claude Code plugin (`odd-claude`, commands `/odd-claude:<x>`, agents `odd-*`). The upstream repo is the only source of behaviour. Built from [research/portability-matrix.md](research/portability-matrix.md) (132 rows, IDs `R##` runtime / `A##` asset), [research/open-questions.md](research/open-questions.md) and [research/claude-code-extensibility.md](research/claude-code-extensibility.md) §12. Decisions and naming: [README.md](README.md).
 
-Status: **v1.0 reached** (Phases 1–4 and 7 done; Phases 5, 6, 8 pending). Phase contents follow the matrix "Candidate phases" with the adjustments listed under [Deviations](#deviations-from-the-matrix-candidate-phases).
+Status: **v1.1 reached** (Phases 1–5 and 7 done; Phases 6, 8 pending). Phase contents follow the matrix "Candidate phases" with the adjustments listed under [Deviations](#deviations-from-the-matrix-candidate-phases).
 
 ## Guiding principles
 
@@ -91,6 +91,7 @@ Originally "Guards" (enforcement through deny/ask hooks). Superseded by user dec
 
 ### Phase 5: Mods UX (optional)
 
+- **Status:** done (v1.1, branch feat/v1.1-mods). R42 (tokens/s) and R44 (statusLine) shipped through `/odd-claude:setup statusline on`; the `$.ui.status` mod variant is not shipped. Interactive checks (panes, quiet rendering, banner visibility, statusLine live payload) are pending.
 - **Goal:** richer UI where mods are available, with the non-mod fallback already shipped in earlier phases.
 - **Matrix IDs:** R09, R36, R39, R40, R42, R44, R45, R46, R51
 - **Deliverables:** `/odd-claude:agents` (R09, text fallback first, pane via mod), `/odd-claude:stats` (R36, local only), `/odd-claude:profiles` (R39), dynamic per-spawn model routing via `agent.spawn` with static frontmatter `model`/`effort` as base (R40), statusLine script `odd-status` (R44, R42 TPS segment), startup banner (R45), `/odd-claude:changes` (R46), tool-render tweaks (R51).
@@ -149,7 +150,7 @@ Originally "Guards" (enforcement through deny/ask hooks). Superseded by user dec
 | v0.5 | ODD core + coordinator mode (prompt) + advisory budget + permission-mode mapping | 2 + 3 | no deny hooks by user decision (S6); makes no safety claims, protection relies on Claude Code native permissions; independent verification of the delivered units |
 | v0.8 | Advisory review: four lenses + Judgment Day as agents and skills | 4 | per Q4; no native RDD, no external binary |
 | v1.0 | Parity target (below) | 1–4 + 7 | reached (branch feat/v1.0-polish); R57 and R63 dropped by user decision 2026-11-18 |
-| v1.1 | Mods UX | 5 | optional layer |
+| v1.1 | Mods UX | 5 | reached (branch feat/v1.1-mods); R42 and R44 shipped via setup; interactive checks pending |
 | v1.2 | Web tools | 6 | |
 | v2 | Native RDD + peer orchestrators: R03, R07, R29, R30, R31, R32, R33, R74, A39, A40, A47, A48 | 8 | per Q4/Q5; engine and channel chosen at v2 start |
 
@@ -215,7 +216,7 @@ Excluded rows (every other matrix ID is in a phase above, v2 included). Out-of-s
 | 2 | Core declarative layer | Phase 1; Q2, Q3, Q6 | v0.2 | done (v0.2, branch feat/v0.2-core) |
 | 3 | Coordinator, advisory budget, permission modes (no deny hooks) | Phase 2; Q3 | v0.5 | done (v0.5, branch feat/v0.5-guards) |
 | 4 | Advisory review (agents) | Phases 1–3 | v0.8 | done (v0.8, branch feat/v0.8-review) |
-| 5 | Mods UX (optional) | Phase 2; Q1, Q7 | v1.1 | not started |
+| 5 | Mods UX (optional) | Phase 2; Q1, Q7 | v1.1 | done (v1.1, branch feat/v1.1-mods); R42 TPS and R44 statusLine shipped via setup; interactive checks pending |
 | 6 | Web tools | Phase 2 | v1.2 | not started |
 | 7 | Cosmetic and small | Phase 1 | v1.0 | done (v1.0, branch feat/v1.0-polish); R57, R63 dropped by user decision 2026-11-18 |
 | 8 | v2: native RDD + peer orchestrators | v1 shipped | v2 | planned (after v1) |
