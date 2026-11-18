@@ -6,7 +6,7 @@ function cleanName(cwd) {
     if (typeof cwd !== "string")
         return "";
     // eslint-disable-next-line no-control-regex
-    return basename(cwd).replace(/[\u0000-\u001f\u007f-\u009f]/g, "").slice(0, MAX_NAME).trim();
+    return basename(cwd).replace(/[\u0000-\u001f\u007f-\u009f\u202a-\u202e\u2066-\u2069]/g, "").slice(0, MAX_NAME).trim();
 }
 export function titleSequence(cwd) {
     const name = cleanName(cwd);

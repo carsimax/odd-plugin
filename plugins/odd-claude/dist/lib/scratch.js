@@ -3,9 +3,9 @@
 // only what we own" rule and refuses anything that is not a plain directory at exactly that path. The upstream
 // artifact ledger (recorded clones/worktrees, crashed-session sweep) is not ported: nothing here records or
 // deletes anything outside <data>/scratch/<session>.
-import { lstatSync, mkdirSync, readdirSync, realpathSync, rmSync } from "node:fs";
+import { lstatSync, mkdirSync, readdirSync, realpathSync, renameSync, rmSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
-import { resolveDataDir, safeSegment } from "./state.js";
+import { logError, resolveDataDir, safeSegment } from "./state.js";
 export function scratchRoot(opts = {}) {
     return join(resolveDataDir(opts), "scratch");
 }
@@ -50,10 +50,27 @@ export function removeSessionScratch(sessionId, opts = {}) {
         return "absent";
     if (st.isSymbolicLink() || !st.isDirectory())
         return "refused";
-    if (realpathSync(dir) !== join(realpathSync(root), basename(dir)))
+    const realRoot = realpathSync(root);
+    if (realpathSync(dir) !== join(realRoot, basename(dir)))
         return "refused";
+    // Mitigates a parent swap between the check and the delete: rename the entry to a unique tombstone inside the
+    // verified real root (rename never follows the entry itself), then re-verify before deleting. Residual same-user
+    // race: the root can still be swapped between the realpath and the rename; documented in the feature doc.
+    const tomb = join(realRoot, `.rm-${process.pid}-${Date.now()}-${basename(dir)}`);
+    try {
+        renameSync(join(realRoot, basename(dir)), tomb);
+        const t = lstatSync(tomb);
+        if (t.isSymbolicLink() || !t.isDirectory() || realpathSync(tomb) !== join(realpathSync(root), basename(tomb))) {
+            logError(`scratch removal aborted, tombstone not verified: ${tomb}`, opts);
+            return "refused";
+        }
+    }
+    catch (err) {
+        logError(`scratch removal aborted: ${err.message}`, opts);
+        return "refused";
+    }
     // rmSync unlinks symlinks inside the tree instead of following them.
-    rmSync(dir, { recursive: true, force: true });
+    rmSync(tomb, { recursive: true, force: true });
     return "removed";
 }
 function sizeOf(dir) {

@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { existsSync, lstatSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { createSessionScratch, listScratch, removeSessionScratch, scratchDir } from "./scratch.js";
 
 function tmp(): string {
@@ -107,6 +107,56 @@ test("listScratch reports entries and tolerates a missing dir", () => {
     mkdirSync(join(p, "d"));
     assert.deepEqual(listScratch(p), { exists: true, entries: ["a.txt", "d/"], bytes: 5 });
     assert.deepEqual(listScratch(join(dir, "nope")), { exists: false, entries: [], bytes: 0 });
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("hostile session ids never leave <root>; a sibling victim of the data dir survives", () => {
+  const base = tmp();
+  try {
+    const dir = join(base, "data");
+    mkdirSync(dir);
+    mkdirSync(join(base, "victim"));
+    writeFileSync(join(base, "victim", "marker"), "x");
+    writeFileSync(join(base, "marker"), "x");
+    for (const id of ["..", "../..", "/", "a/../../x", "../victim"]) {
+      const p = scratchDir(id, { dataDir: dir });
+      assert.equal(dirname(p), join(dir, "scratch"));
+      createSessionScratch(id, { dataDir: dir });
+      removeSessionScratch(id, { dataDir: dir });
+      assert.ok(existsSync(join(base, "victim", "marker")), `victim survives ${id}`);
+      assert.ok(existsSync(join(base, "marker")));
+      assert.ok(existsSync(join(dir, "scratch")), "root is never removed");
+    }
+  } finally {
+    rmSync(base, { recursive: true, force: true });
+  }
+});
+
+test("a relative data dir is refused by create and remove and deletes nothing", () => {
+  const base = tmp();
+  const cwd = process.cwd();
+  try {
+    mkdirSync(join(base, "scratch", "sess-2"), { recursive: true });
+    process.chdir(base);
+    assert.throws(() => removeSessionScratch("sess-2", { dataDir: "." }), /absolute/);
+    assert.throws(() => removeSessionScratch("sess-2", { env: { CLAUDE_PLUGIN_DATA: "." } }), /absolute/);
+    assert.throws(() => createSessionScratch("sess-2", { dataDir: "." }), /absolute/);
+    assert.ok(existsSync(join(base, "scratch", "sess-2")));
+  } finally {
+    process.chdir(cwd);
+    rmSync(base, { recursive: true, force: true });
+  }
+});
+
+test("a tombstone leftover does not break removal and the dir ends up gone", () => {
+  const dir = tmp();
+  try {
+    const p = createSessionScratch("s", { dataDir: dir });
+    writeFileSync(join(p, "f"), "x");
+    assert.equal(removeSessionScratch("s", { dataDir: dir }), "removed");
+    assert.deepEqual(listScratch(join(dir, "scratch")).entries, []);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

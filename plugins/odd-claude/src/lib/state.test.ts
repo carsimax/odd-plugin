@@ -120,6 +120,13 @@ test("resolveDataDir prefers explicit option, then CLAUDE_PLUGIN_DATA, else thro
   assert.throws(() => resolveDataDir({ env: {} }), /CLAUDE_PLUGIN_DATA/);
 });
 
+test("resolveDataDir refuses a relative data dir (option or env)", () => {
+  for (const bad of [".", "rel/dir", "../x"]) {
+    assert.throws(() => resolveDataDir({ dataDir: bad }), /absolute/);
+    assert.throws(() => resolveDataDir({ env: { CLAUDE_PLUGIN_DATA: bad } }), /absolute/);
+  }
+});
+
 test("logError appends a line to logs/hooks.log", () => {
   const dir = tmp();
   try {

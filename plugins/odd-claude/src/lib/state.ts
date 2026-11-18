@@ -2,7 +2,7 @@
 // hooks) or an explicit `dataDir` option (tests/CLI); never under ~/.claude directly.
 // Layout: <dataDir>/sessions/<session>.json  and  <dataDir>/logs/hooks.log
 import { appendFileSync, chmodSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { dirname, isAbsolute, join } from "node:path";
 import { acquireLock, releaseOwnedLock } from "./lock.js";
 
 export const STATE_SCHEMA_VERSION = 1;
@@ -25,6 +25,8 @@ interface StateFile {
 export function resolveDataDir(opts: StateOptions = {}): string {
   const dir = opts.dataDir ?? (opts.env ?? process.env).CLAUDE_PLUGIN_DATA;
   if (!dir) throw new Error("no data dir: set CLAUDE_PLUGIN_DATA or pass dataDir");
+  // A relative dir would resolve against the hook's cwd and could make scratch removal hit the project tree.
+  if (!isAbsolute(dir)) throw new Error("data dir must be an absolute path");
   return dir;
 }
 
