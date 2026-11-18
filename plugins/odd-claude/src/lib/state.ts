@@ -28,7 +28,7 @@ export function resolveDataDir(opts: StateOptions = {}): string {
   return dir;
 }
 
-function safeSegment(id: string): string {
+export function safeSegment(id: string): string {
   const s = id.replace(/[^A-Za-z0-9_-]/g, "_").slice(0, 128);
   return s === "" ? "_" : s;
 }

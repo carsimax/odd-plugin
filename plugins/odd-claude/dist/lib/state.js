@@ -11,7 +11,7 @@ export function resolveDataDir(opts = {}) {
         throw new Error("no data dir: set CLAUDE_PLUGIN_DATA or pass dataDir");
     return dir;
 }
-function safeSegment(id) {
+export function safeSegment(id) {
     const s = id.replace(/[^A-Za-z0-9_-]/g, "_").slice(0, 128);
     return s === "" ? "_" : s;
 }

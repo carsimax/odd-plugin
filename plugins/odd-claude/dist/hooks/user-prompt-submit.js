@@ -1,5 +1,7 @@
 import { buildPromptAnchor } from "../lib/context.js";
 import { logError } from "../lib/state.js";
+import { recordAgentStatus } from "../lib/agent-status.js";
+import { takeQuotaAdvice } from "../lib/quota.js";
 import { resetExploration } from "../lib/exploration-budget.js";
 /**
  * Per-turn reply-language anchor (R72): quotes the start of the human's own prompt so the rule
@@ -20,8 +22,10 @@ export function userPromptSubmit(input, opts = {}) {
             }
         }
     }
-    const additionalContext = buildPromptAnchor(input.prompt);
-    if (additionalContext === undefined)
+    recordAgentStatus(input, "working", opts);
+    const advice = typeof input.session_id === "string" && input.session_id !== "" ? takeQuotaAdvice(input.session_id, opts) : undefined;
+    const additionalContext = [buildPromptAnchor(input.prompt), advice].filter((p) => p !== undefined).join("\n\n");
+    if (additionalContext === "")
         return undefined;
     return { hookSpecificOutput: { hookEventName: "UserPromptSubmit", additionalContext } };
 }

@@ -4,6 +4,9 @@ import { readBackgroundSubagents } from "../lib/background-subagents.js";
 import { realIntegrationDeps, runSessionIntegrations } from "../lib/session-integrations.js";
 import { buildSessionContext, readDelegationMode, resolveCardsDir } from "../lib/context.js";
 import { readPersona } from "../lib/persona.js";
+import { recordAgentStatus } from "../lib/agent-status.js";
+import { createSessionScratch } from "../lib/scratch.js";
+import { titleSequence } from "../lib/terminal.js";
 /**
  * Records the session start in state (when a session id and data dir exist) and injects the
  * odd-claude context (persona, delegation mode, cards dir, reply-language rule) as additionalContext.
@@ -23,6 +26,17 @@ export function sessionStart(input, opts = {}) {
         }
     }
     const env = opts.env ?? process.env;
+    const scratchLines = [];
+    if (typeof input.session_id === "string" && input.session_id !== "") {
+        try {
+            const dir = createSessionScratch(input.session_id, opts);
+            scratchLines.push(`Session scratch dir (R56): ${dir}. Use it for throwaway files; it is removed when the session ends. \`/odd-claude:scratch\` shows it.`);
+        }
+        catch (err) {
+            logError(`SessionStart scratch: ${err instanceof Error ? err.message : String(err)}`, opts);
+        }
+    }
+    recordAgentStatus(input, "idle", opts);
     // Detached registry refresh + trusted codegraph warm-up only when the host reports a project dir (never in tests without cwd).
     const extraLines = typeof input.cwd === "string" && input.cwd !== ""
         ? runSessionIntegrations(input.cwd, realIntegrationDeps(env.HOME || homedir(), env, (m) => logError(m, opts), opts)).extraLines
@@ -32,7 +46,7 @@ export function sessionStart(input, opts = {}) {
         delegationMode: readDelegationMode(opts),
         cardsDir: resolveCardsDir(env),
         backgroundSubagents: readBackgroundSubagents(opts),
-        extraLines,
+        extraLines: [...scratchLines, ...extraLines],
     });
-    return { hookSpecificOutput: { hookEventName: "SessionStart", additionalContext } };
+    return { hookSpecificOutput: { hookEventName: "SessionStart", additionalContext }, terminalSequence: titleSequence(typeof input.cwd === "string" ? input.cwd : undefined) };
 }

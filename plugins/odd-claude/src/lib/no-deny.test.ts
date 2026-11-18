@@ -31,9 +31,9 @@ test("no source or hook config returns or declares a deny/ask/block decision", (
   }
 });
 
-test("hooks.json registers only SessionStart, UserPromptSubmit and advisory PostToolUse (no PreToolUse/Stop)", () => {
+test("hooks.json registers only advisory events (no PreToolUse/PermissionRequest); Stop output is empty", () => {
   const cfg = JSON.parse(readFileSync(join(root, "hooks", "hooks.json"), "utf8")) as { hooks: Record<string, unknown> };
-  assert.deepEqual(Object.keys(cfg.hooks).sort(), ["PostToolUse", "SessionStart", "UserPromptSubmit"]);
+  assert.deepEqual(Object.keys(cfg.hooks).sort(), ["PostToolUse", "SessionEnd", "SessionStart", "Stop", "StopFailure", "UserPromptSubmit"]);
 });
 
 test("PostToolUse outputs are advisory: only hookSpecificOutput.additionalContext, exit 0, never a decision", () => {
@@ -55,6 +55,28 @@ test("PostToolUse outputs are advisory: only hookSpecificOutput.additionalContex
         assert.deepEqual(Object.keys(out), ["hookSpecificOutput"]);
         assert.deepEqual(Object.keys(out.hookSpecificOutput as object).sort(), ["additionalContext", "hookEventName"]);
         assert.doesNotMatch(r.stdout, FORBIDDEN);
+      }
+    }
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("lifecycle hook outputs (SessionStart, UserPromptSubmit, StopFailure, Stop, SessionEnd) never carry a decision, block or continue:false", () => {
+  const dir = mkdtempSync(join(tmpdir(), "odd-nodeny-life-"));
+  try {
+    const forbiddenKeys = ["decision", "continue", "stopReason", "permissionDecision", "reason"];
+    for (const event of ["SessionStart", "UserPromptSubmit", "StopFailure", "Stop", "SessionEnd"]) {
+      for (const err of ["rate_limit", "billing_error", "invalid_request", "unknown"]) {
+        for (const reason of ["clear", "prompt_input_exit", "other"]) {
+          const r = runHook(event, JSON.stringify({ session_id: "s", cwd: "/w/p", prompt: "hola", error: err, reason, stop_hook_active: true }), { dataDir: dir });
+          assert.equal(r.exitCode, 0, event);
+          assert.doesNotMatch(r.stdout, FORBIDDEN, event);
+          if (r.stdout === "") continue;
+          const out = JSON.parse(r.stdout) as Record<string, unknown>;
+          for (const k of forbiddenKeys) assert.equal(Object.hasOwn(out, k), false, `${event}: ${k}`);
+          if (event === "Stop" || event === "StopFailure") assert.equal(r.stdout, "", `${event} output must be empty`);
+        }
       }
     }
   } finally {

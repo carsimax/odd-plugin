@@ -5,7 +5,10 @@ import { readFileSync, realpathSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { logError, type StateOptions } from "../lib/state.js";
 import { postToolUse } from "./post-tool-use.js";
+import { sessionEnd } from "./session-end.js";
 import { sessionStart } from "./session-start.js";
+import { stop } from "./stop.js";
+import { stopFailure } from "./stop-failure.js";
 import { userPromptSubmit } from "./user-prompt-submit.js";
 
 export interface HookInput {
@@ -23,6 +26,9 @@ export const defaultHandlers: Handlers = {
   SessionStart: sessionStart,
   UserPromptSubmit: userPromptSubmit,
   PostToolUse: postToolUse,
+  StopFailure: stopFailure,
+  Stop: stop,
+  SessionEnd: sessionEnd,
 };
 
 export interface RunOptions extends StateOptions {
