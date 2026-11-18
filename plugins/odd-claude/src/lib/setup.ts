@@ -80,14 +80,14 @@ export const STATUSLINE_ACTIONS = ["on", "off"] as const;
 export type StatusLineAction = (typeof STATUSLINE_ACTIONS)[number];
 export const SHIM_NAME = "statusline.mjs";
 
-/** The command stored in settings: node running the stable shim under the plugin data dir. */
+/** The command stored in settings: node running the stable shim, path single-quoted for the shell. */
 export function statusLineCommand(shimPath: string): string {
-  return `node "${shimPath}"`;
+  return `node '${shimPath.replace(/'/g, "'\\''")}'`;
 }
 
-/** True for a statusLine odd-claude wrote (shim, or the script inside a plugin root of any version). */
-export function isOwnStatusLine(v: unknown): boolean {
-  return isObject(v) && v.type === "command" && typeof v.command === "string" && /^node "[^"]*[\\/](statusline\.mjs|dist[\\/]cli[\\/]statusline\.js)"$/.test(v.command);
+/** Own means exactly the value `on` writes for this data dir: any other command is the user's. */
+export function isOwnStatusLine(v: unknown, ownCommand: string): boolean {
+  return isObject(v) && v.type === "command" && v.command === ownCommand;
 }
 
 /**
@@ -146,11 +146,11 @@ export function planStatusLineChange(
   const cur = root.statusLine;
   let foreign = false;
   if (action === "on") {
-    if (isOwnStatusLine(cur) && JSON.stringify(cur) === JSON.stringify(desired)) return unchanged(text);
-    foreign = "statusLine" in root && !isOwnStatusLine(cur);
+    if (isOwnStatusLine(cur, opts.command) && JSON.stringify(cur) === JSON.stringify(desired)) return unchanged(text);
+    foreign = "statusLine" in root && !isOwnStatusLine(cur, opts.command);
     root.statusLine = desired;
   } else {
-    if (!isOwnStatusLine(cur)) return unchanged(text);
+    if (!isOwnStatusLine(cur, opts.command)) return unchanged(text);
     if (opts.previous !== undefined) root.statusLine = opts.previous;
     else delete root.statusLine;
   }

@@ -117,3 +117,14 @@ test("PRESERVE: --mode still works and does not touch statusLine", () => {
     b.cleanup();
   }
 });
+
+test("S3: --replace-statusline with off is a usage error", () => {
+  const b = box();
+  try {
+    const r = setupCli(["--statusline", "off", "--replace-statusline", "--settings", b.settings, "--data-dir", join(b.dir, "d")], {});
+    assert.equal(r.exitCode, 2);
+    assert.match(r.stderr, /--replace-statusline needs --statusline on/);
+  } finally {
+    b.cleanup();
+  }
+});

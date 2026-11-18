@@ -68,13 +68,13 @@ export function planModeChange(text, mode, label = "settings.json") {
 // ---- statusLine key (second managed key; every other key is preserved) ----
 export const STATUSLINE_ACTIONS = ["on", "off"];
 export const SHIM_NAME = "statusline.mjs";
-/** The command stored in settings: node running the stable shim under the plugin data dir. */
+/** The command stored in settings: node running the stable shim, path single-quoted for the shell. */
 export function statusLineCommand(shimPath) {
-    return `node "${shimPath}"`;
+    return `node '${shimPath.replace(/'/g, "'\\''")}'`;
 }
-/** True for a statusLine odd-claude wrote (shim, or the script inside a plugin root of any version). */
-export function isOwnStatusLine(v) {
-    return isObject(v) && v.type === "command" && typeof v.command === "string" && /^node "[^"]*[\\/](statusline\.mjs|dist[\\/]cli[\\/]statusline\.js)"$/.test(v.command);
+/** Own means exactly the value `on` writes for this data dir: any other command is the user's. */
+export function isOwnStatusLine(v, ownCommand) {
+    return isObject(v) && v.type === "command" && v.command === ownCommand;
 }
 /**
  * Source of the shim. The plugin root changes on every plugin update, so settings point at this stable
@@ -124,13 +124,13 @@ export function planStatusLineChange(text, action, opts, label = "settings.json"
     const cur = root.statusLine;
     let foreign = false;
     if (action === "on") {
-        if (isOwnStatusLine(cur) && JSON.stringify(cur) === JSON.stringify(desired))
+        if (isOwnStatusLine(cur, opts.command) && JSON.stringify(cur) === JSON.stringify(desired))
             return unchanged(text);
-        foreign = "statusLine" in root && !isOwnStatusLine(cur);
+        foreign = "statusLine" in root && !isOwnStatusLine(cur, opts.command);
         root.statusLine = desired;
     }
     else {
-        if (!isOwnStatusLine(cur))
+        if (!isOwnStatusLine(cur, opts.command))
             return unchanged(text);
         if (opts.previous !== undefined)
             root.statusLine = opts.previous;

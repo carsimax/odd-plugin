@@ -6,6 +6,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { isOwnStatusLine, planStatusLineChange, shimSource, statusLineCommand } from "./setup.js";
 import { applyRestore, applyStatusLine, listBackups, refreshStatuslineShim } from "./setup-fs.js";
+import { execFileSync } from "node:child_process";
 import { readPluginState } from "./state.js";
 
 const SAMPLE = '{\n  "model": "opus",\n  "permissions": { "defaultMode": "plan", "allow": ["Bash(ls)"] },\n  "env": { "A": "1" }\n}\n';
@@ -22,13 +23,17 @@ function box(content: string | null = SAMPLE) {
 const sha = (p: string): string => createHash("sha256").update(readFileSync(p)).digest("hex");
 const cmd = (data: string): string => statusLineCommand(join(data, "statusline.mjs"));
 
-test("command shape and ownership detection", () => {
-  assert.equal(statusLineCommand("/d/statusline.mjs"), 'node "/d/statusline.mjs"');
-  assert.equal(isOwnStatusLine({ type: "command", command: 'node "/d/statusline.mjs"' }), true);
-  assert.equal(isOwnStatusLine({ type: "command", command: 'node "/old/root/dist/cli/statusline.js"' }), true);
-  assert.equal(isOwnStatusLine(FOREIGN), false);
-  assert.equal(isOwnStatusLine("x"), false);
-  assert.equal(isOwnStatusLine(undefined), false);
+const CMD = statusLineCommand("/d/statusline.mjs");
+
+test("command shape (single-quoted for the shell) and exact ownership detection", () => {
+  assert.equal(CMD, "node '/d/statusline.mjs'");
+  assert.equal(statusLineCommand("/d/it's/statusline.mjs"), "node '/d/it'\\''s/statusline.mjs'");
+  assert.equal(isOwnStatusLine({ type: "command", command: CMD }, CMD), true);
+  assert.equal(isOwnStatusLine({ type: "command", command: 'node "/d/statusline.mjs"' }, CMD), false);
+  assert.equal(isOwnStatusLine({ type: "command", command: 'node "/old/root/dist/cli/statusline.js"' }, CMD), false);
+  assert.equal(isOwnStatusLine(FOREIGN, CMD), false);
+  assert.equal(isOwnStatusLine("x", CMD), false);
+  assert.equal(isOwnStatusLine(undefined, CMD), false);
 });
 
 test("shim imports the resolved plugin root and degrades to a fallback line", () => {
@@ -39,34 +44,34 @@ test("shim imports the resolved plugin root and degrades to a fallback line", ()
 });
 
 test("plan on: adds statusLine only, preserves every other key and the indent", () => {
-  const p = planStatusLineChange(SAMPLE, "on", { command: 'node "/d/statusline.mjs"' }, "s.json");
+  const p = planStatusLineChange(SAMPLE, "on", { command: CMD }, "s.json");
   assert.ok(p.ok);
   if (!p.ok) return;
   assert.equal(p.changed, true);
   assert.equal(p.foreign, false);
   const before = JSON.parse(SAMPLE);
   const after = JSON.parse(p.after);
-  assert.deepEqual(after.statusLine, { type: "command", command: 'node "/d/statusline.mjs"' });
+  assert.deepEqual(after.statusLine, { type: "command", command: CMD });
   delete after.statusLine;
   assert.deepEqual(after, before);
   assert.match(p.diff, /^\+.*"statusLine"/m);
   assert.match(p.after, /^ {2}"model"/m);
 });
 
-test("plan on: missing file creates it; idempotent when already ours; stale own root is replaced without foreign flag", () => {
-  const created = planStatusLineChange(null, "on", { command: 'node "/d/statusline.mjs"' });
+test("plan on: missing file creates it; idempotent when already ours; a different path (even named statusline.js) is foreign", () => {
+  const created = planStatusLineChange(null, "on", { command: CMD });
   assert.ok(created.ok && created.changed && created.before === null);
-  const again = planStatusLineChange(created.ok ? created.after : "", "on", { command: 'node "/d/statusline.mjs"' });
+  const again = planStatusLineChange(created.ok ? created.after : "", "on", { command: CMD });
   assert.ok(again.ok);
   if (again.ok) assert.deepEqual([again.changed, again.diff], [false, "no changes"]);
-  const stale = planStatusLineChange('{"statusLine":{"type":"command","command":"node \\"/old/dist/cli/statusline.js\\""}}', "on", { command: 'node "/d/statusline.mjs"' });
+  const stale = planStatusLineChange('{"statusLine":{"type":"command","command":"node \\"/old/dist/cli/statusline.js\\""}}', "on", { command: CMD });
   assert.ok(stale.ok);
-  if (stale.ok) assert.deepEqual([stale.changed, stale.foreign], [true, false]);
+  if (stale.ok) assert.deepEqual([stale.changed, stale.foreign], [true, true]);
 });
 
 test("plan on over a foreign statusLine shows it in the diff and flags it as foreign", () => {
   const text = JSON.stringify({ model: "opus", statusLine: FOREIGN }, null, 2) + "\n";
-  const p = planStatusLineChange(text, "on", { command: 'node "/d/statusline.mjs"' });
+  const p = planStatusLineChange(text, "on", { command: CMD });
   assert.ok(p.ok);
   if (!p.ok) return;
   assert.equal(p.foreign, true);
@@ -83,11 +88,11 @@ test("plan refuses invalid JSON, non-object roots and a non-object-compatible fi
 });
 
 test("plan off: removes only our own value; restores a recorded previous value; leaves foreign/absent alone", () => {
-  const own = JSON.stringify({ model: "opus", statusLine: { type: "command", command: 'node "/d/statusline.mjs"' } }, null, 2) + "\n";
-  const removed = planStatusLineChange(own, "off", { command: "x" });
+  const own = JSON.stringify({ model: "opus", statusLine: { type: "command", command: CMD } }, null, 2) + "\n";
+  const removed = planStatusLineChange(own, "off", { command: CMD });
   assert.ok(removed.ok);
   if (removed.ok) assert.deepEqual(JSON.parse(removed.after), { model: "opus" });
-  const restored = planStatusLineChange(own, "off", { command: "x", previous: FOREIGN });
+  const restored = planStatusLineChange(own, "off", { command: CMD, previous: FOREIGN });
   assert.ok(restored.ok);
   if (restored.ok) assert.deepEqual(JSON.parse(restored.after).statusLine, FOREIGN);
   const foreign = JSON.stringify({ statusLine: FOREIGN });
@@ -221,6 +226,69 @@ test("refreshStatuslineShim rewrites only an existing shim whose root changed", 
     assert.equal(refreshStatuslineShim(b.data, b.root), false);
     assert.equal(refreshStatuslineShim(b.data, join(b.dir, "new-root")), true);
     assert.equal(readFileSync(join(b.data, "statusline.mjs"), "utf8"), shimSource(join(b.dir, "new-root")));
+  } finally {
+    b.cleanup();
+  }
+});
+
+test("S3: a user's own statusline.mjs is foreign: never replaced without consent, never removed by off", () => {
+  for (const command of ['node "/Users/x/.claude/statusline.mjs"', 'node "/Users/x/ccline/dist/cli/statusline.js"']) {
+    const b = box(JSON.stringify({ statusLine: { type: "command", command } }) + "\n");
+    try {
+      const h = sha(b.settings);
+      assert.equal(applyStatusLine({ settingsPath: b.settings, dataDir: b.data, action: "on", pluginRoot: b.root }).status, "error");
+      assert.equal(sha(b.settings), h);
+      assert.equal(applyStatusLine({ settingsPath: b.settings, dataDir: b.data, action: "off", pluginRoot: b.root }).status, "unchanged");
+      assert.equal(sha(b.settings), h);
+    } finally { b.cleanup(); }
+  }
+});
+
+test("M1: a data dir with shell metacharacters is escaped, cannot inject, and on/off round-trips", () => {
+  const b = box();
+  try {
+    const mark = join(b.dir, "pwned");
+    for (const name of [`d$(touch ${mark})`, "d`touch " + mark + "`", 'd"q', "d'q", "d;touch " + mark]) {
+      const data = join(b.dir, name);
+      const on = applyStatusLine({ settingsPath: b.settings, dataDir: data, action: "on", pluginRoot: b.root });
+      assert.equal(on.status, "applied", name);
+      const command = JSON.parse(readFileSync(b.settings, "utf8")).statusLine.command as string;
+      assert.equal(command, statusLineCommand(join(data, "statusline.mjs")));
+      const out = execFileSync("sh", ["-c", command], { input: "{}", encoding: "utf8" });
+      assert.match(out, /odd-claude/);
+      assert.equal(existsSync(mark), false, name);
+      assert.equal(applyStatusLine({ settingsPath: b.settings, dataDir: data, action: "off", pluginRoot: b.root }).status, "applied", name);
+      assert.deepEqual(JSON.parse(readFileSync(b.settings, "utf8")), JSON.parse(SAMPLE));
+    }
+  } finally {
+    b.cleanup();
+  }
+});
+
+test("M2: a stored previous statusLine is dropped when `on` finds no statusLine (user removed it by hand)", () => {
+  const text = JSON.stringify({ model: "opus", statusLine: FOREIGN }, null, 2) + "\n";
+  const b = box(text);
+  try {
+    applyStatusLine({ settingsPath: b.settings, dataDir: b.data, action: "on", pluginRoot: b.root, replaceForeign: true });
+    assert.deepEqual(readPluginState("setup", { dataDir: b.data }).statusLinePrevious, FOREIGN);
+    writeFileSync(b.settings, '{\n  "model": "opus"\n}\n');
+    assert.equal(applyStatusLine({ settingsPath: b.settings, dataDir: b.data, action: "on", pluginRoot: b.root }).status, "applied");
+    assert.equal(readPluginState("setup", { dataDir: b.data }).statusLinePrevious, undefined);
+    assert.equal(applyStatusLine({ settingsPath: b.settings, dataDir: b.data, action: "off", pluginRoot: b.root }).status, "applied");
+    assert.deepEqual(JSON.parse(readFileSync(b.settings, "utf8")), { model: "opus" });
+  } finally {
+    b.cleanup();
+  }
+});
+
+test("M3: refreshStatuslineShim ignores a relative plugin root", () => {
+  const b = box();
+  try {
+    applyStatusLine({ settingsPath: b.settings, dataDir: b.data, action: "on", pluginRoot: b.root });
+    const before = readFileSync(join(b.data, "statusline.mjs"), "utf8");
+    assert.equal(refreshStatuslineShim(b.data, "relative/root"), false);
+    assert.equal(refreshStatuslineShim(b.data, ""), false);
+    assert.equal(readFileSync(join(b.data, "statusline.mjs"), "utf8"), before);
   } finally {
     b.cleanup();
   }

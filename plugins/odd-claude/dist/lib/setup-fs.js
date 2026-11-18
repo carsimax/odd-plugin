@@ -1,7 +1,7 @@
 // Write path of /odd-claude:setup. Real filesystem; callers (tests/CLI) pick the paths.
 // Order on apply: validate/plan -> backup original (atomic) -> record state -> atomic write.
 import { accessSync, constants, existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, realpathSync, statSync } from "node:fs";
-import { join } from "node:path";
+import { isAbsolute, join } from "node:path";
 import { atomicWriteFile, readPluginState, writePluginState } from "./state.js";
 import { BACKUP_NAME_RE, NO_CHANGES, SHIM_NAME, backupFileName, planModeChange, planStatusLineChange, shimSource, statusLineCommand, unifiedDiff, } from "./setup.js";
 function readCurrent(path) {
@@ -112,6 +112,8 @@ export function shimPath(dataDir) {
 /** Existing shim rewritten when the plugin root moved (plugin update). Never creates it. */
 export function refreshStatuslineShim(dataDir, pluginRoot) {
     try {
+        if (!isAbsolute(pluginRoot))
+            return false;
         const p = shimPath(dataDir);
         const want = shimSource(pluginRoot);
         if (!existsSync(p) || readFileSync(p, "utf8") === want)
@@ -178,7 +180,8 @@ export function applyStatusLine(opts) {
         const prev = readPluginState("setup", { dataDir: opts.dataDir });
         if (opts.action === "on" && plan.foreign)
             writePluginState("setup", { ...prev, statusLinePrevious: replaced }, { dataDir: opts.dataDir });
-        else if (opts.action === "off" && "statusLinePrevious" in prev) {
+        else if ((opts.action === "off" || replaced === undefined) && "statusLinePrevious" in prev) {
+            // off consumed it; `on` over an absent statusLine means the user removed theirs, so the saved one is stale
             const { statusLinePrevious: _gone, ...rest } = prev;
             writePluginState("setup", rest, { dataDir: opts.dataDir });
         }

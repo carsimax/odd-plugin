@@ -9,8 +9,8 @@ import { readFileSync, existsSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { MODES, STATUSLINE_ACTIONS, currentMode, currentStatusLine, isOwnStatusLine, modeWarning, planModeChange, type StatusLineAction } from "../lib/setup.js";
-import { applyMode, applyRestore, applyStatusLine, listBackups, planRestore, planStatusLine } from "../lib/setup-fs.js";
+import { MODES, STATUSLINE_ACTIONS, currentMode, currentStatusLine, isOwnStatusLine, modeWarning, planModeChange, statusLineCommand, type StatusLineAction } from "../lib/setup.js";
+import { applyMode, applyRestore, applyStatusLine, listBackups, planRestore, planStatusLine, shimPath } from "../lib/setup-fs.js";
 
 type Env = Record<string, string | undefined>;
 const VALUE_FLAGS = ["--mode", "--settings", "--data-dir", "--statusline", "--plugin-root"];
@@ -54,7 +54,7 @@ function parseArgs(argv: string[]): Args | string {
   if (a.restore && a.mode !== undefined) return "--restore and --mode are mutually exclusive";
   if (a.statusline !== undefined && !(STATUSLINE_ACTIONS as readonly string[]).includes(a.statusline)) return `--statusline must be one of: ${STATUSLINE_ACTIONS.join(", ")}`;
   if (a.statusline !== undefined && (a.restore || a.mode !== undefined)) return "--statusline cannot be combined with --mode or --restore";
-  if (a.replaceStatusline && a.statusline === undefined) return "--replace-statusline needs --statusline on";
+  if (a.replaceStatusline && a.statusline !== "on") return "--replace-statusline needs --statusline on";
   if (a.apply && !a.restore && a.mode === undefined && a.statusline === undefined) return "--apply needs --mode <mode>, --statusline on|off or --restore";
   return a;
 }
@@ -99,7 +99,7 @@ function run(argv: string[], env: Env): CliResult {
     const text = existsSync(settingsPath) ? readFileSync(settingsPath, "utf8") : null;
     const cur = currentMode(text);
     const sl = currentStatusLine(text);
-    const slText = sl === undefined ? "(not set)" : `${JSON.stringify(sl)} (${isOwnStatusLine(sl) ? "odd-claude" : "not odd-claude"})`;
+    const slText = sl === undefined ? "(not set)" : `${JSON.stringify(sl)} (${dataDir !== undefined && isOwnStatusLine(sl, statusLineCommand(shimPath(dataDir))) ? "odd-claude" : "not odd-claude"})`;
     const backups = dataDir ? listBackups(dataDir) : [];
     const lines = [
       `settings: ${settingsPath}${text === null ? " (missing)" : ""}`,
@@ -176,7 +176,7 @@ const USAGE =
 const HELP = `${USAGE}
 
 Writes ONLY permissions.defaultMode or statusLine of the settings file (default ~/.claude/settings.json).
---statusline on sets statusLine to {"type":"command","command":"node \"<data-dir>/statusline.mjs\""}: a stable shim
+--statusline on sets statusLine to {"type":"command","command":"node '<data-dir>/statusline.mjs'"}: a stable shim
 that imports <plugin-root>/dist/cli/statusline.js (the root changes on plugin updates; the SessionStart hook
 refreshes the shim, so settings never need to be rewritten). A statusLine odd-claude did not write is shown in the
 diff and replaced only with --replace-statusline. --statusline off removes only odd-claude's own statusLine, or
