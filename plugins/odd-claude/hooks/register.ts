@@ -4,6 +4,10 @@
 // missing API degrades silently. The one routing hook is the spawn hook of R40: it only ever rewrites `model`
 // of an odd-claude agent from the active profile and always continues with next(...); it never refuses a spawn. The table format mirrors src/lib/subagents.ts renderSubagents.
 // Only static relative imports are allowed in a mod, so the formatters are repeated below.
+// R51 quiet tool rendering: `ui.render` on ToolResult draws long, successful Bash/Read/Grep/Glob results as one summary
+// line, only when `<data>/quiet.json` says enabled (OFF by default, `/odd-claude:quiet`). Render-only (the model sees
+// the stored result), bounded work per render, and anything unknown, errored, interrupted, expanded or unreadable
+// falls through to next(e), the default rendering.
 // `/odd-changes` (R46) opens a pane with the working-tree summary of src/lib/changes.ts (git status + diff --stat,
 // read-only, bounded timeout), refreshed on a timer; `/odd-claude:changes` prints the same text without mods.
 
@@ -16,6 +20,8 @@ const CHANGES_PANE = 'odd-changes';
 const ROLE_PREFIX = 'odd-claude:';
 const ROLES = ['odd-explore', 'odd-verify', 'odd-worker', 'odd-jd-fix', 'odd-jd-judge-a', 'odd-jd-judge-b', 'odd-review-readability', 'odd-review-reliability', 'odd-review-resilience', 'odd-review-risk'];
 const MODELS = ['haiku', 'sonnet', 'opus'];
+const QUIET_MIN_LINES = 10;
+const QUIET_SCAN_CAP = 1_000_000;
 const NOT_A_REPO = 'Not a git repository; no changes to summarize.';
 
 function duration(ms: number): string {
@@ -91,6 +97,56 @@ async function changesText($: any): Promise<string> {
   if (status === undefined) return NOT_A_REPO;
   const stat = (await git($, ['diff', '--stat', '--no-color', 'HEAD'])) ?? (await git($, ['diff', '--stat', '--no-color']));
   return summarizeChanges(status, stat);
+}
+
+function countLines(text: string): number {
+  const t = text.length > QUIET_SCAN_CAP ? text.slice(0, QUIET_SCAN_CAP) : text;
+  let n = 0;
+  for (let i = t.indexOf('\n'); i !== -1; i = t.indexOf('\n', i + 1)) n++;
+  return t === '' ? 0 : t.endsWith('\n') ? n : n + 1;
+}
+
+// One-line summary of a successful built-in result, or undefined = draw it normally (short, odd shape, error signs).
+export function quietSummary(tool: unknown, output: unknown): string | undefined {
+  try {
+    if (typeof output !== 'object' || output === null || Array.isArray(output)) return undefined;
+    const o = output as Record<string, any>;
+    let line: string | undefined;
+    if (tool === 'Bash') {
+      if (typeof o.stdout !== 'string' || o.interrupted === true) return undefined;
+      if (o.stderr !== undefined && (typeof o.stderr !== 'string' || o.stderr.trim() !== '')) return undefined;
+      const n = countLines(o.stdout);
+      if (n > QUIET_MIN_LINES) line = `Bash: ${n} lines of output`;
+    } else if (tool === 'Read') {
+      const content = o.file?.content;
+      if (typeof content !== 'string') return undefined;
+      const n = countLines(content);
+      if (n > QUIET_MIN_LINES) line = `Read: ${n} lines`;
+    } else if (tool === 'Grep') {
+      const files = Array.isArray(o.filenames) ? o.filenames.length : undefined;
+      if (typeof o.content === 'string') {
+        const n = countLines(o.content);
+        if (n > QUIET_MIN_LINES) line = `Grep: ${n} lines${files === undefined ? '' : ` in ${files} files`}`;
+      } else if (files !== undefined && files > QUIET_MIN_LINES) line = `Grep: ${files} files`;
+    } else if (tool === 'Glob') {
+      if (Array.isArray(o.filenames) && o.filenames.length > QUIET_MIN_LINES) line = `Glob: ${o.filenames.length} files`;
+    }
+    return line === undefined ? undefined : `${line} (ctrl+o to expand)`;
+  } catch {
+    return undefined;
+  }
+}
+
+async function quietEnabled($: any): Promise<boolean> {
+  try {
+    const env = await $.process.hookEnv();
+    const dir = env?.CLAUDE_PLUGIN_DATA;
+    if (typeof dir !== 'string' || dir === '') return false;
+    const raw = JSON.parse(await $.fs.read(`${dir}/quiet.json`));
+    return raw?.version === 1 && raw?.data?.enabled === true;
+  } catch {
+    return false;
+  }
 }
 
 async function load($: any): Promise<Rec[]> {
@@ -186,6 +242,20 @@ export function register(on: any) {
     const { Box, Text } = $.ui.resolve(e);
     const lines = tableLines(await load($), Date.now());
     return Box({ key: 'root' }, ...lines.map((l, i) => Text({ key: `l${i}` }, l)));
+  });
+
+  on('ui.render', { component: 'ToolResult' }, async ($: any, e: any, next: any) => {
+    try {
+      const props = e?.props;
+      if (props?.isErrored !== false || props?.isExpanded === true) return next(e);
+      const line = quietSummary(props.tool, props.output);
+      if (line === undefined || !(await quietEnabled($))) return next(e);
+      // constructors take props only: children go in `children` (ElementConstructor)
+      const { Text } = $.ui.resolve(e);
+      return Text({ children: line });
+    } catch {
+      return next(e);
+    }
   });
 
   on('agent.spawn', async ($: any, e: any, next: any) => {

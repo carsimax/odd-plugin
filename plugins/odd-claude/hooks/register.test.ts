@@ -125,3 +125,84 @@ test('agent.spawn with no profile file or unreadable state passes the spawn thro
   expect(seen[0].model).toBe(undefined);
   expect(r.deny).toBe(undefined);
 });
+
+// R51 quiet tool rendering: OFF by default, render-only, errors and small outputs untouched.
+const QUIET_ON = JSON.stringify({ version: 1, sessionId: 'quiet', data: { enabled: true } });
+const lines = (n: number) => Array.from({ length: n }, (_, i) => `line ${i}`).join('\n');
+
+// `box.file` can change between mounts: hooks may only be registered before the test first calls `$`.
+function quietSetup(on: any, file: string | undefined) {
+  const box = { file };
+  on('process.hookEnv', () => ({ value: { CLAUDE_PLUGIN_DATA: '/data' } }));
+  on('fs.read', () => {
+    if (box.file === undefined) throw new Error('ENOENT');
+    return { value: box.file };
+  });
+  return box;
+}
+
+let mounts = 0;
+
+async function drawn($: any, tool: string, output: unknown, extra: Record<string, unknown> = {}) {
+  const ui = await $.ui.mount({
+    plugin: 'odd-claude',
+    surface: 'terminal',
+    component: 'ToolResult',
+    requestId: `t${++mounts}`,
+    props: { tool_use_id: `t${mounts}`, tool, output, isErrored: false, ...extra },
+  } as any);
+  const tree = await ui.drawn();
+  return { type: tree.type, text: (await ui.find({ type: 'Text' }))?.text };
+}
+
+test('quiet ON collapses long Bash/Read/Grep/Glob results to one summary line', async ($: any, on: any) => {
+  quietSetup(on, QUIET_ON);
+  const bash = await drawn($, 'Bash', { stdout: lines(120), stderr: '' });
+  expect(bash.text).toContain('Bash: 120 lines of output');
+  const read = await drawn($, 'Read', { type: 'text', file: { filePath: '/x', content: lines(300), numLines: 300 } });
+  expect(read.text).toContain('Read: 300 lines');
+  const grep = await drawn($, 'Grep', { mode: 'content', numFiles: 4, filenames: ['a', 'b', 'c', 'd'], content: lines(40), numLines: 40 });
+  expect(grep.text).toContain('Grep: 40 lines in 4 files');
+  const glob = await drawn($, 'Glob', { filenames: Array.from({ length: 80 }, (_, i) => `f${i}`), numFiles: 80 });
+  expect(glob.text).toContain('Glob: 80 files');
+});
+
+test('quiet OFF (default, missing, corrupt or disabled state) draws the default rendering', async ($: any, on: any) => {
+  const box = quietSetup(on, undefined);
+  for (const file of [undefined, 'not json', JSON.stringify({ version: 1, data: { enabled: false } }), JSON.stringify({ version: 2, data: { enabled: true } })]) {
+    box.file = file;
+    const tree = await drawn($, 'Bash', { stdout: lines(120), stderr: '' });
+    expect(tree.type).toBe('engine');
+  }
+});
+
+test('quiet ON never hides errors, stderr, interrupts, expanded rows, small outputs, unknown tools or odd shapes', async ($: any, on: any) => {
+  quietSetup(on, QUIET_ON);
+  const big = { stdout: lines(120), stderr: '' };
+  const cases: Array<[string, unknown, Record<string, unknown>]> = [
+    ['Bash', big, { isErrored: true }],
+    ['Bash', { stdout: lines(120), stderr: 'boom' }, {}],
+    ['Bash', { stdout: lines(120), stderr: '', interrupted: true }, {}],
+    ['Bash', big, { isExpanded: true }],
+    ['Bash', { stdout: lines(3), stderr: '' }, {}],
+    ['Edit', big, {}],
+    ['mcp__x__y', big, {}],
+    ['Bash', 'a string', {}],
+    ['Bash', null, {}],
+    ['Read', { file: 5 }, {}],
+    ['Glob', { filenames: 'nope' }, {}],
+  ];
+  for (const [tool, output, extra] of cases) {
+    const tree = await drawn($, tool, output, extra);
+    expect(tree.type).toBe('engine');
+  }
+});
+
+test('quiet rendering is render-only: it registers no tool or permission hooks and never refuses', async ($: any, on: any) => {
+  quietSetup(on, QUIET_ON);
+  let hooked = 0;
+  on('tool.call', () => { hooked++; return { result: undefined }; });
+  const tree = await drawn($, 'Bash', { stdout: lines(50), stderr: '' });
+  expect(tree.text).toContain('Bash: 50 lines');
+  expect(hooked).toBe(0);
+});

@@ -136,6 +136,6 @@ test("the mod source never hooks prompt/tool events nor returns a decision (S2)"
     assert.doesNotMatch(body, /reject|throw/, f);
     // every hook it registers is one of its own advisory surfaces
     const events = [...text.matchAll(/\bon\(\s*'([a-z.]+)'/g)].map((m) => m[1]).sort();
-    assert.deepEqual(events, ["agent.spawn", "command.run", "command.run", "session.start", "ui.close", "ui.render", "ui.render"], f);
+    assert.deepEqual(events, ["agent.spawn", "command.run", "command.run", "session.start", "ui.close", "ui.render", "ui.render", "ui.render"], f);
   }
 });
