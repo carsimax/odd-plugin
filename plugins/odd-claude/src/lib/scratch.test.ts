@@ -1,9 +1,9 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { existsSync, lstatSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, lstatSync, mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { createSessionScratch, listScratch, removeSessionScratch, scratchDir } from "./scratch.js";
+import { createSessionScratch, listScratch, removeSessionScratch, scratchDir, sweepStaleTombstones } from "./scratch.js";
 
 function tmp(): string {
   return mkdtempSync(join(tmpdir(), "odd-scratch-"));
@@ -147,6 +147,106 @@ test("a relative data dir is refused by create and remove and deletes nothing", 
   } finally {
     process.chdir(cwd);
     rmSync(base, { recursive: true, force: true });
+  }
+});
+
+for (const kind of ["file", "symlink"] as const) {
+  test(`a ${kind} planted at the predicted tombstone name aborts the removal`, (t) => {
+    const dir = tmp();
+    const outside = tmp();
+    try {
+      const p = createSessionScratch("sess-1", { dataDir: dir });
+      writeFileSync(join(p, "keep"), "x");
+      mkdirSync(join(outside, "victim"));
+      writeFileSync(join(outside, "victim", "MARK"), "x");
+      t.mock.method(Date, "now", () => 1_700_000_000_000);
+      const tomb = join(realpathSync(join(dir, "scratch")), `.rm-${process.pid}-1700000000000-sess-1`);
+      if (kind === "file") writeFileSync(tomb, "planted");
+      else symlinkSync(join(outside, "victim"), tomb);
+      assert.equal(removeSessionScratch("sess-1", { dataDir: dir }), "refused");
+      assert.ok(existsSync(join(p, "keep")), "session dir kept");
+      assert.ok(existsSync(join(outside, "victim", "MARK")), "victim intact");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+      rmSync(outside, { recursive: true, force: true });
+    }
+  });
+}
+
+test("a read-only scratch root refuses the removal and keeps the dir", { skip: process.getuid?.() === 0 }, () => {
+  const dir = tmp();
+  const root = join(dir, "scratch");
+  try {
+    const p = createSessionScratch("sess-1", { dataDir: dir });
+    chmodSync(root, 0o500);
+    assert.equal(removeSessionScratch("sess-1", { dataDir: dir }), "refused");
+    assert.ok(existsSync(p));
+  } finally {
+    chmodSync(root, 0o700);
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("a leftover tombstone of a crashed removal is never touched by another session's removal", () => {
+  const dir = tmp();
+  try {
+    createSessionScratch("a", { dataDir: dir });
+    const left = join(dir, "scratch", ".rm-1-1700000000000-crashed");
+    mkdirSync(left);
+    writeFileSync(join(left, "f"), "x");
+    assert.equal(removeSessionScratch("a", { dataDir: dir }), "removed");
+    assert.ok(existsSync(join(left, "f")));
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("sweep removes only stale real-directory tombstones inside the root and never follows symlinks", () => {
+  const dir = tmp();
+  const outside = tmp();
+  try {
+    const now = 1_700_000_000_000;
+    const root = join(dir, "scratch");
+    createSessionScratch("live", { dataDir: dir });
+    const stale = join(root, `.rm-1-${now - 2 * 3600_000}-old`);
+    const fresh = join(root, `.rm-1-${now - 60_000}-new`);
+    const link = join(root, `.rm-1-${now - 2 * 3600_000}-link`);
+    const file = join(root, `.rm-1-${now - 2 * 3600_000}-file`);
+    const odd = join(root, ".rm-garbage");
+    for (const d of [stale, fresh, odd]) {
+      mkdirSync(d);
+      writeFileSync(join(d, "f"), "x");
+    }
+    writeFileSync(file, "x");
+    mkdirSync(join(outside, "victim"));
+    writeFileSync(join(outside, "victim", "MARK"), "x");
+    symlinkSync(join(outside, "victim"), link);
+    assert.equal(sweepStaleTombstones({ dataDir: dir }, now), 1);
+    assert.equal(existsSync(stale), false);
+    assert.ok(existsSync(fresh), "fresh kept");
+    assert.ok(existsSync(odd), "unparseable name kept");
+    assert.ok(existsSync(file), "non-directory kept");
+    assert.ok(lstatSync(link).isSymbolicLink(), "symlink ignored");
+    assert.ok(existsSync(join(outside, "victim", "MARK")), "victim survives");
+    assert.ok(existsSync(join(root, "live")), "live session dir kept");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+    rmSync(outside, { recursive: true, force: true });
+  }
+});
+
+test("sweep is a no-op for a missing or symlinked root", () => {
+  const dir = tmp();
+  const outside = tmp();
+  try {
+    assert.equal(sweepStaleTombstones({ dataDir: dir }, 1e15), 0);
+    mkdirSync(join(outside, ".rm-1-1-old"));
+    symlinkSync(outside, join(dir, "scratch"));
+    assert.equal(sweepStaleTombstones({ dataDir: dir }, 1e15), 0);
+    assert.ok(existsSync(join(outside, ".rm-1-1-old")));
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+    rmSync(outside, { recursive: true, force: true });
   }
 });
 

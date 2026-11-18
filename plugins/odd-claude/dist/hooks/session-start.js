@@ -5,7 +5,7 @@ import { realIntegrationDeps, runSessionIntegrations } from "../lib/session-inte
 import { buildSessionContext, readDelegationMode, resolveCardsDir } from "../lib/context.js";
 import { readPersona } from "../lib/persona.js";
 import { recordAgentStatus } from "../lib/agent-status.js";
-import { createSessionScratch } from "../lib/scratch.js";
+import { createSessionScratch, sweepStaleTombstones } from "../lib/scratch.js";
 import { titleSequence } from "../lib/terminal.js";
 /**
  * Records the session start in state (when a session id and data dir exist) and injects the
@@ -28,6 +28,7 @@ export function sessionStart(input, opts = {}) {
     const env = opts.env ?? process.env;
     const scratchLines = [];
     if (typeof input.session_id === "string" && input.session_id !== "") {
+        sweepStaleTombstones(opts);
         try {
             const dir = createSessionScratch(input.session_id, opts);
             scratchLines.push(`Session scratch dir (R56): ${dir}. Use it for throwaway files; it is removed when the session ends. \`/odd-claude:scratch\` shows it.`);

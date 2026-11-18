@@ -5,7 +5,7 @@ import { realIntegrationDeps, runSessionIntegrations } from "../lib/session-inte
 import { buildSessionContext, readDelegationMode, resolveCardsDir } from "../lib/context.js";
 import { readPersona } from "../lib/persona.js";
 import { recordAgentStatus } from "../lib/agent-status.js";
-import { createSessionScratch } from "../lib/scratch.js";
+import { createSessionScratch, sweepStaleTombstones } from "../lib/scratch.js";
 import { titleSequence } from "../lib/terminal.js";
 import type { HookInput, HookOutput } from "./run.js";
 
@@ -33,6 +33,7 @@ export function sessionStart(input: HookInput, opts: StateOptions = {}): HookOut
   const env = opts.env ?? process.env;
   const scratchLines: string[] = [];
   if (typeof input.session_id === "string" && input.session_id !== "") {
+    sweepStaleTombstones(opts);
     try {
       const dir = createSessionScratch(input.session_id, opts);
       scratchLines.push(`Session scratch dir (R56): ${dir}. Use it for throwaway files; it is removed when the session ends. \`/odd-claude:scratch\` shows it.`);

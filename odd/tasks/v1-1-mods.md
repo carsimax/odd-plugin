@@ -1,0 +1,54 @@
+# v1.1 mods UX and v1.0 follow-ups (Phase 5)
+Goal: ship the v1.0 verification follow-ups and the Phase 5 mods UX (agents, statusLine, changes, stats, profiles, routing, tool render) with non-mod fallbacks. Branch: `feat/v1.1-mods`.
+Runner: `node:test` via `npm test` inside `plugins/odd-claude` + `npm run check` + `claude plugin validate` / `claude plugin test`.
+
+## Specs
+
+### S1 Roadmap Phase 5 (docs/roadmap.md, "### Phase 5: Mods UX (optional)")
+
+- **Goal:** richer UI where mods are available, with the non-mod fallback already shipped in earlier phases.
+- **Matrix IDs:** R09, R36, R39, R40, R42, R44, R45, R46, R51
+- **Deliverables:** `/odd-claude:agents` (R09, text fallback first, pane via mod), `/odd-claude:stats` (R36, local only), `/odd-claude:profiles` (R39), dynamic per-spawn model routing via `agent.spawn` with static frontmatter `model`/`effort` as base (R40), statusLine script `odd-status` (R44, R42 TPS segment), startup banner (R45), `/odd-claude:changes` (R46), tool-render tweaks (R51).
+- **Dependencies / gates:** Phase 2; Q1 (mods available), Q7 (types). Each item ships its non-mod version (command or statusLine via setup) regardless of Q1.
+- **Exit criteria:** with mods enabled, each mod feature appears (pane/status/tool); with `modules` not loaded and in `-p`, the plugin loads without errors and the fallback commands work; no mod is referenced by any Phase 1–3 behaviour.
+- **Risk:** medium: preview/gated API may change between Claude Code versions; types are per-version. R42 needs token/time data in the statusLine payload (verify).
+
+### S2 Project decisions (user, verbatim)
+
+- "El proyecto se llamara odd-claude no gentle-ai o gentle-shell"
+- "ignora completamente otros proyectos como gentle-py tomaremos todo 100% del upstream de este repo"
+- "no usaremos nada de prefijo gentle- o gentle-ai todo sera odd-claude nuestro plugin entonces el prefijo sera odd"
+- "y sin nada de telemetria"
+- Message: "Por cierto se me olvido mencionar no quiero el tema del deny, se que es riesgoso pero así lo requiero que dejemos permisible el bloque de denegaciones que tiene originalmente gentle-shell"
+- Question: "¿Qué hacemos con los comandos que hoy se deniegan (rm -rf /, git reset --hard, etc.)?" Answer: "Quitar el guard: todo permitido"
+- Question: "¿Aplica también a los subagentes (child guard), que hoy niegan todo lo destructivo sin override?" Answer: "Sí, mismo criterio que el hilo principal"
+- Question: "¿Y el guard de rutas sensibles (T2: secretos, .env, .ssh, keychains)?" Answer: "Igual: sin deny"
+- Question: "Quedan otros dos mecanismos de la Fase 3 que también responden 'deny', aunque no por seguridad del sistema sino por disciplina ODD. ¿Los mantenemos?" Answer: "Ninguno: ni T3 ni T4". Option text: "Cero deny en el plugin. Admisión y coordinator quedan solo como reglas de texto en el prompt."
+- Effect: the plugin contains no hook that returns deny/ask/block (v0.5 S6, kept as a project decision; `src/lib/no-deny.test.ts`). No new hook may return a block decision or `continue:false`, and a Stop hook never forces continuation.
+
+### S3 statusLine decision (user, verbatim)
+
+- Question: "T5 /odd-claude:setup escribe en tu ~/.claude/settings.json siempre mostrando un diff, con confirmación, backup y restore. ¿Qué claves debería manejar en v0.1?" Answer: "Solo permissions.defaultMode (Recomendado)". Option text: "Eliges el modo (default, acceptEdits, auto o plan) y la clave statusLine se agrega cuando exista el statusline (fase de UX). Así no apuntamos a un script que todavía no existe."
+- Effect: `/odd-claude:setup` gains the `statusLine` key only once `odd-status` exists (T2).
+
+### S4 v1.0 verification advisories (verbatim, from the parent)
+
+- A-R1: "un atacante del mismo usuario que cambia la raíz `scratch` por un symlink justo entre `realpath` y `rename` consigue que se borre `victim/sess-1`… En ambos casos hace falta un atacante del mismo usuario con sincronización exacta; en la carrera sin sincronizar de 200 iteraciones no ocurrió nunca."
+- A-T1: "los tombstones que deja un crash no se limpian nunca; no hay barrido. No encontré 'tombstone' ni '.rm-' en el README del plugin ni en `docs/`. Vale la pena documentar que pueden acumularse."
+- A-T2: "`src/lib/terminal.ts:11` deja pasar los marcadores bidi LRM/RLM/ALM (U+200E, U+200F, U+061C) y U+2028/U+2029"
+
+## Tasks
+
+- T0 | S4 | writer | done-pending-commit — v1.0 follow-ups: verifier regression tests for the tombstone (planted entry, read-only root, foreign leftover), bounded stale-tombstone sweep at SessionStart + README note (A-T1), extra terminal-title strips (A-T2), A-R1 accepted and logged.
+- T1 | S1,S2 | writer | todo — Mod skeleton + `/odd-claude:agents` (R09).
+- T2 | S1,S2,S3 | writer | todo | Risk: high (setup writes `statusLine` to the user's settings.json) — statusLine `odd-status` + setup `statusLine` key + TPS segment (R44, R42).
+- T3 | S1,S2 | writer | todo — `/odd-claude:changes` + startup banner (R46, R45).
+- T4 | S1,S2 | writer | todo — `/odd-claude:stats` + profiles + dynamic routing (R36, R39, R40).
+- T5 | S1,S2 | writer | todo — Tool-render tweaks (R51).
+- T6 | S1 | parent/writer | todo — Close: README, roadmap, `claude plugin test`, version 1.1.0.
+
+## Log
+
+- L1: user's original request: "Vamos a trabajarlos como 1.1" (reply to the proposal to add the verifier's three regression tests and document tombstones as a small commit, or move on to v1.1 mods UX).
+- L2: A-R1 accepted as residual risk (no code change): a same-user attacker with exact timing can swap the `scratch` root for a symlink between `realpath` and `rename` in `removeSessionScratch`; Node has no fd-based `unlinkat`, and the unsynchronized 200-iteration race never hit it. A same-user attacker can already delete the victim directly, so the boundary is not widened.
+- L3: T0 covers S4 (A-T1, A-T2; A-R1 accepted in L2) and keeps S2 (no new deny: the sweep only deletes, outputs unchanged). Test-first: RED = `npm run build:test` TS2305 (`sweepStaleTombstones` missing); GREEN `npm test` 253 pass, 0 fail. Sweep: `.rm-<pid>-<ts>-*` real directories (lstat, realpath exactly `<realroot>/<name>`), age taken from the timestamp in the name (> 1 h), max 200 entries, run at SessionStart. Verifier regressions added: planted file/symlink at the predicted tombstone, read-only root, foreign leftover untouched. `npm run check` ok; `claude plugin validate plugins/odd-claude` passed with warnings.

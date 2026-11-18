@@ -73,6 +73,44 @@ export function removeSessionScratch(sessionId, opts = {}) {
     rmSync(tomb, { recursive: true, force: true });
     return "removed";
 }
+const TOMBSTONE_RE = /^\.rm-\d+-(\d+)-/;
+export const TOMBSTONE_MAX_AGE_MS = 60 * 60 * 1000;
+const SWEEP_MAX_ENTRIES = 200;
+/**
+ * Deletes tombstones (`.rm-<pid>-<ts>-<id>`) left by a crashed removal. Only real directories (lstat, never symlinks) directly
+ * inside the verified real scratch root, whose name carries a timestamp older than maxAgeMs, whose realpath is exactly
+ * <realroot>/<name>. Bounded to SWEEP_MAX_ENTRIES inspected entries. Returns how many were removed; never throws.
+ */
+export function sweepStaleTombstones(opts = {}, now = Date.now(), maxAgeMs = TOMBSTONE_MAX_AGE_MS) {
+    let removed = 0;
+    try {
+        const root = scratchRoot(opts);
+        const rootStat = lstatOrUndefined(root);
+        if (rootStat === undefined || rootStat.isSymbolicLink() || !rootStat.isDirectory())
+            return 0;
+        const realRoot = realpathSync(root);
+        for (const name of readdirSync(realRoot).slice(0, SWEEP_MAX_ENTRIES)) {
+            const m = TOMBSTONE_RE.exec(name);
+            if (m === null || now - Number(m[1]) < maxAgeMs)
+                continue;
+            const p = join(realRoot, name);
+            try {
+                const st = lstatSync(p);
+                if (st.isSymbolicLink() || !st.isDirectory() || realpathSync(p) !== p)
+                    continue;
+                rmSync(p, { recursive: true, force: true });
+                removed++;
+            }
+            catch (err) {
+                logError(`scratch sweep skipped ${name}: ${err.message}`, opts);
+            }
+        }
+    }
+    catch (err) {
+        logError(`scratch sweep failed: ${err.message}`, opts);
+    }
+    return removed;
+}
 function sizeOf(dir) {
     let total = 0;
     for (const e of readdirSync(dir, { withFileTypes: true })) {

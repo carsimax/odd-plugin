@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { runHook } from "./run.js";
@@ -22,6 +22,23 @@ test("SessionStart creates the scratch, injects its path, sets the title and wri
     assert.equal(out.terminalSequence, "\u001b]0;odd-claude · my-proj\u0007");
     assert.equal(status(dir, "s1").state, "idle");
     assert.equal(status(dir, "s1").cwd, "/work/my-proj");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("SessionStart sweeps stale tombstones in the scratch root and keeps fresh ones", () => {
+  const dir = tmp();
+  try {
+    const root = join(dir, "scratch");
+    mkdirSync(root, { recursive: true });
+    const stale = join(root, ".rm-1-1000-old");
+    const fresh = join(root, `.rm-1-${Date.now()}-new`);
+    mkdirSync(stale);
+    mkdirSync(fresh);
+    run("SessionStart", { session_id: "s1", cwd: "/w/p", source: "startup" }, dir);
+    assert.equal(existsSync(stale), false);
+    assert.ok(existsSync(fresh));
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
