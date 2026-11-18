@@ -1,7 +1,7 @@
 // Shared state-file helper. State lives under CLAUDE_PLUGIN_DATA (set by Claude Code for
 // hooks) or an explicit `dataDir` option (tests/CLI); never under ~/.claude directly.
 // Layout: <dataDir>/sessions/<session>.json  and  <dataDir>/logs/hooks.log
-import { appendFileSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { appendFileSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 export const STATE_SCHEMA_VERSION = 1;
 export function resolveDataDir(opts = {}) {
@@ -59,5 +59,19 @@ export function logError(message, opts = {}) {
     }
     catch {
         // logging must never break a hook
+    }
+}
+/** Session ids (file stems) newest first by mtime; [] when the dir is missing. Read-only. */
+export function listSessionIds(opts = {}) {
+    try {
+        const dir = join(resolveDataDir(opts), "sessions");
+        return readdirSync(dir)
+            .filter((f) => f.endsWith(".json"))
+            .map((f) => ({ id: f.slice(0, -".json".length), mtime: statSync(join(dir, f)).mtimeMs }))
+            .sort((a, b) => b.mtime - a.mtime || (a.id < b.id ? -1 : 1))
+            .map((e) => e.id);
+    }
+    catch {
+        return [];
     }
 }
