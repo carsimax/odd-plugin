@@ -82,7 +82,7 @@ test('odd-changes opens a pane and answers the working-tree summary; the pane re
 
 test('odd-changes degrades silently: no pane API, git failing', async ($: any, on: any) => {
   on('ui.open', () => ({ value: { isPlaced: false, reason: 'no surface' } }));
-  on('process.run', () => ({ value: { exitCode: 128, stdout: '', stderr: 'fatal' } }));
+  on('process.run', () => ({ value: { exitCode: 128, stdout: '', stderr: 'fatal: not a git repository' } }));
   const answer = await $.command.run({ command: 'odd-changes', args: '' } as any);
   expect(answer.text).toBe('Not a git repository; no changes to summarize.');
 });

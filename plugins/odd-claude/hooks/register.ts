@@ -23,6 +23,7 @@ const MODELS = ['haiku', 'sonnet', 'opus'];
 const QUIET_MIN_LINES = 10;
 const QUIET_SCAN_CAP = 1_000_000;
 const NOT_A_REPO = 'Not a git repository; no changes to summarize.';
+const GIT_FAILED = 'git failed; changes unavailable.';
 const GIT_UNAVAILABLE = 'git unavailable or timed out; changes unavailable.';
 const CHANGES_TTL_MS = 4000;
 
@@ -98,24 +99,38 @@ export function summarizeChanges(statusZ: string, stat: string | undefined): str
   return out.join('\n');
 }
 
-async function git($: any, args: string[]): Promise<string | undefined> {
+type GitOut = { out: string } | { fail: 'not-a-repo' | 'failed' };
+
+async function git($: any, args: string[]): Promise<GitOut> {
   const r = await $.process.run(['git', '-c', 'core.fsmonitor=false', '-c', 'core.quotepath=false', ...args], { timeoutMs: 5000 });
-  return r && r.exitCode === 0 && typeof r.stdout === 'string' ? r.stdout : undefined;
+  if (r && r.exitCode === 0 && typeof r.stdout === 'string') return { out: r.stdout };
+  return { fail: typeof r?.stderr === 'string' && /not a git repository/i.test(r.stderr) ? 'not-a-repo' : 'failed' };
 }
 
 async function changesText($: any): Promise<string> {
   try {
     const status = await git($, ['status', '--porcelain=v1', '-z', '--branch']);
-    if (status === undefined) return NOT_A_REPO;
+    if ('fail' in status) return status.fail === 'not-a-repo' ? NOT_A_REPO : GIT_FAILED;
     let stat: string | undefined;
     try {
-      stat = (await git($, ['diff', '--stat', '--no-color', 'HEAD'])) ?? (await git($, ['diff', '--stat', '--no-color']));
+      const head = await git($, ['diff', '--stat', '--no-color', 'HEAD']);
+      const plain = 'out' in head ? head : await git($, ['diff', '--stat', '--no-color']);
+      stat = 'out' in plain ? plain.out : undefined;
     } catch {
       stat = undefined;
     }
-    return summarizeChanges(status, stat);
+    return summarizeChanges(status.out, stat);
   } catch {
     return GIT_UNAVAILABLE;
+  }
+}
+
+function cancel(t: any) {
+  try {
+    if (typeof t === 'function') t();
+    else t?.cancel?.();
+  } catch {
+    // ignore
   }
 }
 
