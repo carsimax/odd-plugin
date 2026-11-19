@@ -102,7 +102,7 @@ export function summarizeChanges(statusZ: string, stat: string | undefined): str
 type GitOut = { out: string } | { fail: 'not-a-repo' | 'failed' };
 
 async function git($: any, args: string[]): Promise<GitOut> {
-  const r = await $.process.run(['git', '-c', 'core.fsmonitor=false', '-c', 'core.quotepath=false', ...args], { timeoutMs: 5000 });
+  const r = await $.process.run(['env', '-u', 'LANGUAGE', 'LC_ALL=C', 'LANG=C', 'git', '-c', 'core.fsmonitor=false', '-c', 'core.quotepath=false', ...args], { timeoutMs: 5000 });
   if (r && r.exitCode === 0 && typeof r.stdout === 'string') return { out: r.stdout };
   return { fail: typeof r?.stderr === 'string' && /not a git repository/i.test(r.stderr) ? 'not-a-repo' : 'failed' };
 }

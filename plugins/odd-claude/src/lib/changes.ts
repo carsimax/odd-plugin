@@ -25,7 +25,8 @@ function runGit(cwd: string, args: string[], timeoutMs: number): GitResult {
     killSignal: "SIGKILL", // a git that ignores SIGTERM must not hold the caller past the timeout
     maxBuffer: 4 * 1024 * 1024,
     stdio: ["ignore", "pipe", "pipe"],
-    env: { ...process.env, GIT_OPTIONAL_LOCKS: "0", GIT_TERMINAL_PROMPT: "0" },
+    // C locale: the stderr classification below matches English text only
+    env: { ...process.env, LC_ALL: "C", LANG: "C", LANGUAGE: undefined, GIT_OPTIONAL_LOCKS: "0", GIT_TERMINAL_PROMPT: "0" },
   });
   if (r.error) {
     const code = (r.error as NodeJS.ErrnoException).code;

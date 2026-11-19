@@ -145,3 +145,25 @@ test("git stderr 'not a git repository' is reported as a non-repository", () => 
     assert.equal(collectChanges(dir), "Not a git repository; no changes to summarize.");
   });
 });
+
+test("a non-English git locale in the environment still classifies a non-repo directory", () => {
+  const bin = mkdtempSync(join(tmpdir(), "odd-changes-loc-"));
+  const plain = mkdtempSync(join(tmpdir(), "odd-changes-locd-"));
+  const keep = { LC_ALL: process.env.LC_ALL, LANG: process.env.LANG, LANGUAGE: process.env.LANGUAGE };
+  try {
+    // fake git: Spanish message unless the runner forces the C locale
+    writeFileSync(join(bin, "git"), '#!/bin/sh\nif [ "$LC_ALL" = C ] && [ "$LANG" = C ] && [ -z "$LANGUAGE" ]; then echo "fatal: not a git repository (or any of the parent directories): .git" >&2; else echo "fatal: no es un repositorio git (ni ninguno de los directorios superiores): .git" >&2; fi\nexit 128\n');
+    chmodSync(join(bin, "git"), 0o755);
+    process.env.LC_ALL = "es_ES.UTF-8";
+    process.env.LANG = "es_ES.UTF-8";
+    process.env.LANGUAGE = "es";
+    const out = withPath(`${bin}:${process.env.PATH}`, () => collectChanges(plain));
+    assert.equal(out, "Not a git repository; no changes to summarize.");
+  } finally {
+    for (const [k, v] of Object.entries(keep)) {
+      if (v === undefined) delete process.env[k];
+      else process.env[k] = v;
+    }
+    for (const d of [bin, plain]) rmSync(d, { recursive: true, force: true });
+  }
+});

@@ -77,7 +77,9 @@ test('odd-changes opens a pane and answers the working-tree summary; the pane re
   expect(opened.id).toBe('odd-changes');
   expect(answer.text).toBe(CHANGES_TEXT);
   // read-only git only, no user text on any command line
-  for (const argv of runs) expect(argv[0]).toBe('git');
+  // git runs under the C locale (stderr classification is English-only)
+  for (const argv of runs) expect(argv.slice(0, 5)).toEqual(['env', '-u', 'LANGUAGE', 'LC_ALL=C', 'LANG=C']);
+  for (const argv of runs) expect(argv[5]).toBe('git');
 });
 
 test('odd-changes degrades silently: no pane API, git failing', async ($: any, on: any) => {

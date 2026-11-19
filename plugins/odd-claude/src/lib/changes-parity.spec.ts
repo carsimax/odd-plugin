@@ -40,3 +40,12 @@ test("the mod and the lib use the same git failure messages", () => {
   assert.match(mod, /not a git repository\//i);
   assert.match(lib, /not a git repository\//i);
 });
+
+test("the mod and the lib run git with the C locale so stderr classification is locale-independent", () => {
+  const mod = readFileSync(join(process.cwd(), "hooks", "register.ts"), "utf8");
+  const lib = readFileSync(join(process.cwd(), "src", "lib", "changes.ts"), "utf8");
+  for (const src of [mod, lib]) {
+    assert.match(src, /LC_ALL/);
+    assert.match(src, /LANGUAGE/);
+  }
+});
