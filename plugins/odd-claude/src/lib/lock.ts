@@ -132,6 +132,37 @@ function takeOver(path: string, staleRaw: string, alive: (pid: number) => boolea
   }
 }
 
+const MAX_STALE_SWEEP = 32;
+
+/**
+ * Best-effort, bounded sweep of `<lock>.*.stale` leftovers (a fresh lock moved aside that could not be linked back).
+ * Removed only when its record's pid is dead, or it is unreadable/empty and older than `staleMs`; a live record and
+ * the lock path itself are never touched.
+ */
+function sweepStaleLeftovers(path: string, alive: (pid: number) => boolean, staleMs: number): void {
+  try {
+    const prefix = `${basename(path)}.`;
+    let seen = 0;
+    for (const name of readdirSync(dirname(path))) {
+      if (!name.startsWith(prefix) || !name.endsWith(".stale")) continue;
+      if (++seen > MAX_STALE_SWEEP) return;
+      const file = join(dirname(path), name);
+      try {
+        const held = parseLock(readFileSync(file, "utf8"));
+        if (held) {
+          if (!alive(held.pid)) rmSync(file, { force: true });
+        } else if (Date.now() - statSync(file).mtimeMs > staleMs) {
+          rmSync(file, { force: true });
+        }
+      } catch {
+        // vanished or unreadable: leave it
+      }
+    }
+  } catch {
+    // best effort
+  }
+}
+
 /** Creates `path` atomically with its content: write a unique temp file, then link it (EEXIST = held). */
 function createExclusive(path: string, content: string): boolean {
   const tmp = `${path}.${process.pid}.${Math.random().toString(36).slice(2)}.tmp`;
@@ -159,6 +190,7 @@ export function acquireLock(path: string, pid: number, opts: LockOptions): boole
       } catch {
         return false;
       }
+      if (attempt === 0) sweepStaleLeftovers(path, alive, opts.staleMs);
       let raw: string;
       try {
         raw = readFileSync(path, "utf8");

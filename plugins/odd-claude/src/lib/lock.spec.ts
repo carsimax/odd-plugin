@@ -237,3 +237,24 @@ test("lock: an empty claim older than staleMs does not block a dead-pid takeover
     assert.deepEqual(readdirSync(join(t.dir, "locks")), ["e.lock"]);
   } finally { t.done(); }
 });
+
+test("lock: dead-pid and old unreadable .stale leftovers are swept on the next contended acquire; a live one is kept", () => {
+  const t = tmp();
+  try {
+    const dir = join(t.dir, "locks");
+    mkdirSync(dir);
+    const p = join(dir, "k.lock");
+    const alive = (pid: number): boolean => pid === 50 || pid === 60;
+    assert.equal(acquireLock(p, 50, { staleMs: 2000, isAlive: alive }), true); // a live holder: later acquires are contended
+    writeFileSync(`${p}.1.dead.stale`, JSON.stringify({ pid: 999999, startedAt: 1 }));
+    writeFileSync(`${p}.1.old.stale`, "");
+    utimesSync(`${p}.1.old.stale`, new Date(0), new Date(0));
+    writeFileSync(`${p}.1.fresh.stale`, ""); // possibly mid-write: kept
+    writeFileSync(`${p}.1.live.stale`, JSON.stringify({ pid: 60, startedAt: Date.now() }));
+    assert.equal(acquireLock(p, 60, { staleMs: 2000, isAlive: alive }), false);
+    assert.deepEqual(readdirSync(dir).sort(), ["k.lock", "k.lock.1.fresh.stale", "k.lock.1.live.stale"]);
+    assert.equal(JSON.parse(readFileSync(p, "utf8")).pid, 50); // the lock itself is untouched
+  } finally {
+    t.done();
+  }
+});
