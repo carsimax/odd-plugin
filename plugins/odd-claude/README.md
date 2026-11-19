@@ -120,9 +120,11 @@ Claude Code removes `AskUserQuestion` from every subagent (verified on 2.1.327).
 ## Install
 
 ```
-/plugin marketplace add <repo>
+/plugin marketplace add carsimax/odd-plugin
 /plugin install odd-claude@odd-claude
 ```
+
+The repository is private: the machine needs GitHub credentials that git can use (for example `gh auth login` or a credential helper) for Claude Code to clone it. Auto-update is off for third-party marketplaces unless you enable it.
 
 For development, load the plugin from a checkout without installing:
 

@@ -4,7 +4,7 @@
   "description": "odd-claude: opinionated workflow plugin for Claude Code (Engram memory, review agents, doctor/status/setup).",
   "author": { "name": "carsimax" },
   "license": "MIT",
-  "repository": "https://github.com/carsimax/odd-claude",
+  "repository": "https://github.com/carsimax/odd-plugin",
   "engines": { "claude-code": ">=2.1.323" },
   "dependencies": ["engram@engram"]
 }
