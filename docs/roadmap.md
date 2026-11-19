@@ -2,7 +2,7 @@
 
 **Goal.** odd-claude is [gentle-shell](../upstream/gentle-shell) ported to a Claude Code plugin (`odd-claude`, commands `/odd-claude:<x>`, agents `odd-*`). The upstream repo is the only source of behaviour. Built from [research/portability-matrix.md](research/portability-matrix.md) (132 rows, IDs `R##` runtime / `A##` asset), [research/open-questions.md](research/open-questions.md) and [research/claude-code-extensibility.md](research/claude-code-extensibility.md) §12. Decisions and naming: [README.md](README.md).
 
-Status: **v1.1 reached** (Phases 1–5 and 7 done; Phases 6, 8 pending). Phase contents follow the matrix "Candidate phases" with the adjustments listed under [Deviations](#deviations-from-the-matrix-candidate-phases).
+Status: **v1.1 reached** (Phases 1–5 and 7 done; Phase 6 dropped by user decision 2026-11-19; Phase 8 / v2 pending). Phase contents follow the matrix "Candidate phases" with the adjustments listed under [Deviations](#deviations-from-the-matrix-candidate-phases).
 
 ## Guiding principles
 
@@ -100,15 +100,11 @@ Originally "Guards" (enforcement through deny/ask hooks). Superseded by user dec
 - **Effort:** 5 S + 4 M (R09, R36, R44, R39).
 - **Risk:** medium: preview/gated API may change between Claude Code versions; types are per-version. R42 needs token/time data in the statusLine payload (verify).
 
-### Phase 6: Web tools
+### Phase 6: Web tools (dropped by user decision 2026-11-19)
 
-- **Goal:** local design canvas and Tower web servers.
-- **Matrix IDs:** R17, R18, R19, A28, A34, A52
-- **Deliverables:** `/odd-claude:guide` + skill `guide` (R17); `/odd-claude:design`, MCP tools `odd_design`, `odd_design_comments` (R18), `assets/design-canvas/` renamed (A28), skill `design` (A34); `/odd-claude:tower` (R19) with hook-written presence, `web/tower/` (A52).
-- **Dependencies / gates:** Phase 2 (hooks scaffolding for presence); node, browser, vite build. Independent of Phases 3–5.
-- **Exit criteria:** design server starts from the command, serves the canvas and persists a comment through `odd_design_comments`; Tower shows two live sessions from hook-written presence; both servers bind to localhost only and stop on session end; no `gentle` strings in served assets.
-- **Effort:** 2 S + 1 M (A28) + 3 L (R18, R19, A52).
-- **Risk:** medium: effort-heavy, local servers (bind to 127.0.0.1, no data leaves the machine). Can slip without affecting parity of the agent workflow.
+- **Status:** **dropped by user decision 2026-11-19**; nothing ported and v1.2 is not released. Reason: Claude Code's own Artifact tool and built-in design/chart features cover the need, and the Tower web UI is not wanted. User answers (verbatim): Tower → "No incluirlo"; design tools → "Esto necesario?, claude ya tiene sus herramiento de diseño"; scope → "Cerrar la fase sin portar nada".
+- **Matrix IDs:** none (the six former IDs moved to [Out of scope](#out-of-scope): R17, R18, R19, A28, A34, A52).
+- **Original goal (historical):** local design canvas and Tower web servers (`/odd-claude:guide`, `/odd-claude:design` with `odd_design`/`odd_design_comments`, `/odd-claude:tower`, `assets/design-canvas/`, `web/tower/`).
 
 ### Phase 7: Cosmetic and small items
 
@@ -135,7 +131,7 @@ Originally "Guards" (enforcement through deny/ask hooks). Superseded by user dec
 
 - Matrix group 0 splits into Phase 0 (gates) and Phase 1 (skeleton).
 - A15 and A16 are both in Phase 3 (A16 is generated from A15; the matrix lists A15 in guards and A16 in core).
-- A34 (skill `design`) moves to Phase 6 (unusable without R18); A39 and A40 move from the matrix review group to Phase 8 (they need the review binary / native RDD). Per Q4 the matrix review group is split: A07–A11 form the v1 advisory Phase 4; R03, R29–R33, R74, A39, A40, A47, A48 go to Phase 8 (v2) with R07.
+- A34 (skill `design`) was moved to Phase 6 (unusable without R18) and is now out of scope with Phase 6 (2026-11-19); A39 and A40 move from the matrix review group to Phase 8 (they need the review binary / native RDD). Per Q4 the matrix review group is split: A07–A11 form the v1 advisory Phase 4; R03, R29–R33, R74, A39, A40, A47, A48 go to Phase 8 (v2) with R07.
 - Unassigned in the matrix and placed here: A58 (tests) in Phase 3 because it is the spec for the guards; R10 in Phase 2; R07 in Phase 8 / v2 (Q5); R55 out of scope (native history covers it).
 - R15 stays in Phase 2 (native TodoWrite; sidebar is a Phase 5 mod add-on). R57 is in Phase 7 only. R39/R40 are in Phase 5; static `model`/`effort` frontmatter ships with the Phase 2 agents.
 
@@ -151,10 +147,9 @@ Originally "Guards" (enforcement through deny/ask hooks). Superseded by user dec
 | v0.8 | Advisory review: four lenses + Judgment Day as agents and skills | 4 | per Q4; no native RDD, no external binary |
 | v1.0 | Parity target (below) | 1–4 + 7 | reached (branch feat/v1.0-polish); R57 and R63 dropped by user decision 2026-11-18 |
 | v1.1 | Mods UX | 5 | reached (branch feat/v1.1-mods); R42 and R44 shipped via setup; interactive checks pending |
-| v1.2 | Web tools | 6 | |
 | v2 | Native RDD + peer orchestrators: R03, R07, R29, R30, R31, R32, R33, R74, A39, A40, A47, A48 | 8 | per Q4/Q5; engine and channel chosen at v2 start |
 
-**What "parity" means for v1.0.** Every matrix item with a 🟡 or ✅ verdict in Phases 1–4 and 7 is delivered or has a documented native equivalent, so that an ODD session (prompt, delegation, writer/verifier rules, guards, Judgment Day, advisory four-lens review) behaves as in gentle-shell for the same user task. Parity is **not** pixel/TUI parity: the 29 ❌ matrix rows and the extra out-of-scope entries below (Pi-host rendering, launcher/installer, providers, keybindings, desktop/herdr, voice/music, telemetry) are excluded, Pi-specific pieces are replaced by native Claude Code tools, and cross-provider model fallback is impossible. Mod-only UX (Phase 5) and web tools (Phase 6) are extended parity shipped after 1.0. Per the Q4 decision, v1.0 parity covers the **advisory** agent-based review only: native RDD (`odd_review*` tools, contract mirror, candidate views, review-approval publication gate, lineage/consent/capture) and inter-session peers (R07) are **v2 scope** (Phase 8: R03, R07, R29, R30, R31, R32, R33, R74, A39, A40, A47, A48) and excluded from the v1 parity claim; the release notes say so.
+**What "parity" means for v1.0.** Every matrix item with a 🟡 or ✅ verdict in Phases 1–4 and 7 is delivered or has a documented native equivalent, so that an ODD session (prompt, delegation, writer/verifier rules, guards, Judgment Day, advisory four-lens review) behaves as in gentle-shell for the same user task. Parity is **not** pixel/TUI parity: the 29 ❌ matrix rows and the extra out-of-scope entries below (Pi-host rendering, launcher/installer, providers, keybindings, desktop/herdr, voice/music, telemetry) are excluded, Pi-specific pieces are replaced by native Claude Code tools, and cross-provider model fallback is impossible. Mod-only UX (Phase 5) is extended parity shipped after 1.0; web tools (Phase 6) were dropped on 2026-11-19. Per the Q4 decision, v1.0 parity covers the **advisory** agent-based review only: native RDD (`odd_review*` tools, contract mirror, candidate views, review-approval publication gate, lineage/consent/capture) and inter-session peers (R07) are **v2 scope** (Phase 8: R03, R07, R29, R30, R31, R32, R33, R74, A39, A40, A47, A48) and excluded from the v1 parity claim; the release notes say so.
 
 ---
 
@@ -166,6 +161,9 @@ Excluded rows (every other matrix ID is in a phase above, v2 included). Out-of-s
 |---|---|
 | R04 | Not needed: subagents have isolated context natively |
 | R08 | Subsumed by R07's mechanism; Pi-process sockets not needed |
+| R17 | Dropped by user decision 2026-11-19 (Phase 6): Claude Code's own Artifact tool and built-in design/chart features cover the need |
+| R18 | Dropped by user decision 2026-11-19 (Phase 6): design canvas tools not needed, Claude Code has its own design tools |
+| R19 | Dropped by user decision 2026-11-19 (Phase 6): Tower web UI not wanted ("No incluirlo") |
 | R37 | Telemetry: excluded by decision |
 | R41 | OpenAI-specific; Claude Code has its own `/fast` |
 | R43 | Plugins cannot register providers |
@@ -187,9 +185,12 @@ Excluded rows (every other matrix ID is in a phase above, v2 included). Out-of-s
 | R73 | Plugin files are versioned by the marketplace; no user-edited copies |
 | A25 | Not needed (see R73) |
 | A27 | Marketplace replaces the installer |
+| A28 | Dropped by user decision 2026-11-19 (Phase 6): design canvas assets not needed (R18 dropped) |
 | A29 | Logo excluded by naming decision and upstream `TRADEMARKS.md`; a new odd-claude icon is a separate branding task |
 | A49 | Telemetry contract: excluded by decision |
+| A34 | Dropped by user decision 2026-11-19 (Phase 6): skill `design` unusable without R18; Claude Code has its own design tools |
 | A51 | herdr-specific (its "mods" are herdr JS, not Claude Code mods) |
+| A52 | Dropped by user decision 2026-11-19 (Phase 6): Tower web UI not wanted (R19) |
 | A53 | Upstream design history, not product |
 | A55 | Upstream docs: source material only |
 | A56 | Pi-package build/CI scripts; `prepare-verifier.mjs` and `check-provider-contract.mjs` may be copied case by case inside Phases 3/4 |
@@ -217,6 +218,6 @@ Excluded rows (every other matrix ID is in a phase above, v2 included). Out-of-s
 | 3 | Coordinator, advisory budget, permission modes (no deny hooks) | Phase 2; Q3 | v0.5 | done (v0.5, branch feat/v0.5-guards) |
 | 4 | Advisory review (agents) | Phases 1–3 | v0.8 | done (v0.8, branch feat/v0.8-review) |
 | 5 | Mods UX (optional) | Phase 2; Q1, Q7 | v1.1 | done (v1.1, branch feat/v1.1-mods); R42 TPS and R44 statusLine shipped via setup; interactive checks pending |
-| 6 | Web tools | Phase 2 | v1.2 | not started |
+| 6 | Web tools | – | – | dropped by user decision 2026-11-19 (Claude Code's own Artifact tool and built-in design/chart features cover the need; Tower not wanted); v1.2 not released |
 | 7 | Cosmetic and small | Phase 1 | v1.0 | done (v1.0, branch feat/v1.0-polish); R57, R63 dropped by user decision 2026-11-18 |
 | 8 | v2: native RDD + peer orchestrators | v1 shipped | v2 | planned (after v1) |
