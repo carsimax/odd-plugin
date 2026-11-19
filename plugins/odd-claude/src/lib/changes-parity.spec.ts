@@ -29,3 +29,14 @@ test("the mod's cleaner is the same as the lib's cleanText", () => {
   assert.deepEqual(mod, lib);
   assert.equal(cleanText("x\u001b]0;T\u0007y"), "xy");
 });
+
+test("the mod and the lib use the same git failure messages", () => {
+  const mod = readFileSync(join(process.cwd(), "hooks", "register.ts"), "utf8");
+  const lib = readFileSync(join(process.cwd(), "src", "lib", "changes.ts"), "utf8");
+  for (const msg of ["Not a git repository; no changes to summarize.", "git failed; changes unavailable."]) {
+    assert.ok(mod.includes(msg), `mod lacks: ${msg}`);
+    assert.ok(lib.includes(msg), `lib lacks: ${msg}`);
+  }
+  assert.match(mod, /not a git repository\//i);
+  assert.match(lib, /not a git repository\//i);
+});

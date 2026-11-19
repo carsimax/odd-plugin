@@ -120,3 +120,28 @@ test("a missing git binary is reported as such, not as a non-repository", () => 
     for (const d of [empty, dir]) rmSync(d, { recursive: true, force: true });
   }
 });
+
+function fakeGit(script: string, fn: (dir: string) => void): void {
+  const bin = mkdtempSync(join(tmpdir(), "odd-changes-fake-"));
+  const dir = mkdtempSync(join(tmpdir(), "odd-changes-cwd-"));
+  try {
+    writeFileSync(join(bin, "git"), `#!/bin/sh\n${script}\n`);
+    chmodSync(join(bin, "git"), 0o755);
+    withPath(`${bin}:/usr/bin:/bin`, () => fn(dir));
+  } finally {
+    for (const d of [bin, dir]) rmSync(d, { recursive: true, force: true });
+  }
+}
+
+test("a git that exits non-zero for another reason is reported as failed, not as a non-repository", () => {
+  fakeGit('echo "fatal: boom" >&2\nexit 1', (dir) => {
+    assert.equal(collectChanges(dir), "git failed; changes unavailable.");
+    assert.equal(changesCli(["--cwd", dir]).stdout, "git failed; changes unavailable.");
+  });
+});
+
+test("git stderr 'not a git repository' is reported as a non-repository", () => {
+  fakeGit('echo "fatal: not a git repository (or any of the parent directories): .git" >&2\nexit 128', (dir) => {
+    assert.equal(collectChanges(dir), "Not a git repository; no changes to summarize.");
+  });
+});

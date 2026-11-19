@@ -11,9 +11,10 @@ const MAX_LINE = 200;
 const GIT_TIMEOUT_MS = 5000;
 const NOT_A_REPO = "Not a git repository; no changes to summarize.";
 const TIMED_OUT = "git timed out; changes unavailable.";
+const GIT_FAILED = "git failed; changes unavailable.";
 const NO_GIT = "git not found; changes unavailable.";
 
-type GitResult = { out: string } | { fail: "timeout" | "missing" | "error" };
+type GitResult = { out: string } | { fail: "timeout" | "missing" | "not-a-repo" | "failed" };
 
 /** Runs git in `cwd`; a `fail` reason on any failure (timeout, missing git, not a repo / other error). */
 function runGit(cwd: string, args: string[], timeoutMs: number): GitResult {
@@ -23,14 +24,18 @@ function runGit(cwd: string, args: string[], timeoutMs: number): GitResult {
     timeout: timeoutMs,
     killSignal: "SIGKILL", // a git that ignores SIGTERM must not hold the caller past the timeout
     maxBuffer: 4 * 1024 * 1024,
-    stdio: ["ignore", "pipe", "ignore"],
+    stdio: ["ignore", "pipe", "pipe"],
     env: { ...process.env, GIT_OPTIONAL_LOCKS: "0", GIT_TERMINAL_PROMPT: "0" },
   });
   if (r.error) {
     const code = (r.error as NodeJS.ErrnoException).code;
-    return { fail: code === "ETIMEDOUT" ? "timeout" : code === "ENOENT" ? "missing" : "error" };
+    return { fail: code === "ETIMEDOUT" ? "timeout" : code === "ENOENT" ? "missing" : "failed" };
   }
-  if (r.status !== 0) return { fail: r.signal === "SIGKILL" ? "timeout" : "error" };
+  if (r.status !== 0) {
+    if (r.signal === "SIGKILL") return { fail: "timeout" };
+    // same classification as the mod (hooks/register.ts): only this stderr means "not a repository"
+    return { fail: /not a git repository/i.test(r.stderr ?? "") ? "not-a-repo" : "failed" };
+  }
   return { out: r.stdout ?? "" };
 }
 
@@ -44,7 +49,7 @@ export function collectChanges(cwd: string, opts: { timeoutMs?: number } = {}): 
   }
   if (!isDir) return NOT_A_REPO;
   const status = runGit(cwd, ["status", "--porcelain=v1", "-z", "--branch"], timeoutMs);
-  if ("fail" in status) return status.fail === "timeout" ? TIMED_OUT : status.fail === "missing" ? NO_GIT : NOT_A_REPO;
+  if ("fail" in status) return status.fail === "timeout" ? TIMED_OUT : status.fail === "missing" ? NO_GIT : status.fail === "not-a-repo" ? NOT_A_REPO : GIT_FAILED;
   const head = runGit(cwd, ["diff", "--stat", "--no-color", "HEAD"], timeoutMs);
   const stat = "out" in head ? head : runGit(cwd, ["diff", "--stat", "--no-color"], timeoutMs);
   return summarizeChanges(status.out, "out" in stat ? stat.out : undefined);
