@@ -1,10 +1,11 @@
 // In-flight lock for detached background jobs (codegraph warm-up, registry refresh).
 // A lock is a file `<dataDir>/locks/<kind>-<sha1(project)>.lock` holding {pid, startedAt}.
 // Created atomically WITH content (unique temp file, then link: EEXIST means contended), so no reader ever sees an
-// empty lock. An unreadable/empty lock is stale only when its mtime is older than `staleMs`. A held lock is stale when older than `staleMs` or its pid is dead.
+// empty lock. An unreadable/empty lock is stale only when its mtime is older than `staleMs`. A held lock is stale when its pid is dead, or
+// (unless `proofOfDeathOnly`) older than `staleMs`. Takeover is claim-based (see takeOver): no move->check->restore.
 import { createHash } from "node:crypto";
-import { linkSync, mkdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { linkSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { basename, dirname, join, resolve } from "node:path";
 export function lockPath(dataDir, kind, project) {
     const key = createHash("sha1").update(resolve(project)).digest("hex").slice(0, 16);
     return join(dataDir, "locks", `${kind}-${key}.lock`);
@@ -40,34 +41,62 @@ function readLock(path) {
     }
 }
 /**
- * Atomically removes the stale lock `staleRaw`: rename it to a unique name, and only when the renamed content is
- * still the stale one proceed. If a concurrent caller already replaced it with a fresh lock, put that lock back
- * (link fails with EEXIST if yet another one exists) and report failure.
+ * Removes the stale lock `staleRaw` WITHOUT any move->check->restore step (a restore leaves a window with no lock file
+ * in which a third process can create one, so two holders overlap). Exclusivity comes from claims instead: every
+ * contender that judged the lock stale publishes its own uniquely named claim `<lock>.claim-<id>` (holding its pid)
+ * and only proceeds when it is the ONLY live claimant (each publishes before it lists, so two contenders can never
+ * both see themselves alone; losers back off and retry). Claims of dead pids are swept. The sole claimant re-reads the
+ * lock: only when it is still exactly `staleRaw` is it moved away. While the stale instance exists nobody else can
+ * create the lock, and a dead holder cannot release it, so nothing can replace it between the re-read and the move.
+ * Returns true when the caller may retry the create; false to back off.
  */
-function takeOver(path, staleRaw) {
-    const tmpName = `${path}.${process.pid}.${Math.random().toString(36).slice(2)}.stale`;
+function takeOver(path, staleRaw, alive) {
+    const dir = dirname(path);
+    const prefix = `${basename(path)}.claim-`;
+    const mine = `${path}.claim-${process.pid}-${Math.random().toString(36).slice(2)}`;
     try {
-        renameSync(path, tmpName);
-    }
-    catch {
-        return true; // already gone: the next create attempt decides
-    }
-    try {
-        if (readFileSync(tmpName, "utf8") === staleRaw)
-            return true;
+        writeFileSync(mine, JSON.stringify({ pid: process.pid }));
+        for (const name of readdirSync(dir)) {
+            const other = join(dir, name);
+            if (!name.startsWith(prefix) || other === mine)
+                continue;
+            let claimant;
+            try {
+                claimant = JSON.parse(readFileSync(other, "utf8")).pid;
+            }
+            catch {
+                // empty/partial claim: its owner is mid-write; treat as live (back off)
+            }
+            if (claimant !== undefined && !alive(claimant)) {
+                rmSync(other, { force: true }); // unique name + dead owner: nobody can be using it
+                continue;
+            }
+            return false; // another live claimant is taking this lock over
+        }
+        let current;
         try {
-            linkSync(tmpName, path); // restore the fresh lock we grabbed by mistake
+            current = readFileSync(path, "utf8");
         }
         catch {
-            // someone else holds a lock now
+            return true; // already gone: the next create attempt decides
         }
-        return false;
+        if (current !== staleRaw)
+            return false; // replaced by a fresh lock: not ours to remove
+        const stale = `${path}.${process.pid}.${Math.random().toString(36).slice(2)}.stale`;
+        try {
+            renameSync(path, stale);
+        }
+        catch {
+            return true;
+        }
+        rmSync(stale, { force: true });
+        return true;
     }
     catch {
         return false;
     }
     finally {
-        rmSync(tmpName, { force: true });
+        rmSync(mine, { force: true });
     }
 }
 /** Creates `path` atomically with its content: write a unique temp file, then link it (EEXIST = held). */
@@ -110,7 +139,8 @@ export function acquireLock(path, pid, opts) {
             }
             const held = parseLock(raw);
             if (held) {
-                if (now() - held.startedAt <= opts.staleMs && alive(held.pid))
+                // Proof of death only (opts.proofOfDeathOnly): a live pid is never taken over by age alone.
+                if (alive(held.pid) && (opts.proofOfDeathOnly === true || now() - held.startedAt <= opts.staleMs))
                     return false;
             }
             else {
@@ -125,7 +155,7 @@ export function acquireLock(path, pid, opts) {
                 if (Date.now() - mtime <= opts.staleMs)
                     return false;
             }
-            if (!takeOver(path, raw))
+            if (!takeOver(path, raw, alive))
                 return false;
         }
     }

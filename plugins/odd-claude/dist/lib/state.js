@@ -82,10 +82,10 @@ function sleepSync(ms) {
 export function updateSessionState(sessionId, update, opts = {}) {
     const lock = `${sessionStatePath(sessionId, opts)}.lock`;
     const deadline = Date.now() + LOCK_WAIT_MS;
-    while (!acquireLock(lock, process.pid, { staleMs: LOCK_STALE_MS })) {
+    while (!acquireLock(lock, process.pid, { staleMs: LOCK_STALE_MS, proofOfDeathOnly: true })) {
         if (Date.now() >= deadline)
             throw new Error("session state lock timeout");
-        sleepSync(5);
+        sleepSync(3 + Math.random() * 5); // jitter so backing-off takeover claimants do not retry in lockstep
     }
     try {
         const current = readSessionState(sessionId, opts);
