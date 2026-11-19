@@ -2,7 +2,10 @@
 // A lock is a file `<dataDir>/locks/<kind>-<sha1(project)>.lock` holding {pid, startedAt}.
 // Created atomically WITH content (unique temp file, then link: EEXIST means contended), so no reader ever sees an
 // empty lock. An unreadable/empty lock is stale only when its mtime is older than `staleMs`. A held lock is stale when its pid is dead, or
-// (unless `proofOfDeathOnly`) older than `staleMs`. Takeover is claim-based (see takeOver): no move->check->restore.
+// (unless `proofOfDeathOnly`) older than `staleMs`. Takeover is claim-based (see takeOver).
+// Limitation (proofOfDeathOnly): a crashed holder whose pid is later reused by an unrelated live process keeps the lock
+// forever; contenders wait their bounded time and fail open (e.g. each PostToolUse waits ~1 s and logs a timeout) until
+// the lock file is removed by hand.
 import { createHash } from "node:crypto";
 import { linkSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
@@ -53,12 +56,15 @@ function readLock(path: string): { pid: number; startedAt: number } | undefined 
  * in which a third process can create one, so two holders overlap). Exclusivity comes from claims instead: every
  * contender that judged the lock stale publishes its own uniquely named claim `<lock>.claim-<id>` (holding its pid)
  * and only proceeds when it is the ONLY live claimant (each publishes before it lists, so two contenders can never
- * both see themselves alone; losers back off and retry). Claims of dead pids are swept. The sole claimant re-reads the
- * lock: only when it is still exactly `staleRaw` is it moved away. While the stale instance exists nobody else can
- * create the lock, and a dead holder cannot release it, so nothing can replace it between the re-read and the move.
- * Returns true when the caller may retry the create; false to back off.
+ * both see themselves alone; losers back off and retry). Claims of dead pids, and unreadable claims older than
+ * `staleMs`, are swept. The sole claimant re-reads the lock: only when it is still exactly `staleRaw` is it moved
+ * away. For a DEAD holder nothing can replace the instance between the re-read and the move (it cannot release, and
+ * nobody can create while it exists). A live holder judged stale by age CAN release and a fresh lock appear in that
+ * gap, so after the move the moved content is verified: if it is not exactly `staleRaw` it is a fresh lock, which is
+ * never deleted: it is linked back (no clobber) or, when the path is occupied again, kept aside; either way we
+ * return false (contended) and never acquire. Returns true when the caller may retry the create; false to back off.
  */
-function takeOver(path: string, staleRaw: string, alive: (pid: number) => boolean): boolean {
+function takeOver(path: string, staleRaw: string, alive: (pid: number) => boolean, staleMs: number): boolean {
   const dir = dirname(path);
   const prefix = `${basename(path)}.claim-`;
   const mine = `${path}.claim-${process.pid}-${Math.random().toString(36).slice(2)}`;
@@ -71,7 +77,15 @@ function takeOver(path: string, staleRaw: string, alive: (pid: number) => boolea
       try {
         claimant = (JSON.parse(readFileSync(other, "utf8")) as { pid?: unknown }).pid as number;
       } catch {
-        // empty/partial claim: its owner is mid-write; treat as live (back off)
+        // empty/partial claim: its owner may be mid-write (fresh) or was killed between create and write (old)
+        try {
+          if (Date.now() - statSync(other).mtimeMs > staleMs) {
+            rmSync(other, { force: true }); // unique name, unreadable and older than staleMs: abandoned
+            continue;
+          }
+        } catch {
+          continue; // vanished
+        }
       }
       if (claimant !== undefined && !alive(claimant)) {
         rmSync(other, { force: true }); // unique name + dead owner: nobody can be using it
@@ -92,8 +106,25 @@ function takeOver(path: string, staleRaw: string, alive: (pid: number) => boolea
     } catch {
       return true;
     }
-    rmSync(stale, { force: true });
-    return true;
+    let moved: string | undefined;
+    try {
+      moved = readFileSync(stale, "utf8");
+    } catch {
+      // unreadable: not provably the judged record; kept aside below
+    }
+    if (moved === staleRaw) {
+      rmSync(stale, { force: true });
+      return true;
+    }
+    // The holder released and somebody created a fresh lock after our re-read: never delete or acquire over it.
+    // Give it back without clobbering (link fails with EEXIST if the path is occupied again; then it stays aside).
+    try {
+      linkSync(stale, path);
+      rmSync(stale, { force: true });
+    } catch {
+      // path occupied or link failed: keep the moved record aside, inert, and report contention
+    }
+    return false;
   } catch {
     return false;
   } finally {
@@ -148,7 +179,7 @@ export function acquireLock(path: string, pid: number, opts: LockOptions): boole
         }
         if (Date.now() - mtime <= opts.staleMs) return false;
       }
-      if (!takeOver(path, raw, alive)) return false;
+      if (!takeOver(path, raw, alive, opts.staleMs)) return false;
     }
   } catch {
     // fail safe: no lock means no spawn

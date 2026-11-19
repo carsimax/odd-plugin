@@ -187,3 +187,53 @@ test("lock: processes that die holding the lock never let two live holders overl
     t.done();
   }
 });
+
+const lockUrl = new URL("./lock.js", import.meta.url).href;
+const pausedChild = `
+  import fs from "node:fs"; import { syncBuiltinESMExports } from "node:module";
+  const [p, ev, pause, hold, proof] = process.argv.slice(1);
+  const sleep = (ms) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+  const rn = fs.renameSync; let once = false;
+  fs.renameSync = function (a, b) { if (+pause && !once && a === p) { once = true; sleep(+pause); } return rn.apply(this, arguments); };
+  syncBuiltinESMExports();
+  const { acquireLock, releaseOwnedLock } = await import(${JSON.stringify(lockUrl)});
+  const end = Date.now() + 300;
+  while (!acquireLock(p, process.pid, { staleMs: 2000, proofOfDeathOnly: proof === "1" })) { if (Date.now() > end) process.exit(0); sleep(5); }
+  fs.appendFileSync(ev, "+\\n"); sleep(+hold); fs.appendFileSync(ev, "-\\n"); releaseOwnedLock(p, process.pid);`;
+const runPaused = (args: string[]) => new Promise<void>((r) => spawn(process.execPath, ["--input-type=module", "-e", pausedChild, ...args]).on("close", () => r()));
+const maxHolders = (ev: string): number => { let n = 0, m = 0; for (const l of readFileSync(ev, "utf8").split("\n")) { if (l === "+") m = Math.max(m, ++n); if (l === "-") n--; } return m; };
+
+test("lock: an age-based takeover never removes a fresh lock created after the old live holder released", async () => {
+  const t = tmp(); const h = spawn("/bin/sleep", ["10"]);
+  try {
+    mkdirSync(join(t.dir, "locks")); const p = join(t.dir, "locks", "w.lock"); const ev = join(t.dir, "ev");
+    writeFileSync(p, JSON.stringify({ pid: h.pid, startedAt: Date.now() - 10_000 }));
+    const p1 = runPaused([p, ev, "900", "1000", "0"]);
+    await new Promise((r) => setTimeout(r, 400));
+    rmSync(p);
+    const p3 = runPaused([p, ev, "0", "1500", "0"]);
+    await Promise.all([p1, p3]);
+    assert.equal(maxHolders(ev), 1, "a fresh lock was moved aside: two holders");
+  } finally { h.kill(); t.done(); }
+});
+test("lock: a dead-pid takeover paused between re-read and move never yields two holders", async () => {
+  const t = tmp();
+  try {
+    mkdirSync(join(t.dir, "locks")); const p = join(t.dir, "locks", "s.lock"); const ev = join(t.dir, "ev");
+    writeFileSync(p, JSON.stringify({ pid: 999999, startedAt: 1 }));
+    const p1 = runPaused([p, ev, "1500", "300", "1"]);
+    await new Promise((r) => setTimeout(r, 200));
+    await Promise.all([p1, ...Array.from({ length: 8 }, () => runPaused([p, ev, "0", "20", "1"]))]);
+    assert.equal(maxHolders(ev), 1);
+  } finally { t.done(); }
+});
+test("lock: an empty claim older than staleMs does not block a dead-pid takeover forever", () => {
+  const t = tmp();
+  try {
+    mkdirSync(join(t.dir, "locks")); const p = join(t.dir, "locks", "e.lock");
+    writeFileSync(p, JSON.stringify({ pid: 999999, startedAt: 1 }));
+    writeFileSync(`${p}.claim-12345-crashed`, ""); utimesSync(`${p}.claim-12345-crashed`, new Date(0), new Date(0));
+    assert.equal(acquireLock(p, process.pid, { staleMs: 2000, proofOfDeathOnly: true }), true);
+    assert.deepEqual(readdirSync(join(t.dir, "locks")), ["e.lock"]);
+  } finally { t.done(); }
+});
