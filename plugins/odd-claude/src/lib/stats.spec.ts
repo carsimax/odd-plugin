@@ -166,3 +166,17 @@ test("statsCli never throws: no session, no data dir, no transcript, unreadable 
     rmSync(dir, { recursive: true, force: true });
   }
 });
+
+test("collectTranscriptStats strips whole OSC/CSI sequences from model names (no residue)", () => {
+  const dir = tmp();
+  try {
+    const p = join(dir, "t.jsonl");
+    writeFileSync(p, [
+      asst("a", "claude-x\u001b]0;PWN\u0007", { input_tokens: 1, output_tokens: 1 }, "2026-11-18T10:00:00.000Z"),
+      asst("b", "claude-y\u001b[31mR", { input_tokens: 1, output_tokens: 1 }, "2026-11-18T10:00:01.000Z"),
+    ].join("\n"));
+    assert.deepEqual(collectTranscriptStats(p)!.models.map((m) => m.model).sort(), ["claude-x", "claude-yR"]);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});

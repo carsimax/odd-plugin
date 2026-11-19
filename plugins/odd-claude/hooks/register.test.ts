@@ -232,3 +232,30 @@ test('a pane that is not ours is left to the default rendering', async ($: any) 
   const ui = await $.ui.mount({ plugin: 'odd-claude', surface: 'terminal', component: 'Pane', requestId: 'someone-else', props: {} } as any);
   expect((await ui.drawn()).type).toBe('engine');
 });
+
+test('odd-changes pane: names carry no escape-sequence residue (parity with the CLI)', async ($: any, on: any) => {
+  on('process.run', (_$: any, e: any) => {
+    const st = ['## main', '?? a\u001b]0;PWN\u0007b', '?? c\u001b[31mR', ''].join('\0');
+    return { value: { exitCode: 0, stdout: e.argv.includes('status') ? st : '', stderr: '' } };
+  });
+  const answer = await $.command.run({ command: 'odd-changes', args: '' } as any);
+  expect(answer.text).toBe('odd-claude changes · branch main\n?? ab\n?? cR\n2 changed, 2 untracked');
+  const ui = await $.ui.mount({ plugin: 'odd-claude', surface: 'terminal', component: 'Pane', requestId: 'odd-changes', props: {} } as any);
+  const texts = (await ui.findAll({ type: 'Text' })).map((f: any) => f.text);
+  expect(texts).toContain('?? ab');
+  for (const t of texts) expect(/[\u0000-\u001f\u007f-\u009f]|\]0;|\[31m/.test(t)).toBe(false);
+});
+
+test('odd-changes pane: renders within one refresh interval reuse a single git run', async ($: any, on: any) => {
+  let runs = 0;
+  on('process.run', () => { runs++; return { value: { exitCode: 0, stdout: '## main\0', stderr: '' } }; });
+  let ui = await $.ui.mount({ plugin: 'odd-claude', surface: 'terminal', component: 'Pane', requestId: 'odd-changes', props: {} } as any);
+  await ui.drawn();
+  for (let i = 0; i < 3; i++) {
+    await ui.unmount();
+    ui = await $.ui.mount({ plugin: 'odd-claude', surface: 'terminal', component: 'Pane', requestId: 'odd-changes', props: {} } as any);
+    await ui.drawn();
+  }
+  // first render runs status + diff (HEAD, then plain when HEAD yields nothing); later renders hit the cache
+  expect(runs).toBeLessThanOrEqual(3);
+});

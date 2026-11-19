@@ -5,6 +5,7 @@
 import { closeSync, fstatSync, openSync, readSync, statSync } from "node:fs";
 import { isAbsolute } from "node:path";
 import { formatDuration, type SubagentRecord } from "./subagents.js";
+import { cleanText } from "./statusline.js";
 import { readSessionState, updateSessionState, type StateOptions } from "./state.js";
 
 /** Only the tail of a transcript is read: a long session never costs more than this. */
@@ -39,8 +40,6 @@ export interface Exploration {
   bytes: number;
 }
 
-// eslint-disable-next-line no-control-regex
-const CONTROL = /[\u0000-\u001f\u007f-\u009f\u200e\u200f\u061c\u2028\u2029\u202a-\u202e\u2066-\u2069]/g;
 const count = (v: unknown): number => (typeof v === "number" && Number.isFinite(v) && v > 0 ? v : 0);
 
 function validPath(p: unknown): p is string {
@@ -114,7 +113,7 @@ export function collectTranscriptStats(path: string): TranscriptStats | undefine
       const m = entry.message;
       const u = m?.usage;
       if (entry.type !== "assistant" || typeof m !== "object" || m === null || typeof u !== "object" || u === null) continue;
-      const model = typeof m.model === "string" ? m.model.replace(CONTROL, "").trim().slice(0, 80) : "";
+      const model = typeof m.model === "string" ? cleanText(m.model).slice(0, 80) : "";
       if (model === "<synthetic>") continue;
       byMessage.set(typeof m.id === "string" && m.id !== "" ? m.id : `anon-${anon++}`, {
         model: model === "" ? "unknown" : model,

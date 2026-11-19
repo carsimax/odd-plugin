@@ -2,31 +2,51 @@
 // truth for what changed; nothing is recorded per session. Read-only: `git status` and `git diff --stat` with
 // optional locks off, a bounded timeout and no user text on any command line. Never throws.
 import { spawnSync } from "node:child_process";
+import { statSync } from "node:fs";
 import { cleanText } from "./statusline.js";
 const MAX_FILES = 50;
 const MAX_STAT_LINES = 40;
 const MAX_LINE = 200;
+const GIT_TIMEOUT_MS = 5000;
 const NOT_A_REPO = "Not a git repository; no changes to summarize.";
-/** Runs git in `cwd`; undefined on any failure (not a repo, timeout, missing git). */
-function runGit(cwd, args) {
+const TIMED_OUT = "git timed out; changes unavailable.";
+const NO_GIT = "git not found; changes unavailable.";
+/** Runs git in `cwd`; a `fail` reason on any failure (timeout, missing git, not a repo / other error). */
+function runGit(cwd, args, timeoutMs) {
     const r = spawnSync("git", ["-c", "core.fsmonitor=false", "-c", "core.quotepath=false", ...args], {
         cwd,
         encoding: "utf8",
-        timeout: 5000,
+        timeout: timeoutMs,
+        killSignal: "SIGKILL", // a git that ignores SIGTERM must not hold the caller past the timeout
         maxBuffer: 4 * 1024 * 1024,
         stdio: ["ignore", "pipe", "ignore"],
         env: { ...process.env, GIT_OPTIONAL_LOCKS: "0", GIT_TERMINAL_PROMPT: "0" },
     });
-    if (r.error || r.status !== 0)
-        return undefined;
-    return r.stdout ?? "";
+    if (r.error) {
+        const code = r.error.code;
+        return { fail: code === "ETIMEDOUT" ? "timeout" : code === "ENOENT" ? "missing" : "error" };
+    }
+    if (r.status !== 0)
+        return { fail: r.signal === "SIGKILL" ? "timeout" : "error" };
+    return { out: r.stdout ?? "" };
 }
-export function collectChanges(cwd) {
-    const status = runGit(cwd, ["status", "--porcelain=v1", "-z", "--branch"]);
-    if (status === undefined)
+export function collectChanges(cwd, opts = {}) {
+    const timeoutMs = opts.timeoutMs ?? GIT_TIMEOUT_MS;
+    let isDir = false;
+    try {
+        isDir = statSync(cwd).isDirectory();
+    }
+    catch {
+        // missing directory: not a repository
+    }
+    if (!isDir)
         return NOT_A_REPO;
-    const stat = runGit(cwd, ["diff", "--stat", "--no-color", "HEAD"]) ?? runGit(cwd, ["diff", "--stat", "--no-color"]);
-    return summarizeChanges(status, stat);
+    const status = runGit(cwd, ["status", "--porcelain=v1", "-z", "--branch"], timeoutMs);
+    if ("fail" in status)
+        return status.fail === "timeout" ? TIMED_OUT : status.fail === "missing" ? NO_GIT : NOT_A_REPO;
+    const head = runGit(cwd, ["diff", "--stat", "--no-color", "HEAD"], timeoutMs);
+    const stat = "out" in head ? head : runGit(cwd, ["diff", "--stat", "--no-color"], timeoutMs);
+    return summarizeChanges(status.out, "out" in stat ? stat.out : undefined);
 }
 /** Pure: `git status --porcelain=v1 -z --branch` output plus `git diff --stat` output to the printed summary. */
 export function summarizeChanges(statusZ, stat) {

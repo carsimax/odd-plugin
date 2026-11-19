@@ -23,6 +23,8 @@ const MODELS = ['haiku', 'sonnet', 'opus'];
 const QUIET_MIN_LINES = 10;
 const QUIET_SCAN_CAP = 1_000_000;
 const NOT_A_REPO = 'Not a git repository; no changes to summarize.';
+const GIT_UNAVAILABLE = 'git unavailable or timed out; changes unavailable.';
+const CHANGES_TTL_MS = 4000;
 
 function duration(ms: number): string {
   const s = Math.floor(Math.max(0, ms) / 1000);
@@ -50,9 +52,22 @@ export function tableLines(records: Rec[], now: number): string[] {
   return [...lines, `${records.length} subagent${records.length === 1 ? '' : 's'} (${running} running)`];
 }
 
-// eslint-disable-next-line no-control-regex
-const CONTROL = /[\u0000-\u001f\u007f-\u009f\u200e\u200f\u061c\u2028\u2029\u202a-\u202e\u2066-\u2069]/g;
-const clean = (s: string) => s.replace(CONTROL, '').trim().slice(0, 200);
+// Copy of cleanText in src/lib/statusline.ts (mods allow only static relative imports): keep both identical; the
+// parity spec src/lib/changes-parity.spec.ts compares the three replace() patterns.
+function cleanText(s: unknown): string {
+  if (typeof s !== 'string') return '';
+  return (
+    s
+      // eslint-disable-next-line no-control-regex
+      .replace(/\u001b\][^\u0007\u001b]*(?:\u0007|\u001b\\)?/g, '')
+      // eslint-disable-next-line no-control-regex
+      .replace(/\u001b\[[0-?]*[ -/]*[@-~]?/g, '')
+      // eslint-disable-next-line no-control-regex
+      .replace(/[\u0000-\u001f\u007f-\u009f\u200e\u200f\u061c\u2028\u2029\u202a-\u202e\u2066-\u2069]/g, '')
+      .trim()
+  );
+}
+const clean = (s: string) => cleanText(s).slice(0, 200);
 
 export function summarizeChanges(statusZ: string, stat: string | undefined): string {
   const tokens = statusZ.split('\0');
@@ -84,19 +99,33 @@ export function summarizeChanges(statusZ: string, stat: string | undefined): str
 }
 
 async function git($: any, args: string[]): Promise<string | undefined> {
-  try {
-    const r = await $.process.run(['git', '-c', 'core.fsmonitor=false', '-c', 'core.quotepath=false', ...args], { timeoutMs: 5000 });
-    return r && r.exitCode === 0 && typeof r.stdout === 'string' ? r.stdout : undefined;
-  } catch {
-    return undefined;
-  }
+  const r = await $.process.run(['git', '-c', 'core.fsmonitor=false', '-c', 'core.quotepath=false', ...args], { timeoutMs: 5000 });
+  return r && r.exitCode === 0 && typeof r.stdout === 'string' ? r.stdout : undefined;
 }
 
 async function changesText($: any): Promise<string> {
-  const status = await git($, ['status', '--porcelain=v1', '-z', '--branch']);
-  if (status === undefined) return NOT_A_REPO;
-  const stat = (await git($, ['diff', '--stat', '--no-color', 'HEAD'])) ?? (await git($, ['diff', '--stat', '--no-color']));
-  return summarizeChanges(status, stat);
+  try {
+    const status = await git($, ['status', '--porcelain=v1', '-z', '--branch']);
+    if (status === undefined) return NOT_A_REPO;
+    let stat: string | undefined;
+    try {
+      stat = (await git($, ['diff', '--stat', '--no-color', 'HEAD'])) ?? (await git($, ['diff', '--stat', '--no-color']));
+    } catch {
+      stat = undefined;
+    }
+    return summarizeChanges(status, stat);
+  } catch {
+    return GIT_UNAVAILABLE;
+  }
+}
+
+// The pane re-renders every refresh; one git run per interval (shared while in flight) so a hung git cannot cost
+// its timeout on every render. The command always runs fresh.
+let changesCache: { at: number; text: Promise<string> } | undefined;
+function cachedChanges($: any): Promise<string> {
+  const now = Date.now();
+  if (changesCache === undefined || now - changesCache.at >= CHANGES_TTL_MS || now < changesCache.at) changesCache = { at: now, text: changesText($) };
+  return changesCache.text;
 }
 
 function countLines(text: string): number {
@@ -185,14 +214,6 @@ export async function routedModel($: any, subagentType: unknown): Promise<string
 export function register(on: any) {
   let timer: any;
   let changesTimer: any;
-  const cancel = (t: any) => {
-    try {
-      if (typeof t === 'function') t();
-      else t?.cancel?.();
-    } catch {
-      // ignore
-    }
-  };
 
   on('session.start', async ($: any, e: any, next: any) => {
     try {
@@ -221,6 +242,7 @@ export function register(on: any) {
 
   on('command.run', { command: CHANGES_COMMAND }, async ($: any) => {
     const text = await changesText($);
+    changesCache = { at: Date.now(), text: Promise.resolve(text) };
     try {
       await $.ui.open({ id: CHANGES_PANE, title: 'odd changes', focus: true, closeOnEscape: true });
       if (changesTimer === undefined) changesTimer = $.clock.every(5000, () => $.ui.invalidate('ui.render'));
@@ -231,17 +253,25 @@ export function register(on: any) {
   }).catch(() => ({ text: 'odd-changes: unavailable (see /odd-claude:changes)' }));
 
   on('ui.render', { component: 'Pane' }, async ($: any, e: any, next: any) => {
-    if (e.requestId !== CHANGES_PANE) return next(e);
-    const { Box, Text } = $.ui.resolve(e);
-    const lines = (await changesText($)).split('\n');
-    return Box({ key: 'root', children: lines.map((l, i) => Text({ key: `l${i}`, children: l })) });
+    if (e?.requestId !== CHANGES_PANE) return next(e);
+    try {
+      const { Box, Text } = $.ui.resolve(e);
+      const lines = (await cachedChanges($)).split('\n');
+      return Box({ key: 'root', children: lines.map((l, i) => Text({ key: `l${i}`, children: l })) });
+    } catch {
+      return next(e);
+    }
   });
 
   on('ui.render', { component: 'Pane' }, async ($: any, e: any, next: any) => {
-    if (e.requestId !== PANE) return next(e);
-    const { Box, Text } = $.ui.resolve(e);
-    const lines = tableLines(await load($), Date.now());
-    return Box({ key: 'root', children: lines.map((l, i) => Text({ key: `l${i}`, children: l })) });
+    if (e?.requestId !== PANE) return next(e);
+    try {
+      const { Box, Text } = $.ui.resolve(e);
+      const lines = tableLines(await load($), Date.now());
+      return Box({ key: 'root', children: lines.map((l, i) => Text({ key: `l${i}`, children: l })) });
+    } catch {
+      return next(e);
+    }
   });
 
   on('ui.render', { component: 'ToolResult' }, async ($: any, e: any, next: any) => {

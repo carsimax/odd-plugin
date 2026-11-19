@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { collectChanges, summarizeChanges } from "./changes.js";
@@ -82,5 +82,41 @@ test("the CLI prints the summary for --cwd and for the process cwd; garbage args
     assert.match(changesCli(["--cwd", join(dir, "sub")]).stdout, / M a\.txt/);
   } finally {
     rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+function withPath<T>(path: string, fn: () => T): T {
+  const old = process.env.PATH;
+  process.env.PATH = path;
+  try {
+    return fn();
+  } finally {
+    process.env.PATH = old;
+  }
+}
+
+test("a git that ignores SIGTERM is killed at the timeout and reported as a timeout", () => {
+  const bin = mkdtempSync(join(tmpdir(), "odd-changes-bin-"));
+  const dir = mkdtempSync(join(tmpdir(), "odd-changes-hang-"));
+  try {
+    writeFileSync(join(bin, "git"), "#!/bin/sh\ntrap '' TERM\nexec sleep 30\n");
+    chmodSync(join(bin, "git"), 0o755);
+    const t0 = Date.now();
+    const out = withPath(`${bin}:/usr/bin:/bin`, () => collectChanges(dir, { timeoutMs: 300 }));
+    assert.equal(out, "git timed out; changes unavailable.");
+    assert.ok(Date.now() - t0 < 5000, "SIGKILL must end the hung git quickly");
+  } finally {
+    for (const d of [bin, dir]) rmSync(d, { recursive: true, force: true });
+  }
+});
+
+test("a missing git binary is reported as such, not as a non-repository", () => {
+  const empty = mkdtempSync(join(tmpdir(), "odd-changes-nogit-"));
+  const dir = mkdtempSync(join(tmpdir(), "odd-changes-dir-"));
+  try {
+    assert.equal(withPath(empty, () => collectChanges(dir)), "git not found; changes unavailable.");
+    assert.equal(collectChanges(dir), "Not a git repository; no changes to summarize.");
+  } finally {
+    for (const d of [empty, dir]) rmSync(d, { recursive: true, force: true });
   }
 });
