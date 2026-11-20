@@ -1,9 +1,10 @@
-// `npm run bench -- --out <file> [--journey <id>]...`: runs the journeys against odd's real MCP server and writes the result JSON.
+// `npm run bench -- --out <file> [--journey <id>]...`: runs the subject-neutral journeys against odd (real MCP server, hooks and CLI) and writes the result JSON.
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { dirname } from "node:path";
 import { DEFAULT_SERVER_PATH, runJourney } from "./journey.js";
-import { JOURNEYS } from "./journeys/index.js";
+import { journeysFor } from "./journeys/index.js";
+import { oddSubject } from "./subjects/odd.js";
 import { buildResult } from "./report.js";
 import { validateResult } from "./schema.js";
 
@@ -21,6 +22,7 @@ function parse(argv: string[]): { out?: string; only: string[]; error?: string }
 }
 
 async function main(): Promise<number> {
+  const JOURNEYS = journeysFor(oddSubject);
   const args = parse(process.argv.slice(2));
   if (args.error || !args.out) { console.error(args.error); return 2; }
   const selected = args.only.length ? JOURNEYS.filter((j) => args.only.includes(j.id)) : JOURNEYS;
