@@ -2,7 +2,7 @@
 
 **Goal.** odd-claude is [gentle-shell](../upstream/gentle-shell) ported to a Claude Code plugin (`odd-claude`, commands `/odd-claude:<x>`, agents `odd-*`). The upstream repo is the only source of behaviour. Built from [research/portability-matrix.md](research/portability-matrix.md) (132 rows, IDs `R##` runtime / `A##` asset), [research/open-questions.md](research/open-questions.md) and [research/claude-code-extensibility.md](research/claude-code-extensibility.md) §12. Decisions and naming: [README.md](README.md).
 
-Status: **v1.1 reached** (Phases 1–5 and 7 done; Phase 6 dropped by user decision 2026-11-19; Phase 8 / v2 pending). Phase contents follow the matrix "Candidate phases" with the adjustments listed under [Deviations](#deviations-from-the-matrix-candidate-phases).
+Status: **v2.0.0 reached** for native RDD (faithful core; Phases 1–5, 7 and the RDD part of 8 done; Phase 6 dropped by user decision 2026-11-19; peer orchestrators R07 pending, after the RDD). Phase contents follow the matrix "Candidate phases" with the adjustments listed under [Deviations](#deviations-from-the-matrix-candidate-phases).
 
 ## Guiding principles
 
@@ -119,6 +119,10 @@ Originally "Guards" (enforcement through deny/ask hooks). Superseded by user dec
 
 ### Phase 8: v2, native RDD + peer orchestrators
 
+- **Status:** **RDD shipped in v2.0.0 (faithful core, branch feat/v2-rdd; feature doc `odd/tasks/v2-rdd.md`)**; peer orchestrators (R07) are not started.
+  - **Shipped:** the native review engine (state machine, atomic authority store with revision CAS, directory lock, git snapshots, risk classification, consent, capture, correction, acknowledge/burn with receipts), isolated `claude -p` reviewers, the review MCP server (final tool names `review_*`, not `odd_review*`: the plugin guard forbids that literal in shipped files), the RDD mode switch CLI (`review-mode.js`, off by default), the Stop settle reminder and the `git push` / `gh pr` delivery gate. Scoped exception to the no-deny rule: only those two can block, only with RDD on (S3).
+  - **Deferred (not in 2.0.0):** store maintenance (recover, reclaim, quarantine, legacy); peer orchestrators R07 via `$.store`, next, as a separate feature doc; consolidating the duplicated helpers in `status.ts`; the slash commands and skills of the original deliverables (`/odd-claude:rdd`, `/odd-claude:review-session-permission`, `provider-defect-report`, `rdd-defect-workflow`), none of which was needed for the core.
+  - **Known residuals (documented, see the plugin README):** a lineage directory abandoned by a crash in the middle of START is inert and is not swept; dead lock directories are reclaimed only on the next mutation; a complete lock-claim guarantee needs a no-replace rename that Node does not expose; the delivery gate is lexical (aliases and scripts are not recognized).
 - **Goal:** the explicit **v2** milestone: the portable items deliberately left out of v1 (native RDD and inter-session peers), planned for after v1 ships. These are the only v2 scope.
 - **Matrix IDs:** R03, R07, R29, R30, R31, R32, R33, R74, A39, A40, A47, A48
 - **Deliverables:** (native RDD, v2; Q4 option A or B reopened when v2 starts) MCP server with `odd_review`, `odd_review_run`, `odd_review_capture`, `odd_review_capture_group`, `odd_review_scope`, `odd_phase` (R29), candidate views (R33), request-context placement (R74), contract fragment injection (R03), `contracts/review-integration/` and `contracts/provider-mirror/` (A47, A48), `/odd-claude:rdd`, `/odd-claude:review-mode`, `/odd-claude:review-session-permission` (R30), Stop hook `odd-settle-nudge` (R31), publication gate tied to review approval `odd-delivery-gate` (R32), skills `provider-defect-report`, `rdd-defect-workflow` (A39, A40). (Peers) `odd_orchestrator_*` tools via a channel chosen then, `$.store` or MCP channels (R07).
@@ -147,7 +151,7 @@ Originally "Guards" (enforcement through deny/ask hooks). Superseded by user dec
 | v0.8 | Advisory review: four lenses + Judgment Day as agents and skills | 4 | per Q4; no native RDD, no external binary |
 | v1.0 | Parity target (below) | 1–4 + 7 | reached (branch feat/v1.0-polish); R57 and R63 dropped by user decision 2026-11-18 |
 | v1.1 | Mods UX | 5 | reached (branch feat/v1.1-mods); R42 and R44 shipped via setup; interactive checks pending |
-| v2 | Native RDD + peer orchestrators: R03, R07, R29, R30, R31, R32, R33, R74, A39, A40, A47, A48 | 8 | per Q4/Q5; engine and channel chosen at v2 start |
+| v2 | Native RDD + peer orchestrators: R03, R07, R29, R30, R31, R32, R33, R74, A39, A40, A47, A48 | 8 | native RDD **shipped as 2.0.0** (faithful core, TypeScript, "camino B"); R07 peers next via `$.store` (Q5) |
 
 **What "parity" means for v1.0.** Every matrix item with a 🟡 or ✅ verdict in Phases 1–4 and 7 is delivered or has a documented native equivalent, so that an ODD session (prompt, delegation, writer/verifier rules, guards, Judgment Day, advisory four-lens review) behaves as in gentle-shell for the same user task. Parity is **not** pixel/TUI parity: the 29 ❌ matrix rows and the extra out-of-scope entries below (Pi-host rendering, launcher/installer, providers, keybindings, desktop/herdr, voice/music, telemetry) are excluded, Pi-specific pieces are replaced by native Claude Code tools, and cross-provider model fallback is impossible. Mod-only UX (Phase 5) is extended parity shipped after 1.0; web tools (Phase 6) were dropped on 2026-11-19. Per the Q4 decision, v1.0 parity covers the **advisory** agent-based review only: native RDD (`odd_review*` tools, contract mirror, candidate views, review-approval publication gate, lineage/consent/capture) and inter-session peers (R07) are **v2 scope** (Phase 8: R03, R07, R29, R30, R31, R32, R33, R74, A39, A40, A47, A48) and excluded from the v1 parity claim; the release notes say so.
 
@@ -220,4 +224,4 @@ Excluded rows (every other matrix ID is in a phase above, v2 included). Out-of-s
 | 5 | Mods UX (optional) | Phase 2; Q1, Q7 | v1.1 | done (v1.1, branch feat/v1.1-mods); R42 TPS and R44 statusLine shipped via setup; interactive checks pending |
 | 6 | Web tools | – | – | dropped by user decision 2026-11-19 (Claude Code's own Artifact tool and built-in design/chart features cover the need; Tower not wanted); v1.2 not released |
 | 7 | Cosmetic and small | Phase 1 | v1.0 | done (v1.0, branch feat/v1.0-polish); R57, R63 dropped by user decision 2026-11-18 |
-| 8 | v2: native RDD + peer orchestrators | v1 shipped | v2 | planned (after v1) |
+| 8 | v2: native RDD + peer orchestrators | v1 shipped | v2 | RDD done (v2.0.0, branch feat/v2-rdd, faithful core); peers (R07) pending |
