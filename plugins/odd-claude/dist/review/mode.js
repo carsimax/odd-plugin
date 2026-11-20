@@ -68,9 +68,10 @@ function readClone(commonDir, problems) {
     problems.push(`clone-local review mode is malformed: ${path}`);
     return "unreadable";
 }
+const gitBound = (opts) => ({ gitTimeoutMs: opts.gitTimeoutMs, ...(opts.deadlineAt !== undefined ? { deadlineAt: opts.deadlineAt } : {}) });
 function resolveCommonDir(cwd, opts) {
     try {
-        return resolveRepository(cwd, { gitTimeoutMs: opts.gitTimeoutMs }).commonDir;
+        return resolveRepository(cwd, gitBound(opts)).commonDir;
     }
     catch (err) {
         if (err instanceof SnapshotError)
@@ -152,7 +153,7 @@ function commonDirOfGitFile(file) {
  */
 function locateCommonDir(cwd, opts) {
     try {
-        return { kind: "found", commonDir: resolveRepository(cwd, { gitTimeoutMs: opts.gitTimeoutMs }).commonDir };
+        return { kind: "found", commonDir: resolveRepository(cwd, gitBound(opts)).commonDir };
     }
     catch (err) {
         if (!(err instanceof SnapshotError))

@@ -1,5 +1,5 @@
 import { logError } from "../lib/state.js";
-import { checkDelivery } from "../review/gate.js";
+import { checkDelivery, DEFAULT_BUDGET_MS } from "../review/gate.js";
 /**
  * RDD delivery gate (U14, decision S3 amending the v0.5 no-deny rule): the ONLY PreToolUse behavior of the plugin,
  * and the only place that builds a permission decision. It acts on Bash commands that deliver work (`git push`,
@@ -10,6 +10,17 @@ import { checkDelivery } from "../review/gate.js";
  * Policy on errors: see `review/gate.ts`. With RDD on, an internal error while checking a detected delivery is a
  * refusal (fail closed, like the reference); anything that happens before RDD is known to be on is silent.
  */
+/**
+ * `ODD_CLAUDE_GATE_BUDGET_MS`: a positive integer that can only SHORTEN the gate's whole-check budget (clamped to
+ * `DEFAULT_BUDGET_MS`, which already sits 10 s under the 30 s hook timeout), so it can never push the check past the
+ * hook timeout. Anything else is ignored. A shorter budget only makes a slow git fail closed sooner with RDD on.
+ */
+function gateBudget(opts) {
+    const raw = (opts.env ?? process.env).ODD_CLAUDE_GATE_BUDGET_MS;
+    if (typeof raw !== "string" || !/^[1-9]\d{0,9}$/.test(raw))
+        return undefined;
+    return Math.min(Number(raw), DEFAULT_BUDGET_MS);
+}
 export function preToolUse(input, opts = {}) {
     if (input.tool_name !== "Bash")
         return undefined;
@@ -20,7 +31,9 @@ export function preToolUse(input, opts = {}) {
         return undefined;
     let verdict;
     try {
-        verdict = checkDelivery({ cwd, command }, opts);
+        const budget = gateBudget(opts);
+        const gateOpts = budget === undefined ? opts : { ...opts, deadlineMs: budget };
+        verdict = checkDelivery({ cwd, command }, gateOpts);
     }
     catch (err) {
         // checkDelivery never throws; if it ever does, RDD could not be shown to be on: stay silent.

@@ -33,6 +33,19 @@ export type SnapshotTarget =
 export interface SnapshotOptions {
   /** Per git command wall-clock bound; defaults to DEFAULT_GIT_TIMEOUT_MS. */
   gitTimeoutMs?: number;
+  /**
+   * Absolute deadline (epoch ms) of the whole operation the caller is bounding (the delivery gate's budget). Every git
+   * call gets min(its own bound, time left) and none starts once it has passed (`git_timeout`). Absent: no deadline.
+   */
+  deadlineAt?: number;
+}
+
+/** The per-call bound and the optional shared deadline, as threaded through every git call of an operation. */
+export type Bound = { timeoutMs: number; deadlineAt?: number };
+
+export function boundOf(options: SnapshotOptions): Bound {
+  const timeoutMs = options.gitTimeoutMs ?? DEFAULT_GIT_TIMEOUT_MS;
+  return options.deadlineAt === undefined ? { timeoutMs } : { timeoutMs, deadlineAt: options.deadlineAt };
 }
 
 export interface RepositoryIdentity {
@@ -128,6 +141,8 @@ export interface GitCall {
   cwd: string;
   args: string[];
   timeoutMs: number;
+  /** Absolute wall-clock deadline (epoch ms) of the whole check; the call gets min(timeoutMs, time left) and never starts once it has passed. */
+  deadlineAt?: number;
   env?: Record<string, string>;
   input?: string | Buffer;
   okExit?: number[];
@@ -140,10 +155,17 @@ export interface GitOut {
 }
 
 export function runGit(call: GitCall): GitOut {
+  let timeout = Math.min(Math.max(call.timeoutMs, 1), MAX_GIT_TIMEOUT_MS);
+  if (call.deadlineAt !== undefined) {
+    const left = call.deadlineAt - Date.now();
+    // the whole-operation budget is a hard deadline: nothing starts once it is spent, and no call outlives it
+    if (!(left >= 1)) throw new SnapshotError("git_timeout", `git ${call.args[0] ?? ""} not started: the time budget is spent`);
+    timeout = Math.min(timeout, left);
+  }
   const result = spawnSync("git", ["--no-replace-objects", "-C", call.cwd, ...call.args], {
     env: gitEnv(call.env),
     input: call.input,
-    timeout: Math.min(Math.max(call.timeoutMs, 1), MAX_GIT_TIMEOUT_MS),
+    timeout,
     killSignal: "SIGKILL",
     maxBuffer: call.limit ?? OUTPUT_LIMIT,
     windowsHide: true,
@@ -298,7 +320,7 @@ function statNoFollow(path: string, logical: string): Stats {
 // ---------------------------------------------------------------------------------------------
 
 export function resolveRepository(cwd: string, options: SnapshotOptions = {}): RepositoryIdentity {
-  const timeoutMs = options.gitTimeoutMs ?? DEFAULT_GIT_TIMEOUT_MS;
+  const bound = boundOf(options);
   if (typeof cwd !== "string" || cwd === "" || cwd.includes("\0")) throw new SnapshotError("invalid_target", "repository path is required");
   let start: string;
   try {
@@ -308,7 +330,7 @@ export function resolveRepository(cwd: string, options: SnapshotOptions = {}): R
   }
   let toplevel: string;
   try {
-    toplevel = oneLine(runGit({ cwd: start, args: ["rev-parse", "--show-toplevel"], timeoutMs }).stdout, "repository root");
+    toplevel = oneLine(runGit({ cwd: start, args: ["rev-parse", "--show-toplevel"], ...bound }).stdout, "repository root");
   } catch (error) {
     if (error instanceof SnapshotError && error.code === "git_failed") {
       // upstream parity (its review-incident classifier): git refuses a repository owned by someone else with exit 128 and
@@ -319,7 +341,7 @@ export function resolveRepository(cwd: string, options: SnapshotOptions = {}): R
       }
       let bare = false;
       try {
-        bare = oneLine(runGit({ cwd: start, args: ["rev-parse", "--is-bare-repository"], timeoutMs }).stdout, "bare probe") === "true";
+        bare = oneLine(runGit({ cwd: start, args: ["rev-parse", "--is-bare-repository"], ...bound }).stdout, "bare probe") === "true";
       } catch {
         bare = false;
       }
@@ -329,8 +351,8 @@ export function resolveRepository(cwd: string, options: SnapshotOptions = {}): R
     throw error;
   }
   const root = realpathSync(toplevel);
-  const gitDir = realpathSync(oneLine(runGit({ cwd: root, args: ["rev-parse", "--absolute-git-dir"], timeoutMs }).stdout, "git dir"));
-  const common = oneLine(runGit({ cwd: root, args: ["rev-parse", "--git-common-dir"], timeoutMs }).stdout, "git common dir");
+  const gitDir = realpathSync(oneLine(runGit({ cwd: root, args: ["rev-parse", "--absolute-git-dir"], ...bound }).stdout, "git dir"));
+  const common = oneLine(runGit({ cwd: root, args: ["rev-parse", "--git-common-dir"], ...bound }).stdout, "git common dir");
   const commonDir = realpathSync(isAbsolute(common) ? common : resolve(root, common));
   return { root, gitDir, commonDir };
 }
@@ -349,43 +371,43 @@ function validateRef(ref: unknown, what: string): string {
   return value;
 }
 
-function resolveTree(repo: RepositoryIdentity, rev: string, timeoutMs: number): string {
+function resolveTree(repo: RepositoryIdentity, rev: string, bound: Bound): string {
   try {
-    return oid(runGit({ cwd: repo.root, args: ["rev-parse", "--verify", `${rev}^{tree}`], timeoutMs }).stdout, "tree id");
+    return oid(runGit({ cwd: repo.root, args: ["rev-parse", "--verify", `${rev}^{tree}`], ...bound }).stdout, "tree id");
   } catch (error) {
     if (error instanceof SnapshotError && error.code === "git_failed") throw new SnapshotError("unknown_revision", `cannot resolve ${JSON.stringify(rev)} to a tree`, { exitCode: error.exitCode });
     throw error;
   }
 }
 
-function emptyTree(repo: RepositoryIdentity, timeoutMs: number): string {
-  return oid(runGit({ cwd: repo.root, args: ["mktree"], timeoutMs, input: "" }).stdout, "empty tree id");
+function emptyTree(repo: RepositoryIdentity, bound: Bound): string {
+  return oid(runGit({ cwd: repo.root, args: ["mktree"], ...bound, input: "" }).stdout, "empty tree id");
 }
 
 /** HEAD's tree, or the empty tree plus `unborn` when HEAD names a branch that has no commit yet. */
-function resolveHeadBase(repo: RepositoryIdentity, timeoutMs: number): { tree: string; unborn: boolean } {
+function resolveHeadBase(repo: RepositoryIdentity, bound: Bound): { tree: string; unborn: boolean } {
   try {
-    return { tree: oid(runGit({ cwd: repo.root, args: ["rev-parse", "--verify", "HEAD^{tree}"], timeoutMs }).stdout, "tree id"), unborn: false };
+    return { tree: oid(runGit({ cwd: repo.root, args: ["rev-parse", "--verify", "HEAD^{tree}"], ...bound }).stdout, "tree id"), unborn: false };
   } catch (error) {
     if (!(error instanceof SnapshotError) || error.code !== "git_failed") throw error;
     let ref: string;
     try {
-      ref = oneLine(runGit({ cwd: repo.root, args: ["symbolic-ref", "--quiet", "HEAD"], timeoutMs }).stdout, "HEAD ref");
+      ref = oneLine(runGit({ cwd: repo.root, args: ["symbolic-ref", "--quiet", "HEAD"], ...bound }).stdout, "HEAD ref");
     } catch {
       throw new SnapshotError("unknown_revision", "cannot resolve HEAD to a tree");
     }
     if (!ref.startsWith("refs/heads/") || ref === "refs/heads/") throw new SnapshotError("unknown_revision", "cannot resolve HEAD to a tree");
-    const exists = runGit({ cwd: repo.root, args: ["show-ref", "--verify", "--quiet", "--", ref], timeoutMs, okExit: [0, 1] });
+    const exists = runGit({ cwd: repo.root, args: ["show-ref", "--verify", "--quiet", "--", ref], ...bound, okExit: [0, 1] });
     if (exists.exitCode === 0) throw new SnapshotError("unknown_revision", "cannot resolve HEAD to a tree");
-    return { tree: emptyTree(repo, timeoutMs), unborn: true };
+    return { tree: emptyTree(repo, bound), unborn: true };
   }
 }
 
-function changedPaths(repo: RepositoryIdentity, baseTree: string, candidateTree: string, timeoutMs: number): string[] {
+function changedPaths(repo: RepositoryIdentity, baseTree: string, candidateTree: string, bound: Bound): string[] {
   const out = runGit({
     cwd: repo.root,
     args: ["diff-tree", "--no-commit-id", "--name-only", "-r", "-z", "--no-renames", "--ignore-submodules=none", baseTree, candidateTree],
-    timeoutMs,
+    ...bound,
     limit: INVENTORY_LIMIT,
   }).stdout;
   return nulRecords(out)
@@ -400,8 +422,8 @@ interface TreeEntry {
   size: number | null;
 }
 
-function listTreeEntries(repo: RepositoryIdentity, tree: string, timeoutMs: number): Map<string, TreeEntry> {
-  const out = runGit({ cwd: repo.root, args: ["ls-tree", "-r", "-t", "-l", "-z", tree], timeoutMs, limit: INVENTORY_LIMIT }).stdout;
+function listTreeEntries(repo: RepositoryIdentity, tree: string, bound: Bound): Map<string, TreeEntry> {
+  const out = runGit({ cwd: repo.root, args: ["ls-tree", "-r", "-t", "-l", "-z", tree], ...bound, limit: INVENTORY_LIMIT }).stdout;
   const entries = new Map<string, TreeEntry>();
   for (const record of nulRecords(out)) {
     const tab = record.indexOf(9);
@@ -428,8 +450,8 @@ export function digestPaths(paths: readonly string[]): string {
  */
 export function verifyIntendedFiles(repo: RepositoryIdentity, candidateTree: string, intended: readonly string[], options: SnapshotOptions = {}): void {
   if (intended.length === 0) return;
-  const timeoutMs = options.gitTimeoutMs ?? DEFAULT_GIT_TIMEOUT_MS;
-  const entries = listTreeEntries(repo, candidateTree, timeoutMs);
+  const bound = boundOf(options);
+  const entries = listTreeEntries(repo, candidateTree, bound);
   for (const path of intended) {
     const entry = entries.get(path);
     if (!entry) throw refuse("missing", path, "is absent from the candidate tree");
@@ -443,19 +465,19 @@ export function verifyIntendedFiles(repo: RepositoryIdentity, candidateTree: str
     if (info.isSymbolicLink()) throw refuse("symlink", path, "became a symbolic link after the pre-add check");
     if (!info.isFile()) throw refuse("not_regular", path, "is no longer a regular file");
     if (info.nlink > 1) throw refuse("hardlink", path, "has more than one hard link after the pre-add check");
-    const actual = oid(runGit({ cwd: repo.root, args: ["hash-object", "--", full], timeoutMs }).stdout, "file object id");
+    const actual = oid(runGit({ cwd: repo.root, args: ["hash-object", "--", full], ...bound }).stdout, "file object id");
     if (actual !== entry.oid) throw refuse("changed", path, "changed after the candidate tree was built");
   }
 }
 
 /** Proof that each intended path is a regular blob of the candidate tree (path, mode, object id). */
 export function intendedUntrackedProof(repo: RepositoryIdentity, candidateTree: string, intended: string[], options: SnapshotOptions = {}): string {
-  return untrackedProof(repo, candidateTree, intended, options.gitTimeoutMs ?? DEFAULT_GIT_TIMEOUT_MS);
+  return untrackedProof(repo, candidateTree, intended, boundOf(options));
 }
 
-function untrackedProof(repo: RepositoryIdentity, candidateTree: string, intended: string[], timeoutMs: number): string {
+function untrackedProof(repo: RepositoryIdentity, candidateTree: string, intended: string[], bound: Bound): string {
   if (intended.length === 0) return domainHash("intended-untracked", 1, []);
-  const entries = listTreeEntries(repo, candidateTree, timeoutMs);
+  const entries = listTreeEntries(repo, candidateTree, bound);
   const proof: Array<{ mode: string; oid: string; path: string }> = [];
   let total = 0;
   for (const path of intended) {
@@ -502,13 +524,13 @@ export function isGeneratedGoldenPath(path: string): boolean {
  */
 export function countChangedLines(repo: RepositoryIdentity, baseTree: string, candidateTree: string, options: SnapshotOptions = {}): number {
   if (!OID_RE.test(baseTree) || !OID_RE.test(candidateTree)) throw new SnapshotError("invalid_target", "tree ids must be full hexadecimal object ids");
-  const timeoutMs = options.gitTimeoutMs ?? DEFAULT_GIT_TIMEOUT_MS;
+  const bound = boundOf(options);
   const out = withIsolatedGit(repo, baseTree, ({ cwd, env }) =>
     runGit({
       cwd,
       env,
       args: ["diff", "--numstat", "-z", "--no-renames", "--no-ext-diff", "--no-textconv", "--ignore-submodules=none", baseTree, candidateTree, "--"],
-      timeoutMs,
+      ...bound,
       limit: INVENTORY_LIMIT,
     }).stdout,
   );
@@ -674,11 +696,11 @@ function buildIndexCandidate(
   repo: RepositoryIdentity,
   projection: SnapshotProjection,
   intended: string[],
-  timeoutMs: number,
+  bound: Bound,
 ): { candidateTree: string; proof: string } {
-  const indexPath = resolve(repo.root, oneLine(runGit({ cwd: repo.root, args: ["rev-parse", "--git-path", "index"], timeoutMs }).stdout, "index path"));
+  const indexPath = resolve(repo.root, oneLine(runGit({ cwd: repo.root, args: ["rev-parse", "--git-path", "index"], ...bound }).stdout, "index path"));
   const real = readRealIndex(indexPath);
-  const precompose = projection === "workspace" && intended.length > 0 && runGit({ cwd: repo.root, args: ["config", "--type=bool", "--get", "core.precomposeunicode"], timeoutMs, okExit: [0, 1] }).stdout.toString("utf8").trim() === "true";
+  const precompose = projection === "workspace" && intended.length > 0 && runGit({ cwd: repo.root, args: ["config", "--type=bool", "--get", "core.precomposeunicode"], ...bound, okExit: [0, 1] }).stdout.toString("utf8").trim() === "true";
   if (projection === "workspace") checkIntendedFiles(repo.root, intended, precompose);
 
   const scratch = makeScratch(repo);
@@ -686,33 +708,33 @@ function buildIndexCandidate(
     const tempIndex = join(scratch, "index");
     const env = { GIT_INDEX_FILE: tempIndex };
     if (real === null) {
-      runGit({ cwd: repo.root, args: ["read-tree", "--empty"], timeoutMs, env });
+      runGit({ cwd: repo.root, args: ["read-tree", "--empty"], ...bound, env });
     } else {
       writeFileSync(tempIndex, real.content, { mode: 0o600 });
       // Keep the real index timestamp: git's racily-clean check compares entry times with it.
       utimesSync(tempIndex, real.atimeMs / 1000, real.mtimeMs / 1000);
     }
     if (projection === "workspace") {
-      const cached = runGit({ cwd: repo.root, args: ["ls-files", "--cached", "-z"], timeoutMs, env, limit: INVENTORY_LIMIT }).stdout;
+      const cached = runGit({ cwd: repo.root, args: ["ls-files", "--cached", "-z"], ...bound, env, limit: INVENTORY_LIMIT }).stdout;
       const tracked = new Set(nulRecords(cached).map((r) => decodeName(r, "index path")));
       for (const path of intended) if (tracked.has(path)) throw refuse("tracked", path, "is already tracked");
       if (intended.length > 0) {
-        const ignored = runGit({ cwd: repo.root, args: ["check-ignore", "-z", "--stdin", "--no-index"], timeoutMs, env, input: intended.join("\0") + "\0", okExit: [0, 1] });
+        const ignored = runGit({ cwd: repo.root, args: ["check-ignore", "-z", "--stdin", "--no-index"], ...bound, env, input: intended.join("\0") + "\0", okExit: [0, 1] });
         const ignoredSet = new Set(nulRecords(ignored.stdout).map((r) => decodeName(r, "ignored path")));
         for (const path of intended) if (ignoredSet.has(path)) throw refuse("ignored", path, "is ignored");
       }
       if (tracked.size > 0) {
-        const budget = Math.min(MAX_GIT_TIMEOUT_MS, Math.max(timeoutMs, tracked.size * 25));
-        runGit({ cwd: repo.root, args: ["add", "-u", "--", "."], timeoutMs: budget, env, limit: INVENTORY_LIMIT });
+        const budget = Math.min(MAX_GIT_TIMEOUT_MS, Math.max(bound.timeoutMs, tracked.size * 25));
+        runGit({ cwd: repo.root, args: ["add", "-u", "--", "."], ...bound, timeoutMs: budget, env, limit: INVENTORY_LIMIT });
       }
       if (intended.length > 0) {
         const specs = intended.map((p) => `:(literal)${p}`).join("\0");
-        runGit({ cwd: repo.root, args: ["add", "--pathspec-from-file=-", "--pathspec-file-nul"], timeoutMs, env, input: specs });
+        runGit({ cwd: repo.root, args: ["add", "--pathspec-from-file=-", "--pathspec-file-nul"], ...bound, env, input: specs });
       }
     }
-    const candidateTree = oid(runGit({ cwd: repo.root, args: ["write-tree"], timeoutMs, env }).stdout, "candidate tree id");
-    const proof = untrackedProof(repo, candidateTree, intended, timeoutMs);
-    if (projection === "workspace") verifyIntendedFiles(repo, candidateTree, intended, { gitTimeoutMs: timeoutMs });
+    const candidateTree = oid(runGit({ cwd: repo.root, args: ["write-tree"], ...bound, env }).stdout, "candidate tree id");
+    const proof = untrackedProof(repo, candidateTree, intended, bound);
+    if (projection === "workspace") verifyIntendedFiles(repo, candidateTree, intended, { gitTimeoutMs: bound.timeoutMs, ...(bound.deadlineAt !== undefined ? { deadlineAt: bound.deadlineAt } : {}) });
     return { candidateTree, proof };
   } finally {
     rmSync(scratch, { recursive: true, force: true });
@@ -750,7 +772,7 @@ function validateTarget(target: SnapshotTarget): { projection: SnapshotProjectio
 }
 
 export function freezeSnapshot(cwd: string, target: SnapshotTarget, options: SnapshotOptions = {}): FreezeResult {
-  const timeoutMs = options.gitTimeoutMs ?? DEFAULT_GIT_TIMEOUT_MS;
+  const bound = boundOf(options);
   const { projection, intended, baseRef } = validateTarget(target);
   const repo = resolveRepository(cwd, options);
   const kind = target.kind;
@@ -762,22 +784,22 @@ export function freezeSnapshot(cwd: string, target: SnapshotTarget, options: Sna
   let proof: string;
   let unbornHead = false;
   if (kind === "base-diff") {
-    baseTree = resolveTree(repo, baseRef!, timeoutMs);
-    const head = resolveHeadBase(repo, timeoutMs);
+    baseTree = resolveTree(repo, baseRef!, bound);
+    const head = resolveHeadBase(repo, bound);
     if (head.unborn) throw new SnapshotError("unborn_head", "a committed-only base-diff needs a commit at HEAD");
     candidateTree = head.tree;
     proof = domainHash("intended-untracked", 1, []);
   } else if (kind === "base-workspace-overlay") {
-    baseTree = resolveTree(repo, baseRef!, timeoutMs);
-    ({ candidateTree, proof } = buildIndexCandidate(repo, "workspace", intended, timeoutMs));
+    baseTree = resolveTree(repo, baseRef!, bound);
+    ({ candidateTree, proof } = buildIndexCandidate(repo, "workspace", intended, bound));
   } else {
-    const head = resolveHeadBase(repo, timeoutMs);
+    const head = resolveHeadBase(repo, bound);
     baseTree = head.tree;
     unbornHead = head.unborn;
-    ({ candidateTree, proof } = buildIndexCandidate(repo, projection, intended, timeoutMs));
+    ({ candidateTree, proof } = buildIndexCandidate(repo, projection, intended, bound));
   }
 
-  const paths = changedPaths(repo, baseTree, candidateTree, timeoutMs);
+  const paths = changedPaths(repo, baseTree, candidateTree, bound);
   if (paths.length === 0) return { status: "empty", repository: repo, kind, projection, baseTree, candidateTree };
   const changedLines = countChangedLines(repo, baseTree, candidateTree, options);
   const pathsDigest = digestPaths(paths);

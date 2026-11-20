@@ -59,7 +59,16 @@
 //    An untrusted repository is therefore NOT waved through: a `-c safe.directory` or GIT_CONFIG_* override in the
 //    command would make git work, so with global on and no readable off the delivery is denied.
 //
-// Time: git calls are bounded one by one and the whole check by a budget (default 20 s, the hook gets 30 s).
+// TIME: every git call is bounded one by one (default 5 s) AND the whole check by a hard deadline (default 20 s):
+// `checkDelivery` fixes `deadlineAt = start + budget` and threads it (SnapshotOptions.deadlineAt, ModeOptions.deadlineAt,
+// GitCall.deadlineAt) into EVERY git invocation, including those of resolveRepository, readReviewMode and the candidate
+// assessment, so each call gets min(per-call bound, time left) and none starts once the budget is spent. A spent
+// budget with RDD on is `check_failed`; the mode is always read first, and a mode read that runs out of budget falls
+// back to the direct `.git` override read and then the global switch (RDD off never denies). Why it must be hard:
+// Claude Code treats a hook that exceeds its `timeout` (hooks.json: 30 s) as a non-blocking error and LETS the
+// command run, which would be fail-open exactly when git is slow. Arithmetic: 30 s hook timeout - 20 s budget = 10 s
+// of margin for Node startup, the lexer, fs reads, a git child that needs a moment to die after SIGKILL, and writing
+// the decision. A test pins budget + margin < the hooks.json timeout.
 import { resolve, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { isTargetConsumed } from "./ack.js";
@@ -553,7 +562,7 @@ function optionValue(args, long, short) {
     return undefined;
 }
 /** Evaluates one repository: returns a result (allow or refuse) for it. */
-function evaluateRoot(root, items, hasChange, unresolved, opts, expired, gitMs) {
+function evaluateRoot(root, items, hasChange, unresolved, opts, expired, bounded) {
     if (expired())
         return refusal("check_failed", root, opts, "the bounded delivery check ran out of its time budget (it fails closed once RDD is on).");
     if (hasChange) {
@@ -562,6 +571,8 @@ function evaluateRoot(root, items, hasChange, unresolved, opts, expired, gitMs) 
     if (unresolved)
         return unresolvedRefusal(root, opts);
     const run = opts.git ?? runGit;
+    const gitMs = bounded.gitTimeoutMs;
+    const deadlineAt = bounded.deadlineAt;
     const text = (out) => {
         if (out.exitCode !== 0)
             return undefined;
@@ -570,12 +581,12 @@ function evaluateRoot(root, items, hasChange, unresolved, opts, expired, gitMs) 
     };
     // STRICT: exit 0 is an answer, exit 1 is a plain "no" (unborn HEAD, detached, unset, no common ancestor); any other
     // failure, a timeout or a missing git throws, so the caller fails closed instead of reading it as "nothing to deliver".
-    const strict = (...args) => text(run({ cwd: root, args, timeoutMs: gitMs, okExit: [0, 1] }));
+    const strict = (...args) => text(run({ cwd: root, args, timeoutMs: gitMs, deadlineAt, okExit: [0, 1] }));
     // LENIENT, only for probing refs that may legitimately not exist (`@{push}` without an upstream dies with 128):
     // a nonzero exit is "absent"; a timeout, a missing git or an output overflow still throws.
     const lenient = (...args) => {
         try {
-            return text(run({ cwd: root, args, timeoutMs: gitMs }));
+            return text(run({ cwd: root, args, timeoutMs: gitMs, deadlineAt }));
         }
         catch (err) {
             if (err instanceof SnapshotError && err.code === "git_failed")
@@ -600,7 +611,7 @@ function evaluateRoot(root, items, hasChange, unresolved, opts, expired, gitMs) 
                 continue;
             if (mb === head)
                 return { kind: "empty" };
-            const counted = text(run({ cwd: root, args: ["rev-list", "--count", `${mb}..${head}`], timeoutMs: gitMs }));
+            const counted = text(run({ cwd: root, args: ["rev-list", "--count", `${mb}..${head}`], timeoutMs: gitMs, deadlineAt }));
             if (counted === undefined || !/^\d+$/.test(counted))
                 throw new Error("git rev-list --count gave no usable answer");
             const count = Number(counted);
@@ -635,7 +646,7 @@ function evaluateRoot(root, items, hasChange, unresolved, opts, expired, gitMs) 
             if (isTag && s !== "tag") {
                 // a tag is assessed as the HEAD range only if it is HEAD or in HEAD's history (then nothing outside it ships)
                 const tagged = git("rev-parse", "--verify", "--quiet", "--end-of-options", `${tagRef}^{commit}`);
-                const inHistory = tagged !== undefined && (tagged === head || run({ cwd: root, args: ["merge-base", "--is-ancestor", tagged, head], timeoutMs: gitMs, okExit: [0, 1] }).exitCode === 0);
+                const inHistory = tagged !== undefined && (tagged === head || run({ cwd: root, args: ["merge-base", "--is-ancestor", tagged, head], timeoutMs: gitMs, deadlineAt, okExit: [0, 1] }).exitCode === 0);
                 if (!inHistory) {
                     return refusal("unassessable_ref", root, opts, `this push sends the tag ${src}, which is neither HEAD nor in the history of HEAD (or is not a commit), so it cannot be assessed as the committed range HEAD is on.`, "Check out the commit the tag points at, then deliver it.");
                 }
@@ -675,12 +686,12 @@ function evaluateRoot(root, items, hasChange, unresolved, opts, expired, gitMs) 
     if (ranges === 0)
         return { allowed: true, reason: "empty_range" };
     const assess = opts.assess ?? assessCandidate;
-    const repo = resolveRepository(root, { gitTimeoutMs: gitMs });
+    const repo = resolveRepository(root, bounded);
     let last = "empty_range";
     for (const baseSha of distinct.values()) {
         if (expired())
             return refusal("check_failed", root, opts, "the bounded delivery check ran out of its time budget (it fails closed once RDD is on).");
-        const a = assess(root, { kind: "base-diff", baseRef: baseSha }, { gitTimeoutMs: gitMs });
+        const a = assess(root, { kind: "base-diff", baseRef: baseSha }, bounded);
         if (a.status === "not_due") {
             last = "empty_range";
             continue;
@@ -723,16 +734,21 @@ export function checkDelivery(input, opts = {}) {
     if (deliveries.length === 0)
         return { allowed: true, reason: "no_delivery" };
     const hasChange = actions.some((a) => a.kind === "change");
+    // The budget is a HARD deadline for the whole check, enforced by the gate's own clock: every git call anywhere below
+    // (repository resolution, the mode reads, the base probes, the candidate assessment) gets min(its own bound, time
+    // left) through `deadlineAt` and none starts once it is spent, so the sum of many slow calls can never outlive it.
     const started = Date.now();
     const budget = opts.deadlineMs ?? DEFAULT_BUDGET_MS;
-    const expired = () => Date.now() - started > budget;
+    const deadlineAt = started + budget;
+    const expired = () => Date.now() >= deadlineAt;
     const gitMs = opts.gitTimeoutMs ?? DEFAULT_GIT_MS;
+    const bounded = { gitTimeoutMs: gitMs, deadlineAt };
     const groups = new Map();
     for (const d of deliveries) {
         const dir = d.unresolved ? input.cwd : d.directories.reduce((b, x) => resolve(b, x), input.cwd);
         const modeOn = (where) => {
             try {
-                return readReviewMode(where, { ...opts, gitTimeoutMs: gitMs }).effective === "on";
+                return readReviewMode(where, { ...opts, ...bounded }).effective === "on";
             }
             catch {
                 return false; // a mode that cannot be read is off (mode.ts)
@@ -740,7 +756,7 @@ export function checkDelivery(input, opts = {}) {
         };
         let root;
         try {
-            root = resolveRepository(dir, { gitTimeoutMs: gitMs }).root;
+            root = resolveRepository(dir, bounded).root;
         }
         catch (err) {
             const code = err instanceof SnapshotError ? err.code : undefined;
@@ -777,7 +793,7 @@ export function checkDelivery(input, opts = {}) {
     for (const [root, g] of groups) {
         let on = false;
         try {
-            on = readReviewMode(root, { ...opts, gitTimeoutMs: gitMs }).effective === "on";
+            on = readReviewMode(root, { ...opts, ...bounded }).effective === "on";
         }
         catch {
             on = false; // a mode that cannot be read is off (mode.ts)
@@ -786,7 +802,7 @@ export function checkDelivery(input, opts = {}) {
             continue;
         let result;
         try {
-            result = evaluateRoot(root, g.items, hasChange, g.unresolved, opts, expired, gitMs);
+            result = evaluateRoot(root, g.items, hasChange, g.unresolved, opts, expired, bounded);
         }
         catch (err) {
             result = refusal("check_failed", root, opts, `the delivery check is unavailable (${err instanceof Error ? err.message : String(err)}); it fails closed while RDD is on.`);

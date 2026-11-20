@@ -5,7 +5,7 @@
 import { closeSync, constants, fstatSync, lstatSync, mkdirSync, openSync, readFileSync, readSync, realpathSync, statSync, unlinkSync } from "node:fs";
 import { dirname, isAbsolute, join, resolve } from "node:path";
 import { atomicWriteFile, readPluginState, writePluginState, type StateOptions } from "../lib/state.js";
-import { resolveRepository, SnapshotError } from "./snapshot.js";
+import { resolveRepository, SnapshotError, type SnapshotOptions } from "./snapshot.js";
 
 export const MODE_STATE_NAME = "review-mode";
 export const MODE_SCHEMA = "odd-claude.review-mode/v1";
@@ -28,6 +28,8 @@ export interface ReviewModeStatus {
 
 export interface ModeOptions extends StateOptions {
   gitTimeoutMs?: number;
+  /** Absolute deadline (epoch ms) shared with the caller's whole check; once spent no git call starts (see snapshot.ts). */
+  deadlineAt?: number;
 }
 
 export class ReviewModeError extends Error {
@@ -87,9 +89,11 @@ function readClone(commonDir: string, problems: string[]): "off" | "unset" | "un
   return "unreadable";
 }
 
+const gitBound = (opts: ModeOptions): SnapshotOptions => ({ gitTimeoutMs: opts.gitTimeoutMs, ...(opts.deadlineAt !== undefined ? { deadlineAt: opts.deadlineAt } : {}) });
+
 function resolveCommonDir(cwd: string, opts: ModeOptions): string | undefined {
   try {
-    return resolveRepository(cwd, { gitTimeoutMs: opts.gitTimeoutMs }).commonDir;
+    return resolveRepository(cwd, gitBound(opts)).commonDir;
   } catch (err) {
     if (err instanceof SnapshotError) return undefined;
     throw err;
@@ -166,7 +170,7 @@ function commonDirOfGitFile(file: string): string | undefined {
  */
 function locateCommonDir(cwd: string, opts: ModeOptions): Located {
   try {
-    return { kind: "found", commonDir: resolveRepository(cwd, { gitTimeoutMs: opts.gitTimeoutMs }).commonDir };
+    return { kind: "found", commonDir: resolveRepository(cwd, gitBound(opts)).commonDir };
   } catch (err) {
     if (!(err instanceof SnapshotError)) throw err;
     if (err.code === "bare_repository" || err.code === "invalid_target") return { kind: "none" };

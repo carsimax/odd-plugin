@@ -17,7 +17,8 @@
 // `process_scan_limit` reason instead of an unbounded read.
 import { basename, extname } from "node:path";
 import {
-  DEFAULT_GIT_TIMEOUT_MS,
+  boundOf,
+  type Bound,
   freezeSnapshot,
   isGeneratedGoldenPath,
   nulRecords,
@@ -83,10 +84,10 @@ interface Stat {
   modeOnly: boolean;
 }
 
-function collectStats(snapshot: Snapshot, repo: RepositoryIdentity, timeoutMs: number): Stat[] {
+function collectStats(snapshot: Snapshot, repo: RepositoryIdentity, bound: Bound): Stat[] {
   const common = ["--no-renames", "--no-ext-diff", "--no-textconv", "--ignore-submodules=none", snapshot.baseTree, snapshot.candidateTree, "--"];
-  const raw = runGit({ cwd: repo.root, args: ["diff", "--raw", "--no-abbrev", "-z", ...common], timeoutMs, limit: 64 * 1024 * 1024 }).stdout;
-  const numstat = runGit({ cwd: repo.root, args: ["diff", "--numstat", "-z", ...common], timeoutMs, limit: 64 * 1024 * 1024 }).stdout;
+  const raw = runGit({ cwd: repo.root, args: ["diff", "--raw", "--no-abbrev", "-z", ...common], ...bound, limit: 64 * 1024 * 1024 }).stdout;
+  const numstat = runGit({ cwd: repo.root, args: ["diff", "--numstat", "-z", ...common], ...bound, limit: 64 * 1024 * 1024 }).stdout;
 
   const counts = new Map<string, { additions: number; deletions: number; binary: boolean }>();
   for (const record of nulRecords(numstat)) {
@@ -409,10 +410,10 @@ function sinkLine(p: string, line: string): boolean {
 // bounded blob access (frozen objects only)
 // ---------------------------------------------------------------------------------------------
 
-function blobSizes(cwd: string, oids: string[], timeoutMs: number): Map<string, number> {
+function blobSizes(cwd: string, oids: string[], bound: Bound): Map<string, number> {
   const sizes = new Map<string, number>();
   if (oids.length === 0) return sizes;
-  const out = runGit({ cwd, args: ["cat-file", "--batch-check"], input: oids.join("\n") + "\n", timeoutMs, limit: OUTPUT_LIMIT }).stdout.toString("utf8");
+  const out = runGit({ cwd, args: ["cat-file", "--batch-check"], input: oids.join("\n") + "\n", ...bound, limit: OUTPUT_LIMIT }).stdout.toString("utf8");
   for (const line of out.split("\n")) {
     const f = line.split(" ");
     if (f.length === 3 && f[1] === "blob" && /^\d+$/.test(f[2]!)) sizes.set(f[0]!, Number(f[2]));
@@ -420,11 +421,11 @@ function blobSizes(cwd: string, oids: string[], timeoutMs: number): Map<string, 
   return sizes;
 }
 
-function readBlobs(cwd: string, oids: string[], sizes: Map<string, number>, timeoutMs: number): Map<string, Buffer> {
+function readBlobs(cwd: string, oids: string[], sizes: Map<string, number>, bound: Bound): Map<string, Buffer> {
   const blobs = new Map<string, Buffer>();
   if (oids.length === 0) return blobs;
   const total = oids.reduce((n, o) => n + (sizes.get(o) ?? 0), 0);
-  const out = runGit({ cwd, args: ["cat-file", "--batch"], input: oids.join("\n") + "\n", timeoutMs, limit: total + oids.length * 160 + 4096 }).stdout;
+  const out = runGit({ cwd, args: ["cat-file", "--batch"], input: oids.join("\n") + "\n", ...bound, limit: total + oids.length * 160 + 4096 }).stdout;
   let pos = 0;
   while (pos < out.length) {
     const nl = out.indexOf(10, pos);
@@ -501,9 +502,9 @@ const scanLimit = (path: string): RiskReasonOut => ({ code: "process_scan_limit"
 
 /** Classify a frozen snapshot from its two trees only. Deterministic; bounded; never reads the worktree. */
 export function assessRisk(snapshot: Snapshot, repo: RepositoryIdentity, options: SnapshotOptions = {}): RiskAssessmentResult {
-  const timeoutMs = options.gitTimeoutMs ?? DEFAULT_GIT_TIMEOUT_MS;
+  const bound = boundOf(options);
   const cwd = repo.root;
-  const stats = collectStats(snapshot, repo, timeoutMs);
+  const stats = collectStats(snapshot, repo, bound);
   const candidates: RiskReasonOut[] = [];
 
   // name/mode based evidence
@@ -536,7 +537,7 @@ export function assessRisk(snapshot: Snapshot, repo: RepositoryIdentity, options
     if (isRegularFile(s.newMode) && !ZERO_OID.test(s.newOid)) sizeOids.add(s.newOid);
   }
   for (const s of passiveStats) sizeOids.add(s.newOid);
-  const sizes = blobSizes(cwd, [...sizeOids].sort(), timeoutMs);
+  const sizes = blobSizes(cwd, [...sizeOids].sort(), bound);
 
   let limitHit: string | undefined;
   let total = 0;
@@ -562,7 +563,7 @@ export function assessRisk(snapshot: Snapshot, repo: RepositoryIdentity, options
     const readOids = new Set<string>();
     for (const s of scanStats) if (isRegularFile(s.newMode) && !ZERO_OID.test(s.newOid)) readOids.add(s.newOid);
     for (const s of passiveStats) if (!oversizedPassive.has(s.path)) readOids.add(s.newOid);
-    const blobs = readBlobs(cwd, [...readOids].sort(), sizes, timeoutMs);
+    const blobs = readBlobs(cwd, [...readOids].sort(), sizes, bound);
     for (const s of scanStats) {
       const blob = isRegularFile(s.newMode) ? blobs.get(s.newOid) : undefined;
       if (blob && hasShebang(blob)) candidates.push({ code: "process_boundary", signal: "shell_process", path: s.path });
@@ -571,7 +572,7 @@ export function assessRisk(snapshot: Snapshot, repo: RepositoryIdentity, options
       const blob = blobs.get(s.newOid);
       if (oversizedPassive.has(s.path) || !blob || !isPassiveContent(s.path, blob)) contradicted.add(s.path);
     }
-    candidates.push(...scanAddedLines(snapshot, cwd, scanStats, timeoutMs));
+    candidates.push(...scanAddedLines(snapshot, cwd, scanStats, bound));
   }
 
   // non-signal evidence
@@ -608,7 +609,7 @@ function fallbackReason(stats: Stat[], contradicted: Set<string>): RiskReasonOut
 }
 
 /** Added-line evidence (process / sink / network / deletion) from the frozen diff, batched and byte-bounded. */
-function scanAddedLines(snapshot: Snapshot, cwd: string, scanStats: Stat[], timeoutMs: number): RiskReasonOut[] {
+function scanAddedLines(snapshot: Snapshot, cwd: string, scanStats: Stat[], bound: Bound): RiskReasonOut[] {
   const reasons: RiskReasonOut[] = [];
   const paths = scanStats.map((s) => s.path);
   const fixed = [
@@ -620,7 +621,7 @@ function scanAddedLines(snapshot: Snapshot, cwd: string, scanStats: Stat[], time
     const known = new Set(batch.map((b) => b.slice(":(literal)".length)));
     let out: Buffer;
     try {
-      out = runGit({ cwd, args: [...fixed, ...batch], timeoutMs, limit: OUTPUT_LIMIT }).stdout;
+      out = runGit({ cwd, args: [...fixed, ...batch], ...bound, limit: OUTPUT_LIMIT }).stdout;
     } catch (e) {
       if (e instanceof SnapshotError && e.code === "git_output_limit") return [scanLimit(first)];
       throw e;

@@ -8,7 +8,7 @@ import { fileURLToPath } from "node:url";
 import { runHook } from "../hooks/run.js";
 import { acknowledgeApproved, isTargetConsumed } from "./ack.js";
 import { recordDecline, REVIEW_TOOL_NAMES } from "./consent.js";
-import { checkDelivery, recognizeDeliveryActions } from "./gate.js";
+import { checkDelivery, DEFAULT_BUDGET_MS, recognizeDeliveryActions } from "./gate.js";
 import { readReviewMode, setReviewMode } from "./mode.js";
 import { runReview, type ReviewRunInput, type ReviewRunOutcome, type RunDeps } from "./run.js";
 import { startReview, type RiskAssessment, type RiskAssessor } from "./start.js";
@@ -1270,6 +1270,186 @@ test("F3: symbolic-ref and config failures fail closed with RDD on", () => {
         assert.equal(r.code, "check_failed", sub);
         assert.match(r.reason, /fails? closed/i, sub);
       }
+    }
+  } finally {
+    f.cleanup();
+  }
+});
+
+// ---------------------------------------------------------------------------------------------
+// 5. the whole-check budget is a HARD deadline (S2/S3: with RDD on the gate fails closed; a hook that outlives its
+//    timeout is treated by Claude Code as non-blocking, i.e. fail-open exactly when git is slow)
+// ---------------------------------------------------------------------------------------------
+
+/** A fake git whose matching calls sleep (stdio detached, so killing the shell returns at once). `*` matches every call. */
+const slowOn = (pattern: string, seconds: number): string => `case "$*" in ${pattern}) sleep ${seconds} >/dev/null 2>&1 </dev/null;; esac`;
+
+test("budget: many sequential slow git calls with RDD on end in check_failed within the deadline, never allowed", () => {
+  const f = fx();
+  const prevPath = process.env.PATH;
+  try {
+    commitHigh(f);
+    on(f);
+    fakeGit(f, slowOn("*", 1.5));
+    const t0 = Date.now();
+    const r = checkDelivery({ cwd: f.repo, command: "git push origin feature" }, { dataDir: f.data, deadlineMs: 3000, gitTimeoutMs: 2000 });
+    const elapsed = Date.now() - t0;
+    assert.equal(r.allowed, false);
+    if (r.allowed) throw new Error("unreachable");
+    assert.equal(r.code, "check_failed");
+    assert.match(r.reason, /time budget|fails? closed/i);
+    assert.match(r.reason, /This delivery command was not run\./);
+    assert.ok(elapsed < 3000 + 1000, `took ${elapsed} ms for a 3000 ms budget`);
+  } finally {
+    process.env.PATH = prevPath;
+    f.cleanup();
+  }
+});
+
+test("budget: with RDD off (or a clone-local off) slow git never denies, and it also ends within the deadline", () => {
+  const f = fx();
+  const prevPath = process.env.PATH;
+  try {
+    commitHigh(f);
+    fakeGit(f, slowOn("*", 1.5));
+    const opts = { dataDir: f.data, deadlineMs: 3000, gitTimeoutMs: 2000 };
+    const timed = (command: string): { allowed: boolean; elapsed: number } => {
+      const t0 = Date.now();
+      const r = checkDelivery({ cwd: f.repo, command }, opts);
+      return { allowed: r.allowed, elapsed: Date.now() - t0 };
+    };
+    // default: off
+    for (const c of ["git push origin feature", "gh pr create --fill"]) {
+      const r = timed(c);
+      assert.equal(r.allowed, true, `off: ${c}`);
+      assert.ok(r.elapsed < 4000, `off: ${c} took ${r.elapsed} ms`);
+    }
+    process.env.PATH = prevPath;
+    // global on, clone-local off: the override is read straight from .git when the budget runs out
+    on(f);
+    setReviewMode("disable", "clone", f.repo, { dataDir: f.data });
+    fakeGit(f, slowOn("*", 1.5));
+    const r = timed("git push origin feature");
+    assert.equal(r.allowed, true, "clone off");
+    assert.ok(r.elapsed < 4000, `clone off took ${r.elapsed} ms`);
+  } finally {
+    process.env.PATH = prevPath;
+    f.cleanup();
+  }
+});
+
+// One git call of each layer of the check is the slow one while the budget is short: the call must be cut at the
+// deadline (not at its own, longer per-call bound). Removing the deadline from any one layer fails its row.
+const LAYERS: [string, string][] = [
+  ["resolveRepository: show-toplevel", "*--show-toplevel*"],
+  ["resolveRepository: absolute-git-dir", "*--absolute-git-dir*"],
+  ["evaluateRoot: merge-base", "*merge-base*"],
+  ["evaluateRoot: rev-list", "*rev-list*"],
+  ["snapshot: tree resolution (freezeSnapshot)", "*?tree?*"],
+  ["risk: collectStats diff", "*diff*--raw*"],
+  ["risk: numstat diff", "*diff*--numstat*"],
+];
+for (const [name, pattern] of LAYERS) {
+  test(`budget: a slow ${name} is cut at the deadline (RDD on: check_failed; RDD off: allowed)`, () => {
+    const f = fx();
+    const prevPath = process.env.PATH;
+    try {
+      commitHigh(f);
+      on(f); // before the fake git: setReviewMode itself runs git
+      fakeGit(f, slowOn(pattern, 5));
+      const opts = { dataDir: f.data, deadlineMs: 2000, gitTimeoutMs: 8000 };
+      const off = Date.now();
+      // a data dir that never had the mode switched on: RDD is off
+      assert.equal(checkDelivery({ cwd: f.repo, command: "git push origin feature" }, { ...opts, dataDir: join(f.dir, "mode-never-set") }).allowed, true, "off");
+      assert.ok(Date.now() - off < 3500, `off took ${Date.now() - off} ms`);
+      const t0 = Date.now();
+      const r = checkDelivery({ cwd: f.repo, command: "git push origin feature" }, opts);
+      const elapsed = Date.now() - t0;
+      assert.equal(r.allowed === false && r.code, "check_failed", name);
+      assert.ok(elapsed < 3500, `${name}: took ${elapsed} ms for a 2000 ms budget (per-call bound 8000 ms)`);
+    } finally {
+      process.env.PATH = prevPath;
+      f.cleanup();
+    }
+  });
+}
+
+test("budget: a spent budget starts no git at all (a fake git that records its calls is never run)", () => {
+  const f = fx();
+  const prevPath = process.env.PATH;
+  try {
+    commitHigh(f);
+    on(f);
+    const log = join(f.dir, "calls.log");
+    fakeGit(f, `echo "$*" >> ${log}`);
+    const r = checkDelivery({ cwd: f.repo, command: "git push origin feature" }, { dataDir: f.data, deadlineMs: -1 });
+    assert.equal(r.allowed === false && r.code, "check_failed");
+    assert.equal(existsSync(log), false, "git was started after the budget was spent");
+  } finally {
+    process.env.PATH = prevPath;
+    f.cleanup();
+  }
+});
+
+test("budget: no deadline given keeps the previous behavior for resolveRepository, the mode read and the assessment; a spent one starts no git", () => {
+  const f = fx();
+  try {
+    commitHigh(f);
+    on(f);
+    assert.equal(resolveRepository(f.repo).root, f.repo);
+    assert.equal(readReviewMode(f.repo, { dataDir: f.data }).effective, "on");
+    assert.equal(assessCandidate(f.repo, { kind: "base-diff", baseRef: "origin/main" }).status, "assessed");
+    assert.throws(() => resolveRepository(f.repo, { deadlineAt: Date.now() - 1 }), (e: unknown) => e instanceof SnapshotError && e.code === "git_timeout");
+    assert.throws(() => assessCandidate(f.repo, { kind: "base-diff", baseRef: "origin/main" }, { deadlineAt: Date.now() - 1 }), (e: unknown) => e instanceof SnapshotError && e.code === "git_timeout");
+    assert.equal(checkDelivery({ cwd: f.repo, command: "git push origin feature" }, { dataDir: f.data }).allowed, false);
+  } finally {
+    f.cleanup();
+  }
+});
+
+test("budget: the default budget leaves at least 5 s under the hook timeout in hooks.json (Node startup, kill latency, output)", () => {
+  const hooks = JSON.parse(readFileSync(join(PLUGIN_ROOT, "hooks", "hooks.json"), "utf8")) as { hooks: { PreToolUse: { matcher: string; hooks: { timeout?: number }[] }[] } };
+  const timeoutS = hooks.hooks.PreToolUse.find((h) => h.matcher === "Bash")?.hooks[0]?.timeout;
+  assert.equal(typeof timeoutS, "number");
+  assert.ok(DEFAULT_BUDGET_MS + 5000 <= (timeoutS as number) * 1000, `budget ${DEFAULT_BUDGET_MS} ms vs hook timeout ${timeoutS} s`);
+});
+
+test("budget, end to end: dist/hooks/run.js PreToolUse denies before the budget plus a margin when git is slow (RDD on), and stays silent with RDD off", async () => {
+  const f = fx();
+  try {
+    commitHigh(f);
+    const bin = join(f.dir, "bin");
+    mkdirSync(bin, { recursive: true });
+    const realGit = spawnSync("sh", ["-c", "command -v git"], { encoding: "utf8" }).stdout.trim();
+    writeFileSync(join(bin, "git"), `#!/bin/sh\n${slowOn("*", 1.5)}\nexec ${realGit} "$@"\n`, { mode: 0o755 });
+    const run = join(PLUGIN_ROOT, "dist", "hooks", "run.js");
+    const one = (budget: string | undefined, slow: boolean): Promise<{ code: number | null; out: string; ms: number }> =>
+      new Promise((resolve) => {
+        const t0 = Date.now();
+        const env: NodeJS.ProcessEnv = { ...ENV, CLAUDE_PLUGIN_DATA: f.data };
+        if (slow) env.PATH = `${bin}:${ENV.PATH ?? ""}`;
+        if (budget !== undefined) env.ODD_CLAUDE_GATE_BUDGET_MS = budget;
+        const c = spawn(process.execPath, [run, "PreToolUse"], { env, stdio: ["pipe", "pipe", "pipe"] });
+        let out = "";
+        c.stdout.on("data", (d: Buffer) => (out += d.toString()));
+        c.on("close", (code) => resolve({ code, out, ms: Date.now() - t0 }));
+        c.stdin.end(JSON.stringify({ session_id: "b", cwd: f.repo, tool_name: "Bash", tool_input: { command: "git push origin feature" } }));
+      });
+    const off = await one("2000", true);
+    assert.deepEqual({ code: off.code, out: off.out }, { code: 0, out: "" }, "RDD off is silent");
+    assert.ok(off.ms < 2000 + 2500, `off took ${off.ms} ms`);
+    on(f);
+    const r = await one("2000", true);
+    assert.equal(r.code, 0);
+    const reason = JSON.parse(r.out).hookSpecificOutput;
+    assert.equal(reason.permissionDecision, "deny");
+    assert.match(reason.permissionDecisionReason, /fails? closed|time budget/i);
+    assert.ok(r.ms < 2000 + 2500, `took ${r.ms} ms for a 2000 ms budget`);
+    // the variable only SHORTENS the budget: garbage, zero and huge values are ignored/clamped (fast git: the normal denial)
+    for (const bad of ["0", "-5", "abc", "1e9", "99999999999"]) {
+      const q = await one(bad, false);
+      assert.equal(JSON.parse(q.out).hookSpecificOutput.permissionDecision, "deny", `budget ${JSON.stringify(bad)} with a fast git`);
+      assert.ok(q.ms < 10_000);
     }
   } finally {
     f.cleanup();
