@@ -5,6 +5,7 @@ import { readFileSync, realpathSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { logError } from "../lib/state.js";
 import { postToolUse } from "./post-tool-use.js";
+import { preToolUse } from "./pre-tool-use.js";
 import { sessionEnd } from "./session-end.js";
 import { sessionStart } from "./session-start.js";
 import { stop } from "./stop.js";
@@ -15,6 +16,7 @@ import { userPromptSubmit } from "./user-prompt-submit.js";
 export const defaultHandlers = {
     SessionStart: sessionStart,
     UserPromptSubmit: userPromptSubmit,
+    PreToolUse: preToolUse,
     PostToolUse: postToolUse,
     StopFailure: stopFailure,
     Stop: stop,
