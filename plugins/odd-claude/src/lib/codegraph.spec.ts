@@ -72,7 +72,7 @@ test(".mcp.json ships a `codegraph` stdio server that runs `codegraph serve --mc
   const raw = JSON.parse(readFileSync(new URL("../../.mcp.json", import.meta.url), "utf8")) as {
     mcpServers: Record<string, { command: string; args: string[] }>;
   };
-  assert.deepEqual(Object.keys(raw.mcpServers), ["codegraph"]);
+  assert.deepEqual(Object.keys(raw.mcpServers), ["codegraph", "review"]);
   assert.deepEqual(raw.mcpServers.codegraph, { command: "codegraph", args: ["serve", "--mcp"] });
 });
 
