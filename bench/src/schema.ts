@@ -14,6 +14,8 @@ export interface RunMeta {
   os: { platform: string; arch: string; release: string };
   commit: string;
   started_at: string;
+  /** How many times each journey was run (fresh processes each time); latency samples are pooled across them. Absent in results older than T4. */
+  repeats?: number;
 }
 
 export interface JourneyRow {
@@ -22,6 +24,8 @@ export interface JourneyRow {
   outcome: Projection | null;
   metrics: MetricSet | null;
   reason?: string;
+  /** Declared divergences: where this subject legitimately behaves differently from the shared expectation. Findings, never wins or losses. */
+  divergence?: string[];
 }
 
 export interface BenchResult {
@@ -65,6 +69,7 @@ export function validateResult(x: unknown): string[] {
   else {
     if (meta.subject !== "odd" && meta.subject !== "oracle") errs.push("meta.subject: expected odd|oracle");
     for (const k of ["node", "commit", "started_at"]) if (typeof meta[k] !== "string" || meta[k] === "") errs.push(`meta.${k}: expected a non-empty string`);
+    if (meta.repeats !== undefined && !(Number.isInteger(meta.repeats) && (meta.repeats as number) >= 1)) errs.push("meta.repeats: expected an integer >= 1");
     const bin = meta.binary;
     if (!isObj(bin) || typeof bin.path !== "string" || typeof bin.version !== "string") errs.push("meta.binary: expected {path,version}");
     const os = meta.os;
@@ -83,6 +88,7 @@ export function validateResult(x: unknown): string[] {
       const st = row.status;
       if (st !== "passed" && st !== "failed" && st !== "unsupported") return void errs.push(`${at}.status: expected passed|failed|unsupported`);
       counts[st] = (counts[st] ?? 0) + 1;
+      if (row.divergence !== undefined && !(Array.isArray(row.divergence) && row.divergence.every((d) => typeof d === "string" && d !== ""))) errs.push(`${at}.divergence: expected an array of non-empty strings`);
       if (st === "unsupported") {
         if (typeof row.reason !== "string" || row.reason === "") errs.push(`${at}.reason: required for unsupported rows`);
         if (row.metrics !== null) errs.push(`${at}.metrics: must be null for unsupported rows`);

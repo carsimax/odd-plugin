@@ -2,16 +2,36 @@
 
 Offline, model-free bench that measures the *friction* of odd-claude journeys (not wall-clock quality, tokens or a composite score)
 and compares them with the upstream oracle (the `gentle-ai` binary). It lives in `bench/` at the repository root, has its own `tsconfig`, builds to
-`bench/dist/` (gitignored) and is **not** part of the plugin payload. Full documentation arrives in T4; this is a stub.
+`bench/dist/` (gitignored) and is **not** part of the plugin payload. It answers one question: is odd-claude as efficient as upstream?
+
+## Prerequisites
+
+- The plugin built and its dependencies installed: `cd plugins/odd-claude && npm ci` (the bench compiles with the plugin's `tsc` and drives
+  `plugins/odd-claude/dist/`; run the plugin build first if `dist/` is stale).
+- Node >= 20 and `git` on `PATH`.
+- For the oracle: the upstream `gentle-ai` binary. The default path is
+  `~/.local/share/odd-claude-oracle/gentle-ai-4.6.0/bin/gentle-ai`; point `ODD_BENCH_ORACLE_BIN` at another binary. Without it,
+  `--subject oracle|both` exits 2 (use `--subject odd`) and the oracle tests skip.
+- No network, no model, no Claude login: the reviewer is a fake `claude` in the sandbox, and telemetry of the oracle is switched off
+  (see Isolation).
 
 ## Run
 
 ```sh
 npm run bench -- --out /tmp/odd-bench-results.json     # odd, all journeys; add --journey <id> to select
 npm run bench -- --subject oracle --out /tmp/oracle.json   # the upstream binary
-npm run bench -- --subject both --out /tmp/bench-out        # both: /tmp/bench-out/odd.json and oracle.json (or <name>.odd.json / <name>.oracle.json for --out <name>.json)
+npm run bench -- --subject both --out /tmp/bench-out        # both, plus the comparison (see below)
+npm run bench -- --subject both --repeat 5 --out /tmp/bench-out   # repeat every journey 5 times (default 3, 1..20)
+npm run bench -- --compare /tmp/bench-out/odd.json /tmp/bench-out/oracle.json --out /tmp/again   # rebuild the report, runs nothing
 npm run test:bench                                      # unit tests of the bench itself
 ```
+
+Outputs of `--subject both --out <dir>`: `odd.json`, `oracle.json` (`odd-claude.bench-result/v1`), `comparison.json`
+(`odd-claude.bench-comparison/v1`) and `report.md`. With `--out <name>.json` the names are `<name>.odd.json`, `<name>.oracle.json`,
+`<name>.comparison.json` and `<name>.report.md`. `--compare <odd.json> <oracle.json>` validates both files (odd first, oracle second),
+rebuilds `comparison.json` and `report.md` into `--out` (without `--out` it prints the report to stdout) and exits 2 on an unreadable,
+invalid or swapped input without writing anything. Exit codes: 0 ok, 1 a journey failed, 2 usage or missing input, 3 invalid result.
+A full `both` run with the default 3 repeats takes several minutes; `--repeat 1` takes about two.
 
 Each journey gets its own sandbox (temp `HOME`, temp git repo, optional bare origin). A `git` shim on the sandbox `PATH` counts
 invocations and forwards to the real git; `claude` is a fake that counts its runs and synthesizes reviewer verdicts, so no model
@@ -151,10 +171,68 @@ To add a journey, add a `JourneyDef` to one of those files (`bench/src/journeys/
 
 `unobservable` dimensions carry `value: null`, never a fabricated 0.
 
+## Latency and repeats
+
+Both subjects are measured in the same invocation, on the same machine, each operation in a fresh process (MCP server, hook or CLI
+command for odd; one binary invocation per command for the oracle). Each journey is run `--repeat K` times (default 3), every repeat in
+its own sandbox. The result records node, OS and binary versions and `repeats` in `meta`.
+
+- Friction is deterministic, so every repeat must agree on it; a journey whose friction differs between repeats is marked `failed`
+  ("unstable across repeats"), never averaged. A failure in any repeat fails the journey.
+- Latency samples are pooled per operation (median and nearest-rank p95 of all samples). Operation names differ between subjects, so
+  the comparable number is `journey.total`: one sample per repeat, the sum of that run's process times; its median is the median of
+  K whole-journey times, and the p95 is shown next to it.
+- Latency verdict: ratio of medians `odd / oracle`; `equal` when it is within `1/(1+t)..1+t` (default `t` = 0.25) or the medians are at
+  most 5 ms apart, `better` below, `worse` above, `not_comparable` when the oracle median is 0 or the operation exists on one side only.
+  The summary's *latency median ratio* is the median of the per-journey ratios. Latency is a same-machine cost comparison of different
+  surfaces (node-hosted MCP and hooks against one native binary); it is noisy, so read the ratio, not single journeys.
+
+## Reading `report.md`
+
+Sections, in order: **Run** (versions, node, OS, repeats of both subjects), **Summary** (journeys comparable / divergent / unsupported;
+thresholds; per metric the verdict counts and totals over comparable journeys; latency), **Efficiency verdict**, **Journeys** (one table per
+comparable journey: odd, oracle, verdict per metric plus whole-journey latency with p95), **Unsupported journeys**, **Declared divergences**,
+**How to read**.
+
+- Verdicts are from odd's point of view and lower is better everywhere: `equal`, `better`, `worse`, `not_comparable` (a side is
+  unobservable, unsupported or divergent).
+- Thresholds: counts (prompts, commands, blocks, recovery round trips, model runs, git subprocesses) are exact; `human_surface_bytes` and
+  `manual_tokens` tolerate 10% (`|odd - oracle| <= max(absolute, relative * max(odd, oracle))`); `blocks` compare by total, `by_design`
+  included. `compareResults` takes custom thresholds (`per_metric`: `{relative, absolute}`, i.e. ±N or a ratio).
+- Unsupported rows and declared divergences are listed apart and are **never** wins or losses: they are excluded from per-metric
+  counts and totals, from the latency summary and from the efficiency verdict. A divergent journey keeps its raw numbers for information.
+- **Efficiency verdict**: per dimension, `at_least_as_efficient` when no comparable journey is `worse`, `less_efficient` otherwise,
+  `not_assessable` when nothing was compared; latency uses the overall median ratio against `1 + tolerance`. The overall line names the
+  dimensions that are less efficient. Always read it with the caveats printed under it:
+  - the oracle has no reviewer cost forecast, so it has fewer human prompts by design (and fewer `manual_tokens`): odd's extra prompt is a
+    safety step the oracle simply does not have;
+  - `start` and `inspect` cost two commands on the oracle (status preflight, then the action) and one on odd;
+  - `git_subprocesses` is what each product spawns through the `PATH` shim, not git work done in-process or setup git calls.
+
+## Metric definitions
+
+See the table in *Metrics and derivations* above for what each dimension is and how it is derived. Everything is observed by the bench, never reported by the
+subjects, except the events a subject declares for its steps (prompts, commands, blocks, recoveries, surface bytes); `model_runs` and
+`git_subprocesses` come from the counting shims on the sandbox `PATH`. Every dimension carries its derivation (`measured`, `proxy`,
+`unobservable`); an unobservable value is `null` and makes that verdict `not_comparable`.
+
+## Known limits
+
+- **Unsupported journeys** (6 of 23): every journey needing a delivery denial. Oracle 4.6.0's `review validate --gate` never denies
+  (`delivery=unmanaged`), so there is nothing to compare; they are marked with that reason, not faked.
+- **Version skew**: the oracle is 4.6.0 while the journeys were ported from sources pinned at 08317b9. A behavior change between them shows
+  up as a divergence or an unsupported row.
+- **Declared divergences** (see the oracle subject above): a decline persists nothing; no duplicate-start guard during a pending correction;
+  reviewers read frozen trees so drift after consent does not refuse the run; RDD defaults to on. Derived from the oracle's own expectation
+  (`declaredDivergences` in `bench/src/cli.ts`) and stored on the oracle rows as `divergence`, so `--compare` sees them from saved results.
+- Accounting conventions differ between the products' surfaces (see the caveats above); the verdicts compare friction under those
+  conventions, not user-perceived quality. Reviewer outputs are synthesized, so model quality is out of scope.
+- Journeys are small and offline; they corroborate efficiency of the review lifecycle and gate, not general agent behavior.
+
 ## Formats
 
 - Result: `odd-claude.bench-result/v1` (`bench/src/schema.ts`): run metadata (`subject` odd|oracle, binary, node, OS, commit), per-journey rows
   (`id`, `status` passed|failed|unsupported, outcome projection, metrics) and an aggregate.
-- Comparison: `odd-claude.bench-comparison/v1` (`bench/src/compare.ts`): odd vs oracle per journey per metric,
-  `equal|better|worse|not_comparable`; two values are equal when `|odd - oracle| <= max(absolute, relative * max(odd, oracle))`
-  (default relative 0.1). Lower is better. Projections are compared, never bytes or hashes.
+- Comparison: `odd-claude.bench-comparison/v1` (`bench/src/compare.ts`): per journey a `kind` (`comparable|divergent|unsupported|missing`), odd vs
+  oracle per metric with `equal|better|worse|not_comparable`, latency per operation (`ratio`, medians, p95), the thresholds used and a summary.
+  Projections are compared, never bytes or hashes. `report.md` is rendered from it by `bench/src/report.ts`.

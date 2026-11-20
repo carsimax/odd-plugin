@@ -62,3 +62,15 @@ test("non-objects and non-finite numbers are rejected", () => {
   r.journeys[0].metrics.latency = { op: { samples: 1, median_ms: Number.NaN, p95_ms: 1 } };
   assert.ok(validateResult(r).some((e) => e.includes("median_ms")));
 });
+
+test("optional repeats and divergence are validated when present", () => {
+  const r = sample() as unknown as Record<string, any>;
+  r.meta.repeats = 3;
+  r.journeys[0].divergence = ["why"];
+  assert.deepEqual(validateResult(r), []);
+  r.meta.repeats = 0;
+  r.journeys[0].divergence = ["", 1];
+  const errs = validateResult(r);
+  assert.ok(errs.some((e) => e.startsWith("meta.repeats")));
+  assert.ok(errs.some((e) => e.startsWith("journeys[0].divergence")));
+});
