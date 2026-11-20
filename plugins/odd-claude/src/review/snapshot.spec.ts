@@ -14,6 +14,7 @@ import {
   MAX_INTENDED_UNTRACKED_FILE_BYTES,
   normalizeLogicalPath,
   resolveRepository,
+  runGit,
   SnapshotError,
   verifyIntendedFiles,
   snapshotIdentity,
@@ -866,5 +867,40 @@ test("R2: with core.precomposeunicode, an NFD name on disk is frozen under its N
     expectCode(() => freezeSnapshot(f.repo, { kind: "current-changes", intendedUntracked: [nfd] }), "invalid_path");
   } finally {
     f.cleanup();
+  }
+});
+
+test("A2: a timed-out git call reports the bound actually applied; the check's time budget when that was the binding limit", () => {
+  const dir = mkdtempSync(join(tmpdir(), "odd-snap-bound-"));
+  const prevPath = process.env.PATH;
+  try {
+    const bin = join(dir, "bin");
+    mkdirSync(bin);
+    writeFileSync(join(bin, "git"), "#!/bin/sh\nsleep 5 >/dev/null 2>&1 </dev/null\n", { mode: 0o755 });
+    process.env.PATH = `${bin}:${prevPath ?? ""}`;
+    const message = (call: Parameters<typeof runGit>[0]): string => {
+      try {
+        runGit(call);
+      } catch (error) {
+        assert.ok(error instanceof SnapshotError);
+        assert.equal(error.code, "git_timeout");
+        return error.message;
+      }
+      throw new Error("expected git_timeout");
+    };
+    // the per-call bound binds (no deadline, or a deadline far away): its own value, no budget wording
+    const own = message({ cwd: dir, args: ["status"], timeoutMs: 300 });
+    assert.equal(own, "git status timed out after 300ms");
+    assert.equal(message({ cwd: dir, args: ["status"], timeoutMs: 300, deadlineAt: Date.now() + 60_000 }), own);
+    // the deadline binds: the time left (well under the 8000 ms per-call bound), named as the check's time budget
+    const t0 = Date.now();
+    const cut = message({ cwd: dir, args: ["status"], timeoutMs: 8000, deadlineAt: t0 + 400 });
+    const m = /^git status timed out after (\d+)ms \(the check's time budget\)$/.exec(cut);
+    assert.ok(m, cut);
+    assert.ok(Number(m[1]) >= 1 && Number(m[1]) <= 400, cut);
+    assert.ok(Date.now() - t0 < 3000);
+  } finally {
+    process.env.PATH = prevPath;
+    rmSync(dir, { recursive: true, force: true });
   }
 });

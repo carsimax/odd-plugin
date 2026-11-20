@@ -8,6 +8,7 @@ import { fileURLToPath } from "node:url";
 import { runHook } from "../hooks/run.js";
 import { acknowledgeApproved, isTargetConsumed } from "./ack.js";
 import { recordDecline, REVIEW_TOOL_NAMES } from "./consent.js";
+import { preToolUse } from "../hooks/pre-tool-use.js";
 import { checkDelivery, DEFAULT_BUDGET_MS, recognizeDeliveryActions } from "./gate.js";
 import { readReviewMode, setReviewMode } from "./mode.js";
 import { runReview, type ReviewRunInput, type ReviewRunOutcome, type RunDeps } from "./run.js";
@@ -1345,7 +1346,12 @@ const LAYERS: [string, string][] = [
   ["resolveRepository: absolute-git-dir", "*--absolute-git-dir*"],
   ["evaluateRoot: merge-base", "*merge-base*"],
   ["evaluateRoot: rev-list", "*rev-list*"],
-  ["snapshot: tree resolution (freezeSnapshot)", "*?tree?*"],
+  // the base's tree is resolved from a hex id; HEAD's from the name HEAD: each pattern matches only its own call
+  ["snapshot: tree resolution (freezeSnapshot, base id)", "*--verify\\ [0-9a-f]*tree*"],
+  ["snapshot: HEAD^{tree} (resolveHeadBase)", "*--verify\\ HEAD*tree*"],
+  ["snapshot: changedPaths diff-tree", "*diff-tree*"],
+  ["risk: blob sizes cat-file --batch-check", "*--batch-check*"],
+  ["gate: lenient remote-ref probe", "*refs/remotes/*"],
   ["risk: collectStats diff", "*diff*--raw*"],
   ["risk: numstat diff", "*diff*--numstat*"],
 ];
@@ -1373,6 +1379,35 @@ for (const [name, pattern] of LAYERS) {
     }
   });
 }
+
+test("budget: ODD_CLAUDE_GATE_BUDGET_MS only shortens the deadline handed to the assessment", () => {
+  const f = fx();
+  try {
+    commitHigh(f);
+    on(f);
+    const within = (value: string, expected: number): void => {
+      let deadlineAt: number | undefined;
+      const assess = ((_root: string, _target: unknown, o: { deadlineAt?: number }) => {
+        deadlineAt = o.deadlineAt;
+        return { status: "not_due" };
+      }) as unknown as typeof assessCandidate;
+      const t0 = Date.now();
+      const out = preToolUse(
+        { session_id: "s", cwd: f.repo, tool_name: "Bash", tool_input: { command: "git push origin feature" } },
+        { dataDir: f.data, env: { ODD_CLAUDE_GATE_BUDGET_MS: value }, assess } as Parameters<typeof preToolUse>[1],
+      );
+      const t1 = Date.now();
+      assert.equal(out, undefined, `budget ${JSON.stringify(value)}: the spy answered not_due`);
+      assert.notEqual(deadlineAt, undefined, `budget ${JSON.stringify(value)}: the assessment got a deadline`);
+      // deadlineAt = (start in [t0, t1]) + budget
+      assert.ok((deadlineAt as number) >= t0 + expected && (deadlineAt as number) <= t1 + expected, `budget ${JSON.stringify(value)}: expected ${expected} ms, got ${(deadlineAt as number) - t0} ms after t0`);
+    };
+    for (const v of ["25000", "20001", "99999999999", "abc", "0", "-5", "1e9"]) within(v, DEFAULT_BUDGET_MS);
+    within("5000", 5000);
+  } finally {
+    f.cleanup();
+  }
+});
 
 test("budget: a spent budget starts no git at all (a fake git that records its calls is never run)", () => {
   const f = fx();

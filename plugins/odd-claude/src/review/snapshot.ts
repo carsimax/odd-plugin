@@ -156,11 +156,15 @@ export interface GitOut {
 
 export function runGit(call: GitCall): GitOut {
   let timeout = Math.min(Math.max(call.timeoutMs, 1), MAX_GIT_TIMEOUT_MS);
+  let budgetBound = false;
   if (call.deadlineAt !== undefined) {
     const left = call.deadlineAt - Date.now();
     // the whole-operation budget is a hard deadline: nothing starts once it is spent, and no call outlives it
     if (!(left >= 1)) throw new SnapshotError("git_timeout", `git ${call.args[0] ?? ""} not started: the time budget is spent`);
-    timeout = Math.min(timeout, left);
+    if (left < timeout) {
+      timeout = left;
+      budgetBound = true;
+    }
   }
   const result = spawnSync("git", ["--no-replace-objects", "-C", call.cwd, ...call.args], {
     env: gitEnv(call.env),
@@ -175,7 +179,7 @@ export function runGit(call: GitCall): GitOut {
   if (result.error) {
     const code = (result.error as NodeJS.ErrnoException).code;
     if (code === "ENOENT") throw new SnapshotError("git_unavailable", "git executable not found");
-    if (code === "ETIMEDOUT") throw new SnapshotError("git_timeout", `${label} timed out after ${call.timeoutMs}ms`);
+    if (code === "ETIMEDOUT") throw new SnapshotError("git_timeout", `${label} timed out after ${Math.ceil(timeout)}ms${budgetBound ? " (the check's time budget)" : ""}`);
     if (code === "ENOBUFS") throw new SnapshotError("git_output_limit", `${label} output exceeded the deterministic byte limit`);
     throw new SnapshotError("git_failed", `${label} could not run: ${result.error.message}`);
   }
