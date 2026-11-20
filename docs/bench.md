@@ -1,13 +1,15 @@
 # Efficiency bench (dev-only)
 
 Offline, model-free bench that measures the *friction* of odd-claude journeys (not wall-clock quality, tokens or a composite score)
-and, later, compares them with the upstream oracle. It lives in `bench/` at the repository root, has its own `tsconfig`, builds to
+and compares them with the upstream oracle (the `gentle-ai` binary). It lives in `bench/` at the repository root, has its own `tsconfig`, builds to
 `bench/dist/` (gitignored) and is **not** part of the plugin payload. Full documentation arrives in T4; this is a stub.
 
 ## Run
 
 ```sh
-npm run bench -- --out /tmp/odd-bench-results.json     # all journeys; add --journey <id> to select
+npm run bench -- --out /tmp/odd-bench-results.json     # odd, all journeys; add --journey <id> to select
+npm run bench -- --subject oracle --out /tmp/oracle.json   # the upstream binary
+npm run bench -- --subject both --out /tmp/bench-out        # both: /tmp/bench-out/odd.json and oracle.json (or <name>.odd.json / <name>.oracle.json for --out <name>.json)
 npm run test:bench                                      # unit tests of the bench itself
 ```
 
@@ -25,6 +27,10 @@ The bench never touches the real Claude installation or the real repository:
   all point inside the sandbox root; the review-mode CLI is also given `--data-dir <sandbox data dir>`.
 - The sandbox `bin/` (the `git` counting shim and the fake `claude`) is first on `PATH`, so the reviewer runner can only reach the fake.
 - The sandbox lives under the session `TMPDIR` and is removed when its journey ends.
+- Oracle journeys add the product's own switches (below) and run the binary only in that env; its state lands in `$HOME/.gentle-ai`
+  and `<repo>/.git/gentle-ai` of the sandbox. The isolation test also runs oracle journeys and checks that the real `~/.claude`,
+  the static entries of `~/.gentle-shell` (it is live: the host harness writes sessions there), `~/.gentle-ai` and the other
+  product home dirs, and this repository's `.git/gentle-ai`, `odd-plugin`, `config` and `HEAD` did not change (stat only).
 - `bench/src/journeys/journeys.spec.ts` checks it: it snapshots (stat only, never reading content) the real `~/.claude/plugins/data`,
   `~/.claude/settings*.json` and this repository's `odd-plugin/` and `config` before and after running journeys and asserts
   nothing changed, that the state did land inside the sandbox, and that no sandbox or reviewer scratch directory is left in `TMPDIR`.
@@ -62,6 +68,57 @@ typed refusal are `in_band` blocks (each names the route forward), and the first
 
 Delivery commands (a push, opening a pull request) are presented to the gate hook **as text only**: they are assembled from
 fragments and never executed by a shell or git, and no push ever happens (origin is a local bare repository).
+
+### The oracle subject (`bench/src/subjects/oracle.ts`)
+
+Runs the same 23 journeys against the upstream binary (`ODD_BENCH_ORACLE_BIN`, default
+`~/.local/share/odd-claude-oracle/gentle-ai-4.6.0/bin/gentle-ai`), one fresh process per command, and returns the same normalized facts
+and metric events. The run metadata records the binary's own version (`meta.binary.version`, from `gentle-ai version`) and path; the
+journeys were ported from sources pinned at 08317b9, so expect version skew (that is why unsupported rows and divergences exist).
+If the binary is absent, `--subject oracle|both` exits 2 and the oracle tests skip with a message.
+
+- **No telemetry, no network.** The product sends anonymous usage events unless a kill switch is set. The oracle env sets
+  `DO_NOT_TRACK=1` (first in its precedence order) and `GENTLE_AI_TELEMETRY=0`, and points `GENTLE_AI_TELEMETRY_ENDPOINT` at a closed
+  loopback port, so even a switch that failed could reach no server. The review commands do not contact the network otherwise
+  (the update check belongs to install/update/sync, which the bench never runs). `oracle.spec.ts` asks the real binary (`telemetry
+  status --json`) and sees it disabled by each switch alone.
+- **Protocol.** Everything the agent does follows the product's own printed route: the selectorless `review status` preflight, the
+  printed `review start` with `--consent=relay`, the consent question's own `granted|declined` invocation, `review status` for the next
+  collect, `capture-result` per lens, `capture-refuter` and `capture-validation` for severe findings, `capture-correction-plan` before
+  the edit, `review acknowledge-approved`, `review validate --gate`, `review stop-hook`, `review mode`.
+- **Reviewers without a model.** The binary runs its reviewers itself through `claude` on `PATH`; in the sandbox that is the same fake
+  `claude` as for odd, which also answers the upstream provider prompts (a lens result bound to the binding line and manifest, the
+  refuter and the validator echoing their request hash) from the same verdict plan. Model runs are therefore *measured*, not reported.
+- **Accounting.** Same conventions as odd: every process is a command (the oracle needs two for `inspect` and two for `start`: its
+  status preflight then the start); the human prompt is the consent answer only (the oracle has no reviewer cost forecast to approve,
+  where odd asks once more per reviewer batch); typed refusals, Stop reminders and gate denials are `in_band` blocks; the first success
+  after a block is a recovery; `human_surface_bytes` counts stdout and stderr; git subprocesses are what the `PATH` shim sees.
+
+**Mapping table** (`MAPPING` in `oracle.ts`, one commented row per upstream value; an unmapped value is an error, never a guess):
+
+| Upstream | odd |
+| --- | --- |
+| assess `risk` passive / medium / high | low / medium / high |
+| start `action` closed / consent_required / created / declined | closed / consent_required / consented / declined |
+| closure `state` approved / correction_required / escalated | approved / correction_required / escalated |
+| status `next_transition` execute review.start / review.acknowledge-approved / review.validate / collect / stop | start / acknowledge / validate / collect / stop |
+| failure code `stale_target_identity`; stop reason `corrected_candidate_unavailable` | `binding_drift`; `unchanged_candidate` |
+| gate `delivery` unmanaged / disabled/unmanaged | allow / allow (the gate never vetoes) |
+| stop-hook `decision` block / empty | remind / silent |
+
+An upstream refusal code without a row keeps its own name prefixed `oracle:` so it is visible.
+
+**Unsupported** (6 of 23, marked `unsupported` with the product's reason, never faked): every journey that needs a delivery denial.
+In 4.6.0 `review validate --gate` is non-deciding: for every candidate it reports `delivery=unmanaged` (`allowed=false`, ordinary
+repository policy decides), so there is no deny to compare. The two journeys that only expect an allow run and pass, and a test
+pins the evidence (the fixture odd denies comes back as an unmanaged allow for a push and a pull request alike).
+
+**Divergences** (`DIVERGENCES` in `oracle.ts`; the oracle's expected projection, so the oracle row passes and the difference shows
+in the projections): a decline persists nothing (status offers the start again; odd offers nothing); no duplicate-start guard while a
+correction is pending (a start for the changed candidate asks consent anew); reviewers read the frozen candidate trees, so drift after
+consent does not refuse the run (odd refuses it as binding drift); and the product starts with RDD **on** and refuses every review
+while it is off (`rdd_disabled`), so a journey that does not set the mode keeps the product default and its `inspect` reads `on`.
+The oracle also resumes by capturing every lens then acknowledging (it never runs reviewers in one go), so `resume` is that sequence.
 
 ### Catalog
 

@@ -55,10 +55,32 @@ export function installReviewerShim(binDir: string, logFile: string, planFile: s
   const body = `#!${process.execPath}
 const fs = require("node:fs");
 fs.appendFileSync(${JSON.stringify(logFile)}, "claude\\n");
+// The upstream CLI runs reviewers itself through this same fake claude (its provider prompts, not odd's): the lens prompt opens with a
+// binding line and carries the changed-path manifest in a context line; the validator and refuter prompts end with their request as one JSON line.
+function provider(prompt) {
+  let plan = {};
+  try { plan = JSON.parse(fs.readFileSync(${JSON.stringify(planFile)}, "utf8")); } catch {}
+  const line = (prefix) => { const l = prompt.split("\\n").find((x) => x.startsWith(prefix + " ")); return l ? JSON.parse(l.slice(prefix.length + 1)) : undefined; };
+  let result;
+  if (prompt.startsWith("GENTLE_AI_REVIEW_BINDING ")) {
+    const binding = line("GENTLE_AI_REVIEW_BINDING"), context = line("GENTLE_AI_REVIEW_CONTEXT") || {};
+    const lens = String(binding.lens).replace(/^review-/, "");
+    result = { subject_hash: binding.subject_hash, inspection: { status: "completed", paths: (context.changed_path_manifest || []).map((e) => e.path) }, findings: (plan.findings || {})[lens] || [], evidence: ["reviewed the complete candidate scope"] };
+  } else if (prompt.includes("review-provider-refuter-request/v1")) {
+    const input = JSON.parse(/\\nInput:\\n(\\{.*\\})/.exec(prompt)[1]);
+    result = { refuter_request_hash: input.request_hash, results: input.claims.map((c) => ({ finding_id: c.finding_id, outcome: "corroborated", proof_refs: ["the finding still holds"] })) };
+  } else {
+    const input = JSON.parse(/\\nInput:\\n(\\{.*\\})/.exec(prompt)[1]).validation_request;
+    const ok = plan.validatorPasses !== false;
+    result = { targeted_validation_request_hash: input.request_hash, correction_target_identity: input.correction_target_identity, original_criteria: { passed: ok, evidence: [ok ? "the original criteria now pass" : "the original criteria still fail"] }, correction_regression: { passed: true, evidence: ["no regression observed"] }, follow_ups: [] };
+  }
+  process.stdout.write(JSON.stringify(result) + "\\n");
+}
 let stdin = "";
 process.stdin.setEncoding("utf8");
 process.stdin.on("data", (c) => { stdin += c; });
 process.stdin.on("end", () => {
+  if (stdin.startsWith("GENTLE_AI_REVIEW_BINDING ") || stdin.includes("read-only targeted fix validator") || stdin.includes("review-provider-refuter-request/v1")) { provider(stdin); return; }
   const head = /Role: (\\w+)(?:, lens: (\\w+))?\\./.exec(stdin);
   const echoLine = /Echo these fields verbatim in the result: (\\{.*\\})/.exec(stdin);
   if (!head || !echoLine) { process.stdout.write("odd-bench fake claude: no model was run\\n"); return; }
@@ -91,7 +113,7 @@ export async function createSandbox(opts: { origin?: boolean } = {}): Promise<Sa
   const root = mkdtempSync(join(tmpdir(), "odd-bench-"));
   const home = join(root, "home"), repo = join(root, "repo"), binDir = join(root, "bin"), logs = join(root, "logs");
   const dataDir = join(root, "plugin-data"), claudeConfig = join(root, "claude-config"), xdg = join(root, "xdg");
-  for (const d of [home, repo, binDir, logs, dataDir, claudeConfig, join(xdg, "config"), join(xdg, "data"), join(xdg, "cache")]) mkdirSync(d, { recursive: true });
+  for (const d of [home, repo, binDir, logs, dataDir, claudeConfig, join(xdg, "config"), join(xdg, "data"), join(xdg, "cache"), join(xdg, "state")]) mkdirSync(d, { recursive: true });
   const basePath = process.env.PATH ?? "/usr/bin:/bin";
   const realGit = execFileSync("sh", ["-c", "command -v git"], { env: { PATH: basePath }, encoding: "utf8" }).trim();
   const gitLog = join(logs, "git.log"), claudeLog = join(logs, "claude.log");
@@ -102,7 +124,7 @@ export async function createSandbox(opts: { origin?: boolean } = {}): Promise<Sa
   // Built from scratch: no ANTHROPIC_*/CLAUDE_*/AWS_* or any other parent variable leaks in; every config/data/cache location is inside the sandbox.
   const env: NodeJS.ProcessEnv = {
     HOME: home, PATH: `${binDir}:${basePath}`, TMPDIR: process.env.TMPDIR, LANG: "C", GIT_CONFIG_NOSYSTEM: "1", GIT_CONFIG_GLOBAL: join(home, ".gitconfig"),
-    CLAUDE_PLUGIN_DATA: dataDir, CLAUDE_CONFIG_DIR: claudeConfig, XDG_CONFIG_HOME: join(xdg, "config"), XDG_DATA_HOME: join(xdg, "data"), XDG_CACHE_HOME: join(xdg, "cache"),
+    CLAUDE_PLUGIN_DATA: dataDir, CLAUDE_CONFIG_DIR: claudeConfig, XDG_CONFIG_HOME: join(xdg, "config"), XDG_DATA_HOME: join(xdg, "data"), XDG_CACHE_HOME: join(xdg, "cache"), XDG_STATE_HOME: join(xdg, "state"),
     ...identity,
   };
   const rawGit = (args: readonly string[], cwd = repo): string => execFileSync(realGit, [...args], { cwd, env: { ...env, PATH: basePath }, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });

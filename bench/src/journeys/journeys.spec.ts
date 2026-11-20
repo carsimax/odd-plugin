@@ -10,6 +10,7 @@ import { blocksTotal } from "../metrics.js";
 import { buildResult } from "../report.js";
 import { validateResult } from "../schema.js";
 import { oddSubject } from "../subjects/odd.js";
+import { oracleAvailable, oracleBinaryPath, oracleEnv, oracleSubject } from "../subjects/oracle.js";
 import { applyEdit, applyFixture, CHANGE, editedFile } from "./fixtures.js";
 import { createSandbox } from "../sandbox.js";
 import { JOURNEY_DEFS } from "./index.js";
@@ -227,9 +228,57 @@ test("isolation: a journey run reads and writes only its sandbox; the real ~/.cl
 });
 
 test("isolation: a fresh journey run leaves no sandbox directory behind in the session TMPDIR", async () => {
-  const mine = (): string[] => readdirSync(tmpdir()).filter((n) => n.startsWith("odd-bench-"));
-  const before = mine();
-  const row = await runJourney(toJourney(byId("low-risk-closes-with-zero-lenses"), oddSubject));
+  // Test files run in parallel and each creates sandboxes in the same TMPDIR, so the journey's own sandbox is the one checked (not a before/after listing).
+  let root = "";
+  const probe = { name: "note sandbox", actor: "events" as const, async run(env: Parameters<Journey["steps"][number]["run"]>[0]) { root = env.sandbox.root; return { ok: true }; } };
+  const j = toJourney(byId("low-risk-closes-with-zero-lenses"), oddSubject);
+  const row = await runJourney({ ...j, steps: [...j.steps, probe] });
   assert.equal(row.status, "passed");
-  assert.deepEqual(mine().filter((n) => !before.includes(n)), [], "no sandbox directory outlives its journey");
+  assert.match(root, /odd-bench-/);
+  assert.equal(existsSync(root), false, "no sandbox directory outlives its journey");
+});
+
+// ---- isolation, oracle journeys ----
+
+test("isolation (oracle): journeys run against the upstream binary touch only their sandbox; the real ~/.claude, ~/.gentle-shell, the product's own home dirs and this repository's .git are untouched", { skip: oracleAvailable() ? false : `oracle binary not found at ${oracleBinaryPath()}` }, async () => {
+  const home = process.env.HOME ?? "";
+  const common = spawnSync("git", ["rev-parse", "--path-format=absolute", "--git-common-dir"], { encoding: "utf8" }).stdout.trim();
+  // ~/.gentle-shell is live (the host harness writes sessions and history there while tests run), so only its static entries are watched.
+  const watched = [
+    join(home, ".claude", "plugins", "data"), join(home, ".claude", "settings.json"), join(home, ".claude", "settings.local.json"),
+    ...["config.json", "path-entry.json", "versions.history", "bin", "versions", "runtime"].map((e) => join(home, ".gentle-shell", e)),
+    join(home, ".gentle-ai"), join(home, ".config", "gentle-ai"), join(home, ".local", "share", "gentle-ai"), join(home, ".local", "state", "gentle-ai"), join(home, ".cache", "gentle-ai"),
+    join(common, "gentle-ai"), join(common, "odd-plugin"), join(common, "config"), join(common, "HEAD"),
+  ];
+  const before = watched.map(snapshot);
+  const leaked = { ANTHROPIC_API_KEY: "dummy-not-a-secret", CLAUDE_CODE_OAUTH_TOKEN: "dummy", AWS_PROFILE: "dummy", GENTLE_AI_TELEMETRY: "1", DO_NOT_TRACK: "0" };
+  Object.assign(process.env, leaked);
+  const inside: { root: string; env: NodeJS.ProcessEnv; product: string[]; authority: string[]; mode: string[] } = { root: "", env: {}, product: [], authority: [], mode: [] };
+  const probe = { name: "probe sandbox", actor: "events" as const, async run(env: Parameters<Journey["steps"][number]["run"]>[0]) {
+    inside.root = env.sandbox.root;
+    inside.env = oracleEnv(env.sandbox.env);
+    const list = (dir: string): string[] => (existsSync(dir) ? readdirSync(dir) : []);
+    inside.product = list(join(env.sandbox.home, ".gentle-ai"));
+    inside.authority = list(join(env.sandbox.repo, ".git", "gentle-ai"));
+    return { ok: true };
+  } };
+  try {
+    for (const id of ["stop-reminds-once-per-session-and-candidate", "high-risk-four-lens-group", "rdd-mode-global-and-clone-scopes"]) {
+      const j = toJourney(byId(id), oracleSubject);
+      const row = await runJourney({ ...j, steps: [...j.steps, probe] });
+      assert.equal(row.status, "passed", JSON.stringify(row));
+      assert.ok(inside.root.startsWith(tmpdir()) || inside.root.startsWith(process.env.TMPDIR ?? "\0"), "the sandbox lives under the session TMPDIR");
+      assert.equal(existsSync(inside.root), false, "and is removed afterwards");
+      if (id.startsWith("high")) assert.ok(inside.authority.includes("review-transactions"), `review authority went to the sandbox repo: ${inside.authority.join()}`);
+      else assert.ok(inside.product.length > 0, `the product's own state (mode, stop-hook sessions) went to the sandbox HOME: ${inside.product.join()}`);
+      assert.equal(inside.env.DO_NOT_TRACK, "1", "telemetry stays off whatever the parent says");
+      assert.equal(inside.env.GENTLE_AI_TELEMETRY, "0");
+      assert.equal(inside.env.ANTHROPIC_API_KEY, undefined);
+      const withoutPath = Object.fromEntries(Object.entries(inside.env).filter(([k]) => k !== "PATH"));
+      assert.equal(JSON.stringify(withoutPath).includes(home), false, "no real HOME path in the child environment (PATH keeps the tools' own directories)");
+    }
+  } finally {
+    for (const k of Object.keys(leaked)) delete process.env[k];
+  }
+  assert.deepEqual(watched.map(snapshot), before, "nothing changed in the real Claude, gentle-shell or product directories, nor in this repository's .git");
 });

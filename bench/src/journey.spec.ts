@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { existsSync } from "node:fs";
-import { expectedProjection, runJourney, toJourney, type FixtureSpec, type Journey, type JourneyDef, type MetricEvent, type NormalizedFacts, type StepSpec, type Subject } from "./journey.js";
+import { expectedProjection, runJourney, toJourney, UnsupportedError, type FixtureSpec, type Journey, type JourneyDef, type MetricEvent, type NormalizedFacts, type StepSpec, type Subject } from "./journey.js";
 import { exampleStatusJourney } from "./journeys/example.js";
 import { validateResult } from "./schema.js";
 import { buildResult } from "./report.js";
@@ -157,4 +157,62 @@ test("the journey env hands subjects the built plugin entrypoints", async () => 
   const subject: Subject = { name: "odd", async open(env) { paths = env.plugin; return { async exec() { return { facts: { outcome: "x" }, events: [] }; } }; } };
   await runJourney(toJourney(def({ steps: [{ do: { kind: "inspect" }, expect: { outcome: "x" } }] }), subject));
   for (const k of ["server", "hooks", "reviewMode"]) assert.ok(existsSync(paths[k]!), `${k} exists: ${paths[k]}`);
+});
+
+// ---- subjects that cannot express a journey, differ by design, or run their own CLI ----
+
+const one = (over: Partial<JourneyDef> = {}): JourneyDef => def({ steps: [{ do: { kind: "inspect" }, expect: { outcome: "inspected", lineages: 0 } }], ...over });
+
+test("a subject can declare a journey unsupported up front: the row says why, carries no metrics and nothing runs", async () => {
+  let opened = false;
+  const subject: Subject = { name: "oracle", unsupported: () => "the product has no such thing", async open() { opened = true; return { async exec() { return { facts: { outcome: "x" }, events: [] }; } }; } };
+  const row = await runJourney(toJourney(one({ refId: "j05-gate-without-any-review" }), subject));
+  assert.deepEqual([row.status, row.reason, row.outcome, row.metrics, row.ref_id, opened], ["unsupported", "the product has no such thing", null, null, "j05-gate-without-any-review", false]);
+  const res = buildResult("oracle", [row], { binaryPath: "x", binaryVersion: "y", commit: "z" });
+  assert.deepEqual(validateResult(JSON.parse(JSON.stringify(res))), []);
+  assert.deepEqual(res.aggregate.counts, { passed: 0, failed: 0, unsupported: 1 });
+});
+
+test("a subject that discovers mid-journey that the product cannot express a step marks the row unsupported, not failed, and cleans up", async () => {
+  let root = "";
+  const subject: Subject = { name: "oracle", async open(env) { root = env.sandbox.root; return { async exec() { throw new UnsupportedError("no such route in this version"); } }; } };
+  const row = await runJourney(toJourney(one(), subject));
+  assert.deepEqual([row.status, row.reason, row.metrics, row.outcome], ["unsupported", "no such route in this version", null, null]);
+  assert.equal(existsSync(root), false);
+});
+
+test("a subject can replace the expected projection where its product legitimately differs", async () => {
+  const subject: Subject = {
+    name: "oracle",
+    expected: (d) => ({ steps: [{ step: d.steps[0]!.do.kind, outcome: "inspected", lineages: 0, mode: "on" }] }),
+    async open() { return { async exec() { return { facts: { outcome: "inspected", lineages: 0, mode: "on" }, events: [] }; } }; },
+  };
+  assert.equal((await runJourney(toJourney(one(), subject))).status, "passed");
+  const plain: Subject = { name: "odd", async open() { return { async exec() { return { facts: { outcome: "inspected", lineages: 0, mode: "on" }, events: [] }; } }; } };
+  assert.equal((await runJourney(toJourney(one(), plain))).status, "failed", "without the override the shared expectation applies");
+});
+
+test("runCli runs one process in the sandbox env (or the env the subject gives), records cli.<name> latency and counts stdout and stderr as shown", async () => {
+  const seen: { env?: string; cwd?: string; own?: string } = {};
+  const subject: Subject = {
+    name: "oracle",
+    async open(env) {
+      return {
+        async exec() {
+          const a = await env.runCli("probe_a", process.execPath, ["-e", "process.stdout.write(process.env.HOME+'|'+process.cwd()); process.stderr.write('err!')"]);
+          seen.env = a.stdout.split("|")[0]; seen.cwd = a.stdout.split("|")[1];
+          const b = await env.runCli("probe_b", process.execPath, ["-e", "process.stdout.write(process.env.ODD_PROBE ?? 'unset')"], { env: { ...env.sandbox.env, ODD_PROBE: "mine" } });
+          seen.own = b.stdout;
+          return { facts: { outcome: "inspected", lineages: 0 }, events: [] };
+        },
+      };
+    },
+  };
+  const row = await runJourney(toJourney(one(), subject));
+  assert.equal(row.status, "passed", JSON.stringify(row));
+  assert.ok(seen.env!.includes("odd-bench-") && seen.cwd!.includes("odd-bench-"), "runs in the sandbox HOME and repo");
+  assert.equal(seen.own, "mine");
+  assert.deepEqual(Object.keys(row.metrics!.latency).sort(), ["cli.probe_a", "cli.probe_b"]);
+  const home = seen.env!, cwd = seen.cwd!;
+  assert.equal(row.metrics!.human_surface_bytes.value, Buffer.byteLength(`${home}|${cwd}`) + Buffer.byteLength("err!") + Buffer.byteLength("mine"));
 });

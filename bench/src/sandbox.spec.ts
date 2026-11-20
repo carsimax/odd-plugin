@@ -68,12 +68,12 @@ test("sandbox env is built from scratch: every config, data and cache location i
   Object.assign(process.env, leaked);
   const sb = await createSandbox();
   try {
-    for (const k of ["HOME", "CLAUDE_PLUGIN_DATA", "CLAUDE_CONFIG_DIR", "XDG_CONFIG_HOME", "XDG_DATA_HOME", "XDG_CACHE_HOME", "GIT_CONFIG_GLOBAL"]) {
+    for (const k of ["HOME", "CLAUDE_PLUGIN_DATA", "CLAUDE_CONFIG_DIR", "XDG_CONFIG_HOME", "XDG_DATA_HOME", "XDG_CACHE_HOME", "XDG_STATE_HOME", "GIT_CONFIG_GLOBAL"]) {
       const v = sb.env[k];
       assert.ok(typeof v === "string" && v.startsWith(`${sb.root}/`), `${k}=${String(v)} is inside the sandbox`);
     }
     assert.equal(sb.dataDir, sb.env.CLAUDE_PLUGIN_DATA);
-    for (const d of ["CLAUDE_PLUGIN_DATA", "CLAUDE_CONFIG_DIR", "XDG_CONFIG_HOME", "XDG_DATA_HOME", "XDG_CACHE_HOME"]) assert.ok(existsSync(sb.env[d]!), `${d} exists`);
+    for (const d of ["CLAUDE_PLUGIN_DATA", "CLAUDE_CONFIG_DIR", "XDG_CONFIG_HOME", "XDG_DATA_HOME", "XDG_CACHE_HOME", "XDG_STATE_HOME"]) assert.ok(existsSync(sb.env[d]!), `${d} exists`);
     assert.deepEqual(Object.keys(sb.env).filter((k) => /^(ANTHROPIC_|AWS_|CLAUDE_CODE)/.test(k)), []);
     const child = await runProcess(process.execPath, ["-e", "process.stdout.write(JSON.stringify(process.env))"], { cwd: sb.repo, env: sb.env, deadlineMs: 10_000 });
     const seen = JSON.parse(child.stdout) as Record<string, string>;
@@ -123,6 +123,50 @@ test("fake reviewer synthesizes a schema-shaped verdict from the prompt's own ec
     sb.setVerdicts({ validatorPasses: false });
     assert.equal((await ask(sb, reviewerPrompt("validator", undefined, { targeted_validation_request_hash: "sha256:" + "c".repeat(64) }))).original_criteria.passed, false);
     assert.equal(sb.countModelRuns(), 6);
+  } finally {
+    sb.cleanup();
+  }
+});
+
+// The upstream CLI runs its reviewers through the same fake claude, with its own prompt formats (binding line + context line; request as the last JSON line).
+const ask2 = async (sb: Awaited<ReturnType<typeof createSandbox>>, prompt: string): Promise<Record<string, any>> => {
+  const r = await runProcess("claude", ["--print"], { cwd: sb.repo, env: sb.env, stdin: prompt, deadlineMs: 10_000 });
+  assert.equal(r.code, 0);
+  assert.equal(r.stdout.includes("```"), false, "the provider contract wants one bare JSON object");
+  return JSON.parse(r.stdout) as Record<string, any>;
+};
+
+test("fake claude also answers the upstream provider prompts: lens result bound to the subject hash and manifest, validator and refuter echoing their request, all from the same verdict plan", async () => {
+  const sb = await createSandbox();
+  try {
+    const subject = "sha256:" + "d".repeat(64);
+    const lens = (name: string): string => [
+      `GENTLE_AI_REVIEW_BINDING ${JSON.stringify({ lineage: "l", target: "t", lens: name, order: 0, subject_hash: subject })}`,
+      `GENTLE_AI_REVIEW_CONTEXT ${JSON.stringify({ changed_path_manifest: [{ path: "src/a.ts" }, { path: "src/b.ts" }] })}`,
+      "GENTLE_AI_REVIEW_INSTRUCTION",
+    ].join("\n") + "\n";
+    const clean = await ask2(sb, lens("review-risk"));
+    assert.equal(clean.subject_hash, subject);
+    assert.deepEqual(clean.inspection, { status: "completed", paths: ["src/a.ts", "src/b.ts"] });
+    assert.deepEqual(clean.findings, []);
+    const finding = { location: "src/a.ts:1", severity: "CRITICAL" };
+    sb.setVerdicts({ findings: { risk: [finding] } });
+    assert.deepEqual((await ask2(sb, lens("review-risk"))).findings, [finding], "the plan is keyed by the short lens name");
+    assert.deepEqual((await ask2(sb, lens("review-resilience"))).findings, []);
+
+    const validator = `You are the read-only targeted fix validator.\n\nInput:\n${JSON.stringify({ validation_request: { request_hash: "sha256:" + "e".repeat(64), correction_target_identity: "sha256:" + "f".repeat(64) } })}\n\nOutput schema:\n{}\n`;
+    const ok = await ask2(sb, validator);
+    assert.equal(ok.targeted_validation_request_hash, "sha256:" + "e".repeat(64));
+    assert.equal(ok.correction_target_identity, "sha256:" + "f".repeat(64));
+    assert.deepEqual([ok.original_criteria.passed, ok.correction_regression.passed, ok.follow_ups], [true, true, []]);
+    sb.setVerdicts({ validatorPasses: false });
+    assert.equal((await ask2(sb, validator)).original_criteria.passed, false);
+
+    const refuter = `Refute.\n\nInput:\n${JSON.stringify({ schema: "gentle-ai.review-provider-refuter-request/v1", request_hash: "sha256:" + "a".repeat(64), claims: [{ finding_id: "R1-001" }] })}\n\nOutput schema:\n{}\n`;
+    const refuted = await ask2(sb, refuter);
+    assert.equal(refuted.refuter_request_hash, "sha256:" + "a".repeat(64));
+    assert.deepEqual(refuted.results.map((x: any) => [x.finding_id, x.outcome]), [["R1-001", "corroborated"]]);
+    assert.equal(sb.countModelRuns(), 6, "lens x3, validator x2, refuter x1");
   } finally {
     sb.cleanup();
   }

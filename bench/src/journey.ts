@@ -48,6 +48,8 @@ export interface Journey {
   needsOrigin?: boolean;
   /** Whole-journey deadline (default 60s). */
   deadlineMs?: number;
+  /** Set when the subject cannot express this journey: the row is `unsupported` with this reason and nothing runs. */
+  unsupported?: string;
   setup?(env: JourneyEnv): Promise<void>;
   steps: Step[];
   /** Expected outcome projection, compared by deep equality with the merged `observed` of all steps. */
@@ -66,7 +68,12 @@ export interface JourneyEnv {
   mcpTools(): Promise<string[]>;
   /** One hook/CLI process; stdout is surfaced and latency recorded as `hook.<name>`. */
   runHook(name: string, command: string, args: readonly string[], stdin?: string): Promise<ProcessResult>;
+  /** One command-line process (a subject's own CLI, `git`): stdout and stderr are surfaced and latency recorded as `cli.<name>`. `env` replaces the sandbox env (a subject adds its own switches). */
+  runCli(name: string, command: string, args: readonly string[], opts?: { stdin?: string; env?: NodeJS.ProcessEnv }): Promise<ProcessResult>;
 }
+
+/** Thrown by a subject mid-journey when the product cannot express what the step asks; the row becomes `unsupported`, never `failed`. */
+export class UnsupportedError extends Error {}
 
 export interface RunOptions { serverPath?: string }
 
@@ -78,6 +85,7 @@ const DEFAULT_DEADLINE_MS = 60_000;
 const utf8 = (s: string): number => Buffer.byteLength(s, "utf8");
 
 export async function runJourney(journey: Journey, opts: RunOptions = {}): Promise<JourneyResultRow> {
+  if (journey.unsupported !== undefined) return { id: journey.id, ...(journey.refId !== undefined ? { ref_id: journey.refId } : {}), status: "unsupported", outcome: null, metrics: null, reason: journey.unsupported };
   const serverPath = opts.serverPath ?? DEFAULT_SERVER_PATH;
   const deadlineMs = journey.deadlineMs ?? DEFAULT_DEADLINE_MS;
   const sandbox = await createSandbox({ origin: journey.needsOrigin === true });
@@ -108,12 +116,19 @@ export async function runJourney(journey: Journey, opts: RunOptions = {}): Promi
       surface += utf8(r.stdout);
       return r;
     },
+    async runCli(name, command, args, o = {}) {
+      const r = await runProcess(command, args, { cwd: sandbox.repo, env: o.env ?? sandbox.env, deadlineMs, ...(o.stdin !== undefined ? { stdin: o.stdin } : {}) });
+      sample(`cli.${name}`, r.ms);
+      surface += utf8(r.stdout) + utf8(r.stderr);
+      return r;
+    },
   };
 
   let prompts = 0, manualBytes = 0, commands = 0, recoveries = 0, extraModelRuns = 0, extraGit = 0;
   const blocks = emptyBlocks();
   const observed: Projection = {};
   let failure: string | undefined;
+  let unsupported: string | undefined;
   let timer: NodeJS.Timeout | undefined;
   try {
     await journey.setup?.(env);
@@ -145,7 +160,8 @@ export async function runJourney(journey: Journey, opts: RunOptions = {}): Promi
     const deadline = new Promise<never>((_, rej) => { timer = setTimeout(() => rej(new Error(`journey deadline exceeded after ${deadlineMs}ms`)), deadlineMs); });
     await Promise.race([body, deadline]);
   } catch (e) {
-    failure = e instanceof Error ? e.message : String(e);
+    if (e instanceof UnsupportedError) unsupported = e.message;
+    else failure = e instanceof Error ? e.message : String(e);
   } finally {
     clearTimeout(timer);
   }
@@ -162,6 +178,7 @@ export async function runJourney(journey: Journey, opts: RunOptions = {}): Promi
   const root = sandbox.root;
   sandbox.cleanup();
   if (existsSync(root)) failure ??= "sandbox cleanup failed";
+  if (unsupported !== undefined && failure === undefined) return { id: journey.id, ...(journey.refId !== undefined ? { ref_id: journey.refId } : {}), status: "unsupported", outcome: null, metrics: null, reason: unsupported };
   if (failure === undefined && !sameJson(observed, journey.expected)) failure = `outcome projection differs from expected: ${JSON.stringify(observed)}`;
   return { id: journey.id, ...(journey.refId !== undefined ? { ref_id: journey.refId } : {}), status: failure === undefined ? "passed" : "failed", outcome: observed, metrics, ...(failure !== undefined ? { reason: failure } : {}) };
 }
@@ -254,6 +271,10 @@ export interface SubjectSession {
 
 export interface Subject {
   readonly name: "odd" | "oracle";
+  /** Why this subject cannot express the journey at all, or undefined. Checked before anything runs. */
+  unsupported?(def: JourneyDef): string | undefined;
+  /** The projection this subject is expected to produce when its product legitimately differs from the shared expectation (default: `expectedProjection`). */
+  expected?(def: JourneyDef): Projection;
   /** Applies the fixture inside the sandbox and returns the session that executes steps. Runs before counters reset. */
   open(env: JourneyEnv, fixture: FixtureSpec): Promise<SubjectSession>;
 }
@@ -283,8 +304,9 @@ export function toJourney(def: JourneyDef, subject: Subject): Journey {
     ...(def.refId !== undefined ? { refId: def.refId } : {}),
     description: def.description,
     needsOrigin: def.fixture.origin === true,
+    ...(subject.unsupported?.(def) !== undefined ? { unsupported: subject.unsupported(def)! } : {}),
     ...(def.deadlineMs !== undefined ? { deadlineMs: def.deadlineMs } : {}),
-    expected: expectedProjection(def),
+    expected: subject.expected?.(def) ?? expectedProjection(def),
     async setup(env) {
       sessions.set(env.sandbox, await subject.open(env, def.fixture));
       seen.set(env.sandbox, []);
