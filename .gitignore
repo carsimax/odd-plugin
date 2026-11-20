@@ -11,3 +11,6 @@ spikes/**/latest
 # odd-claude plugin: local deps and test build output (dist/ IS committed)
 plugins/odd-claude/node_modules/
 plugins/odd-claude/dist-test/
+
+# Dev-only bench build output (bench/ is not part of the plugin payload)
+/bench/dist/

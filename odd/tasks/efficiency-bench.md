@@ -36,7 +36,7 @@ Runner: `node:test` via `npm test` inside `plugins/odd-claude` + `npm run check`
 
 Route `writer` for all; commit pending for all.
 
-- T1 | S4 | writer | commit pending — Metric model and report format (JSON schema for results, derivation per metric, comparison report) and a bench runner skeleton (sandbox HOME + repo, fresh processes, timing).
+- T1 | S4 | writer | commit pending (ready) — Metric model and report format (JSON schema for results, derivation per metric, comparison report) and a bench runner skeleton (sandbox HOME + repo, fresh processes, timing).
 - T2 | S3,S4 | writer | commit pending — Select and port ~20 journeys from `journeys.manifest` relevant to odd's surface (review lifecycle low/medium/high, consent decline, correction, gate push/PR allow/deny, Stop reminder, RDD off) as odd scenarios with expected outcomes.
 - T3 | S3,S4 | writer | commit pending — Oracle adapter: run the same scenarios through the `gentle-ai` binary (CLI), normalize its outputs to the same projection, and mark unsupported journeys.
 - T4 | S1,S2 | writer | commit pending — Comparison report per journey and per metric, odd vs oracle (equal/better/worse with thresholds), latency median/p95; dev-only npm script `bench`; docs section under `docs/` (not the shipped README) on how to run and read it.
@@ -48,3 +48,4 @@ Route `writer` for all; commit pending for all.
 - L2: user's goal (S2): "La idea de hacer los evals es que sea igual de eificiente que el uptream"
 - L3: user decision (S3): "Bench de fricción + oráculo (recomendado)"
 - L4: Parent: gate fail-open fix runs separately on branch fix/gate-budget.
+- L5: T1 (S4) implemented, not committed: dev-only `bench/` at repo root (own tsconfig, builds to gitignored `bench/dist/`; root `package.json` with `bench`, `test:bench`, `check`), `docs/bench.md` stub. Metric model (`metrics.ts`, derivation per dimension, odd-only latency), result schema `odd-claude.bench-result/v1` + validator, comparison format `odd-claude.bench-comparison/v1`, sandbox with git-counting shim and fake `claude`, fresh-process MCP client, journey runner and one example journey against `dist/mcp/review-server.js`. 26 bench tests pass; plugin payload untouched.

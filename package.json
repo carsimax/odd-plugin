@@ -1,0 +1,13 @@
+{
+  "name": "odd-claude-dev",
+  "private": true,
+  "type": "module",
+  "description": "Dev-only tooling of the odd-claude repository (not shipped in the plugin payload).",
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "build:bench": "plugins/odd-claude/node_modules/.bin/tsc -p bench/tsconfig.json",
+    "test:bench": "npm run build:bench && node --test \"bench/dist/**/*.spec.js\"",
+    "bench": "npm run build:bench --silent && node bench/dist/cli.js",
+    "check": "npm --prefix plugins/odd-claude run check"
+  }
+}
