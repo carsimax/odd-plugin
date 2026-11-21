@@ -8,9 +8,19 @@
 //   the human allows that sender again, otherwise they expire by TTL (and keep counting against the mailbox cap, the back-pressure).
 //   So mail queued while a session was away survives SessionStart's grant reset (resume/startup/clear) until the human re-allows.
 //   Expired (TTL) messages are deleted by the store, never delivered.
-// - The injected block is capped at MAX_INJECT_BYTES. Selection and removal happen under the mailbox lock (takeSelect): what does
-//   not fit is NOT taken and stays queued for the next prompt. A single message too big even alone is truncated (marked), so the
-//   mailbox can never wedge.
+// - BUDGET (observed with the real claude 2.1.330, R07 P4 blocker): when a hook's additionalContext is large (a 16774-byte
+//   UserPromptSubmit output with two ~8 KB peer messages) Claude Code does NOT inject it: it persists it to a file
+//   (`<persisted-output>`) and shows the model only a ~2 KB preview, so the closing `</peer-messages>` and most messages never reach
+//   the model, and they were already deleted from the mailbox (lost). One ~8 KB message (a ~8.5 KB hook output) arrived whole. The
+//   limit is believed to be ~10,000 characters for the hook's WHOLE additionalContext. So the TOTAL additionalContext a hook emits
+//   (everything merged: grant confirmation, language anchor, SessionStart context, this block) must stay under
+//   HOOK_CONTEXT_BUDGET_CHARS, counted as UTF-16 chars AND as UTF-8 bytes (we measure bytes, which is never smaller than chars).
+//   The peers block gets only what remains after the other parts. Selection and removal happen under the mailbox lock
+//   (takeSelect): what does not fit is NOT taken and stays queued for the next prompt. A single message too big even alone is
+//   truncated (marked) into the remaining room, so the mailbox can never wedge, but only if at least MIN_BLOCK_BYTES remain;
+//   otherwise the whole batch is deferred to the next prompt and nothing is taken.
+// - Text read back from a mailbox file is clamped (reason to 512 bytes, one line; message truncated to the room), so a hand-forged
+//   file (Bash access to the data dir, the documented shell-access limit) cannot wedge later mail or blow the budget.
 // - Never blocks and never throws: any failure (corrupt/symlinked mailbox, lock timeout, no data dir) means "nothing delivered".
 import { lstatSync, readdirSync } from "node:fs";
 import { join } from "node:path";
@@ -18,9 +28,12 @@ import { isAllowed } from "./peer-grants.js";
 import { isValidSessionId, takeSelect, type PeerMessage, type PeersOptions } from "./peers.js";
 import { resolveDataDir } from "./state.js";
 
-export const MAX_INJECT_BYTES = 24 * 1024;
-/** Longest rendered form of one message (the first message of a batch must always fit under the cap with the envelope). */
-const MAX_ONE_BYTES = 16 * 1024;
+/** Total additionalContext a hook may emit (see the header for the observation behind it). */
+export const HOOK_CONTEXT_BUDGET_CHARS = 9000;
+/** Smallest room worth delivering into: envelope + a head with a 512-byte reason fully escaped + some body. Less: defer the batch. */
+const MIN_BLOCK_BYTES = 4096;
+const MAX_REASON_READ_BYTES = 512;
+const SEPARATOR = "\n\n";
 const DELIVERY_LOCK_WAIT_MS = 1_000;
 const TRUNCATED = "| [truncated]";
 
@@ -53,7 +66,7 @@ function esc(s: string): string {
 
 function quote(s: string): string {
   return s
-    .split(/\r\n|\r|\n/)
+    .split(/\r\n|[\r\n\u2028\u2029\u0085\v\f]/)
     .map((l) => `| ${l}`)
     .join("\n");
 }
@@ -75,13 +88,18 @@ function truncateTo(s: string, maxBytes: number): string {
   return out;
 }
 
-function renderOne(m: PeerMessage): string {
-  const reason = esc(m.reason.replace(/\s+/g, " ").trim());
+/** Size that must stay within the budget: UTF-8 bytes (>= UTF-16 chars always), so both measures hold. */
+function size(s: string): number {
+  return Math.max(s.length, utf8(s));
+}
+
+function renderOne(m: PeerMessage, maxOne: number): string {
+  const reason = esc(truncateTo(m.reason.slice(0, 4 * MAX_REASON_READ_BYTES).replace(/[\s\u0085]+/g, " ").trim(), MAX_REASON_READ_BYTES));
   const head = `<peer-message>\nfrom: ${m.from}\nreason: ${reason}\nsent: ${m.accepted_at}\nmessage:\n`;
   const foot = "\n</peer-message>";
   const body = quote(esc(m.message));
-  const room = MAX_ONE_BYTES - utf8(head) - utf8(foot) - utf8(TRUNCATED) - 1;
-  const fitted = utf8(body) > room ? `${truncateTo(body, room)}\n${TRUNCATED}` : body;
+  const room = maxOne - utf8(head) - utf8(foot) - utf8(TRUNCATED) - 1;
+  const fitted = utf8(body) > room ? `${truncateTo(body, Math.max(0, room))}\n${TRUNCATED}` : body;
   return head + fitted + foot;
 }
 
@@ -89,18 +107,20 @@ function renderOne(m: PeerMessage): string {
  * Takes the deliverable pending messages of session `me` and returns the wrapped block, or undefined when there is nothing to
  * deliver (or anything went wrong). Messages are removed from the mailbox only when delivered (or expired); not-allowed senders' mail stays queued.
  */
-export function deliverPending(me: unknown, opts: PeersOptions = {}): string | undefined {
+export function deliverPending(me: unknown, opts: PeersOptions = {}, budget: number = HOOK_CONTEXT_BUDGET_CHARS): string | undefined {
   try {
     if (!isValidSessionId(me)) return undefined;
+    if (budget < MIN_BLOCK_BYTES) return undefined; // not enough room: defer the whole batch, take nothing
+    const maxOne = budget - ENVELOPE_BYTES - 1;
     let used = ENVELOPE_BYTES;
     const rendered = new Map<number, string>();
     const taken = takeSelect(
       me,
       (m) => {
         if (!isAllowed(me, m.from, opts)) return "skip";
-        const r = renderOne(m);
-        const need = utf8(r) + 1;
-        if (used + need > MAX_INJECT_BYTES) return "stop";
+        const r = renderOne(m, maxOne);
+        const need = size(r) + 1;
+        if (used + need > budget) return "stop";
         used += need;
         rendered.set(m.seq, r);
         return "take";
@@ -123,11 +143,12 @@ export function mergePeerDelivery(event: "SessionStart" | "UserPromptSubmit", in
   try {
     const sid = input !== null && typeof input === "object" ? (input as { session_id?: unknown }).session_id : undefined;
     if (!hasPendingMail(sid, opts)) return out;
-    const block = deliverPending(sid, opts);
-    if (block === undefined) return out;
     const hso = (out?.hookSpecificOutput ?? {}) as Record<string, unknown>;
     const prev = typeof hso.additionalContext === "string" && hso.additionalContext !== "" ? hso.additionalContext : undefined;
-    return { ...out, hookSpecificOutput: { ...hso, hookEventName: event, additionalContext: prev === undefined ? block : `${prev}\n\n${block}` } };
+    const room = HOOK_CONTEXT_BUDGET_CHARS - (prev === undefined ? 0 : size(prev) + SEPARATOR.length);
+    const block = deliverPending(sid, opts, room); // takes nothing when room < MIN_BLOCK_BYTES
+    if (block === undefined) return out;
+    return { ...out, hookSpecificOutput: { ...hso, hookEventName: event, additionalContext: prev === undefined ? block : `${prev}${SEPARATOR}${block}` } };
   } catch {
     return out;
   }

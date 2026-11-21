@@ -7,7 +7,7 @@ import { runHook } from "./run.js";
 import { runHookLazy } from "./lazy.js";
 import { allow, isAllowed, revoke } from "../lib/peer-grants.js";
 import { count, send } from "../lib/peers.js";
-import { PEER_PREAMBLE } from "../lib/peers-delivery.js";
+import { HOOK_CONTEXT_BUDGET_CHARS, PEER_PREAMBLE } from "../lib/peers-delivery.js";
 
 const R = "rrrrrrrr-1111-4111-8111-rrrrrrrrrrrr";
 const S = "ssssssss-2222-4222-8222-ssssssssssss";
@@ -175,5 +175,35 @@ test("a corrupt or symlinked mailbox never fails the hook", async () => {
   } finally {
     rmSync(dir, { recursive: true, force: true });
     rmSync(other, { recursive: true, force: true });
+  }
+});
+
+test("the whole hook additionalContext (grant confirmation + anchor + peers block) stays within the budget; what does not fit is delivered on the next prompt, nothing is lost", () => {
+  const dir = tmp();
+  try {
+    allow(R, T, { dataDir: dir });
+    for (const m of ["A", "B", "C"]) put(dir, T, `${m}-` + "w".repeat(8000));
+    put(dir, S, "queued by S");
+    const seen: string[] = [];
+    const first = ups(dir, `/odd-claude:peers allow ${S}`);
+    seen.push(ctx(first));
+    assert.match(ctx(first), /Peer grant recorded/);
+    for (let i = 0; i < 6 && count(R, { dataDir: dir }) > 0; i++) seen.push(ctx(ups(dir, "Por favor revisa el estado del repositorio ahora mismo")));
+    for (const c of seen) {
+      assert.ok(c.length <= HOOK_CONTEXT_BUDGET_CHARS, String(c.length));
+      assert.ok(Buffer.byteLength(c, "utf8") <= HOOK_CONTEXT_BUDGET_CHARS);
+      if (c.includes("<peer-messages")) assert.ok(c.endsWith("</peer-messages>"));
+    }
+    const all = seen.join("\n");
+    for (const m of ["A-", "B-", "C-", "queued by S"]) assert.ok(all.includes(m), m);
+    assert.equal(count(R, { dataDir: dir }), 0);
+    // SessionStart (compact) with the session context obeys the same budget
+    allow(R, S, { dataDir: dir });
+    put(dir, S, "s-" + "v".repeat(8000));
+    const c = ctx(start(dir, "compact"));
+    assert.ok(Buffer.byteLength(c, "utf8") <= HOOK_CONTEXT_BUDGET_CHARS, String(c.length));
+    assert.ok(c.includes("odd-claude"));
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
   }
 });
