@@ -11,6 +11,7 @@ import {
   TTL_MS,
   count,
   peek,
+  removeMailboxIfEmpty,
   send,
   sessionIds,
   take,
@@ -427,6 +428,75 @@ test("concurrency: sends racing a take lose nothing and duplicate nothing", asyn
     const all = [...taken, ...rest];
     assert.equal(new Set(all).size, all.length);
     assert.deepEqual(all.sort(), ["r0", "r1", "r2", "r3", "r4", "r5", "r6", "r7", "seed"]);
+  } finally {
+    t.done();
+  }
+});
+
+test("removeMailboxIfEmpty: a mailbox holding only .seq/rate-* bookkeeping is removed; others stay", () => {
+  const t = tmp();
+  try {
+    const o = { dataDir: t.dir, now: () => 1_000_000 };
+    send(B, { from: A, reason: REASON, message: "x" }, o);
+    send(C, { from: A, reason: REASON, message: "y" }, o);
+    take(B, o);
+    assert.deepEqual(readdirSync(join(t.dir, "peers", B)).sort(), [".seq", `rate-${A}.json`]);
+    assert.equal(removeMailboxIfEmpty(B, o), true);
+    assert.equal(existsSync(join(t.dir, "peers", B)), false);
+    assert.equal(existsSync(join(t.dir, "peers", C)), true);
+    assert.equal(removeMailboxIfEmpty(B, o), false, "already absent");
+    assert.equal(removeMailboxIfEmpty("not a valid id", o), false);
+  } finally {
+    t.done();
+  }
+});
+
+test("removeMailboxIfEmpty: a pending message keeps the directory and its files", () => {
+  const t = tmp();
+  try {
+    const o = { dataDir: t.dir, now: () => 1_000_000 };
+    send(B, { from: A, reason: REASON, message: "x" }, o);
+    const before = readdirSync(join(t.dir, "peers", B)).sort();
+    assert.equal(removeMailboxIfEmpty(B, o), false);
+    assert.deepEqual(readdirSync(join(t.dir, "peers", B)).sort(), before);
+    assert.equal(peek(B, o).length, 1);
+  } finally {
+    t.done();
+  }
+});
+
+test("removeMailboxIfEmpty: a foreign file or subdirectory keeps the directory and the bookkeeping", () => {
+  const t = tmp();
+  try {
+    const o = { dataDir: t.dir, now: () => 1_000_000 };
+    send(B, { from: A, reason: REASON, message: "x" }, o);
+    take(B, o);
+    const dir = join(t.dir, "peers", B);
+    writeFileSync(join(dir, "notes.txt"), "mine");
+    assert.equal(removeMailboxIfEmpty(B, o), false);
+    assert.deepEqual(readdirSync(dir).sort(), [".seq", "notes.txt", `rate-${A}.json`]);
+    rmSync(join(dir, "notes.txt"));
+    mkdirSync(join(dir, "sub"));
+    assert.equal(removeMailboxIfEmpty(B, o), false);
+    assert.ok(existsSync(join(dir, "sub")));
+    assert.ok(existsSync(join(dir, ".seq")));
+  } finally {
+    t.done();
+  }
+});
+
+test("removeMailboxIfEmpty: a symlinked mailbox directory is never touched", () => {
+  const t = tmp();
+  try {
+    const o = { dataDir: t.dir, now: () => 1_000_000 };
+    mkdirSync(join(t.dir, "peers"), { recursive: true });
+    const target = join(t.dir, "elsewhere");
+    mkdirSync(target);
+    writeFileSync(join(target, ".seq"), "3\n");
+    symlinkSync(target, join(t.dir, "peers", B));
+    assert.equal(removeMailboxIfEmpty(B, o), false);
+    assert.deepEqual(readdirSync(target), [".seq"]);
+    assert.ok(existsSync(join(t.dir, "peers", B)));
   } finally {
     t.done();
   }

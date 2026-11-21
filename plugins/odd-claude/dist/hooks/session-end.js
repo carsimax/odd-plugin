@@ -1,6 +1,6 @@
 import { recordAgentStatus } from "../lib/agent-status.js";
 import { revokeAll } from "../lib/peer-grants.js";
-import { isValidSessionId } from "../lib/peers.js";
+import { isValidSessionId, removeMailboxIfEmpty } from "../lib/peers.js";
 import { forgetCurrentSession } from "../lib/peers-session.js";
 import { removeSessionScratch } from "../lib/scratch.js";
 import { logError } from "../lib/state.js";
@@ -34,6 +34,13 @@ export function sessionEnd(input, opts = {}) {
             }
             catch (err) {
                 logError(`SessionEnd peers current: ${err instanceof Error ? err.message : String(err)}`, opts);
+            }
+            // An ended session leaves only .seq / rate-* behind: drop the mailbox dir unless it holds messages.
+            try {
+                removeMailboxIfEmpty(id, { ...opts, lockWaitMs: 1000 });
+            }
+            catch (err) {
+                logError(`SessionEnd peers mailbox: ${err instanceof Error ? err.message : String(err)}`, opts);
             }
         }
         recordAgentStatus(input, "ended", opts);

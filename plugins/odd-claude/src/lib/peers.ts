@@ -14,7 +14,7 @@
 // - Safety: ids must be UUID-like; the peers dir and every mailbox dir must be real directories (symlinks are
 //   refused); message files must be regular files (never followed through symlinks) and are read size-capped.
 // - Never logs message contents; nothing here writes to hooks.log.
-import { closeSync, constants, fstatSync, lstatSync, mkdirSync, openSync, readdirSync, readFileSync, rmSync } from "node:fs";
+import { closeSync, constants, fstatSync, lstatSync, mkdirSync, openSync, readdirSync, readFileSync, rmdirSync, rmSync, unlinkSync } from "node:fs";
 import { join } from "node:path";
 import { acquireLock, releaseOwnedLock } from "./lock.js";
 import { atomicWriteFile, resolveDataDir, type StateOptions } from "./state.js";
@@ -395,5 +395,49 @@ export function sessionIds(opts: PeersOptions = {}): string[] {
       .sort();
   } catch {
     return [];
+  }
+}
+
+/**
+ * Removes `recipient`'s mailbox directory when it holds no message files, only the `.seq` / `rate-*.json` bookkeeping
+ * (what an ended session leaves behind). Under the mailbox lock; a symlinked or non-directory path is never touched;
+ * never recursive: only those known bookkeeping files are unlinked, then a plain rmdir (a foreign file, a subdirectory
+ * or a race with a new message leaves the directory). Pending messages keep it (they expire by TTL).
+ * Returns true only when the directory was removed.
+ */
+export function removeMailboxIfEmpty(recipient: string, opts: PeersOptions = {}): boolean {
+  if (!isValidSessionId(recipient)) return false;
+  let dir: string | undefined;
+  try {
+    dir = ensureMailbox(recipient, opts, false);
+  } catch {
+    return false; // unsafe path: leave it alone
+  }
+  if (!dir) return false;
+  const mailbox = dir;
+  try {
+    return withLock(recipient, opts, () => {
+      const bookkeeping: string[] = [];
+      for (const name of readdirSync(mailbox)) {
+        if (name === ".seq" || /^rate-[A-Za-z0-9-]+\.json$/.test(name)) bookkeeping.push(name);
+        else return false; // a message file or anything foreign keeps the directory
+      }
+      for (const name of bookkeeping) {
+        const p = join(mailbox, name);
+        try {
+          if (lstatSync(p).isFile()) unlinkSync(p);
+        } catch {
+          // vanished
+        }
+      }
+      try {
+        rmdirSync(mailbox);
+        return true;
+      } catch {
+        return false; // ENOTEMPTY or anything else: leave it
+      }
+    });
+  } catch {
+    return false;
   }
 }

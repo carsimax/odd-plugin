@@ -6,6 +6,7 @@ import { join } from "node:path";
 import { runHook } from "./run.js";
 import { runHookLazy } from "./lazy.js";
 import { isAllowed, listGrants, allow } from "../lib/peer-grants.js";
+import { send, take } from "../lib/peers.js";
 
 const R = "rrrrrrrr-1111-4111-8111-rrrrrrrrrrrr"; // recipient = the session running the hook
 const S = "ssssssss-2222-4222-8222-ssssssssssss";
@@ -189,6 +190,22 @@ test("SessionEnd clears only that session's grants (any reason)", () => {
     }
     // no grants at all / invalid id: still fine
     assert.equal(runHook("SessionEnd", JSON.stringify({ session_id: "../x" }), { dataDir: dir, env: {} }).exitCode, 0);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("SessionEnd removes this session's mailbox dir only when it holds no messages", () => {
+  const dir = tmp();
+  try {
+    send(R, { from: S, reason: "bookkeeping", message: "a" }, { dataDir: dir });
+    take(R, { dataDir: dir });
+    send(T, { from: S, reason: "bookkeeping", message: "b" }, { dataDir: dir });
+    runHook("SessionEnd", JSON.stringify({ session_id: R }), { dataDir: dir, env: {} });
+    assert.equal(existsSync(join(dir, "peers", R)), false, "bookkeeping-only dir removed");
+    runHook("SessionEnd", JSON.stringify({ session_id: T }), { dataDir: dir, env: {} });
+    assert.equal(existsSync(join(dir, "peers", T)), true, "pending message keeps the dir");
+    assert.equal(runHook("SessionEnd", JSON.stringify({ session_id: R }), { dataDir: dir, env: {} }).exitCode, 0);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

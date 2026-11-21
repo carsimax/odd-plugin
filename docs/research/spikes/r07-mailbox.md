@@ -50,3 +50,11 @@ Ejecutado por el padre, con permiso del usuario ("Te doy permiso que ejecutes tu
 ## Conclusión / decisión para P1..P4
 
 El canal buzón en archivos + hooks (pull) funciona de extremo a extremo en `claude -p`: (a) y (c) resueltos, (b) resuelto salvo `/clear`. P1..P4 pueden avanzar con las implicaciones anteriores; la lista "NO probado" queda como riesgo abierto, a verificar en una sesión interactiva antes de declarar la feature estable.
+
+## Follow-up observations (implementación P1-P4, 2026-11-21, `claude` 2.1.330)
+
+- **Límite del `additionalContext` de un hook.** Un `additionalContext` de 16774 bytes (dos mensajes de ~8 KB) NO se inyectó: Claude Code lo guarda en un archivo (`<persisted-output>`) y al modelo le muestra solo una vista previa de ~2 KB, así que el cierre `</peer-messages>` y casi todo el contenido nunca llegaron, y los mensajes ya estaban borrados del buzón. Un solo mensaje de ~8 KB (~8,5 KB de salida del hook) sí llegó completo. El límite parece rondar los 10 000 caracteres para todo el `additionalContext` del hook; el plugin usa un presupuesto de 9000 (`HOOK_CONTEXT_BUDGET_CHARS`).
+- **Resultado e2e 3 x 8 KB.** Con el presupuesto, tres mensajes de ~8 KB se entregaron de uno en uno en prompts sucesivos, íntegros y dentro del sobre no confiable; lo que no cabe se queda en cola para el siguiente prompt.
+- **ppid.** Confirmado con el `claude` real: el ppid del hook (SessionStart) coincide con el ppid del servidor MCP, por lo que la entrada `.current/<pid>.json` escrita por el hook identifica la sesión desde el servidor MCP.
+- **`CLAUDE_CODE_SESSION_ID`.** Claude Code lo exporta al entorno de Bash; no se confía en él para el servidor MCP (el hook, vía ppid, tiene prioridad).
+- **Sigue sin probarse:** `/clear` de punta a punta y una sesión interactiva viva e inactiva recibiendo sin un prompt.
