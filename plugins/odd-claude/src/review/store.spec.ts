@@ -26,6 +26,7 @@ import {
   writeAtomic,
   writeReceipt,
 } from "./store.js";
+import { acquireStoreLock, StoreLockContended } from "./lock.js";
 import { bump, counterOf, patchRename } from "./store-child.testkit.js";
 
 const KIT = fileURLToPath(new URL("./store-child.testkit.js", import.meta.url));
@@ -709,5 +710,234 @@ test("kill -9 at every fs call of create/update/receipt (before and after): old,
     assert.deepEqual(failures, []);
   } finally {
     for (const done of cleanups) done();
+  }
+});
+
+// ---- sweep of abandoned lineage directories (a crash in the middle of START) ----
+
+const HOUR = 3_600_000;
+const OLD = { sweep: { now: () => Date.now() + 2 * HOUR } };
+const L2 = `review-${hex("2", 16)}`;
+const lin = (n: number) => `review-${n.toString(16).padStart(16, "0")}`;
+const rootOf = (commonDir: string) => storeRootFor(commonDir);
+const FAST = { lock: { timeoutMs: 300, pollMs: 5 } };
+
+/** An abandoned lineage directory as a crash leaves it: empty, or holding only `.atomic-*` temps. */
+function abandon(commonDir: string, id: string, temps: string[] = []): string {
+  const dir = join(rootOf(commonDir), id);
+  mkdirSync(dir, { recursive: true, mode: 0o700 });
+  for (const t of temps) writeFileSync(join(dir, t), "x");
+  return dir;
+}
+const TEMP_A = ".atomic-123-0123456789abcdef";
+const TEMP_B = ".atomic-456-fedcba9876543210";
+
+test("sweep: createState removes an old empty dir and an old temp-only dir, then writes the new lineage", async () => {
+  const t = tmp();
+  try {
+    await createState(t.commonDir, mkRecord());
+    const empty = abandon(t.commonDir, lin(1));
+    const tempOnly = abandon(t.commonDir, lin(2), [TEMP_A, TEMP_B]);
+    await createState(t.commonDir, mkRecord(L2, `sha256:${hex("1", 64)}`), OLD);
+    assert.equal(existsSync(empty), false);
+    assert.equal(existsSync(tempOnly), false);
+    assert.deepEqual(listLineages(t.commonDir).lineages, [L2, LINEAGE].sort());
+    assert.equal(readState(t.commonDir, L2).lineage_id, L2);
+  } finally {
+    t.done();
+  }
+});
+
+test("sweep: a young directory and the default age are respected; read-only calls never sweep", async () => {
+  const t = tmp();
+  try {
+    await createState(t.commonDir, mkRecord());
+    const young = abandon(t.commonDir, lin(1), [TEMP_A]);
+    const old = abandon(t.commonDir, lin(2));
+    await createState(t.commonDir, mkRecord(L2, `sha256:${hex("1", 64)}`)); // real clock: nothing is an hour old
+    assert.equal(existsSync(young), true);
+    assert.equal(existsSync(old), true);
+    // a minute short of the default age: still kept
+    const now = Date.now();
+    await createState(t.commonDir, mkRecord(lin(9), `sha256:${hex("9", 64)}`), { sweep: { now: () => now + HOUR - 60_000 } });
+    assert.equal(existsSync(young), true);
+    // read-only APIs leave abandoned directories alone, however old
+    for (const id of [LINEAGE]) readState(t.commonDir, id);
+    listLineages(t.commonDir);
+    assert.equal(existsSync(old), true);
+    await createState(t.commonDir, mkRecord(lin(10), `sha256:${hex("8", 64)}`), OLD);
+    assert.equal(existsSync(young), false);
+    assert.equal(existsSync(old), false);
+  } finally {
+    t.done();
+  }
+});
+
+test("sweep: injectable minAgeMs", async () => {
+  const t = tmp();
+  try {
+    await createState(t.commonDir, mkRecord());
+    const d = abandon(t.commonDir, lin(1));
+    await createState(t.commonDir, mkRecord(L2, `sha256:${hex("1", 64)}`), { sweep: { minAgeMs: 10 * HOUR, now: () => Date.now() + 2 * HOUR } });
+    assert.equal(existsSync(d), true);
+    await createState(t.commonDir, mkRecord(lin(3), `sha256:${hex("3", 64)}`), { sweep: { minAgeMs: 0, now: () => Date.now() + 1 } });
+    assert.equal(existsSync(d), false);
+  } finally {
+    t.done();
+  }
+});
+
+test("sweep: never removes a live lineage (state, receipt), a dir with a LOCK or any other file, nor a young dir or a non-lineage name", async () => {
+  const t = tmp();
+  try {
+    const rec = mkRecord();
+    await createState(t.commonDir, rec);
+    const root = rootOf(t.commonDir);
+    // a receipt alone, a state alone, other files, a lock, a non-lineage name, a directory named like a temp
+    const receiptOnly = abandon(t.commonDir, lin(1), [TEMP_A]);
+    writeFileSync(join(receiptOnly, "review-receipt.json"), "{}");
+    const stateOnly = abandon(t.commonDir, lin(2));
+    writeFileSync(join(stateOnly, "review-state.json"), "{}");
+    const other = abandon(t.commonDir, lin(3), [TEMP_A]);
+    writeFileSync(join(other, "notes.txt"), "x");
+    const locked = abandon(t.commonDir, lin(4));
+    mkdirSync(join(locked, "LOCK"));
+    const lockedFile = abandon(t.commonDir, lin(5));
+    writeFileSync(join(lockedFile, "LOCK.1"), "x");
+    const junk = join(root, "review-NOTHEX0000000000");
+    mkdirSync(junk);
+    const short = join(root, "review-abc");
+    mkdirSync(short);
+    const tempDir = abandon(t.commonDir, lin(6));
+    mkdirSync(join(tempDir, TEMP_A)); // a directory named like a temp is not a temp
+    const keepAll = [receiptOnly, stateOnly, other, locked, lockedFile, junk, short, tempDir];
+    const before = keepAll.map((d) => readdirSync(d).sort());
+    // a dir literally named `.atomic-*` directly under the root
+    const atomicDir = join(root, TEMP_B);
+    mkdirSync(atomicDir);
+    await createState(t.commonDir, mkRecord(L2, `sha256:${hex("1", 64)}`), OLD);
+    keepAll.forEach((d, i) => {
+      assert.equal(existsSync(d), true, `${d} survived`);
+      assert.deepEqual(readdirSync(d).sort(), before[i]);
+    });
+    assert.equal(existsSync(atomicDir), true);
+    assert.deepEqual(bytes(stateFile(t.commonDir)), Buffer.from(`${canonicalJson(rec)}\n`));
+    assert.equal(readState(t.commonDir, LINEAGE).revision, rec.revision);
+  } finally {
+    t.done();
+  }
+});
+
+test("sweep: a symlink named like a lineage is never followed or removed, its target is untouched", async () => {
+  const t = tmp();
+  try {
+    await createState(t.commonDir, mkRecord());
+    const target = join(t.commonDir, "outside");
+    mkdirSync(target);
+    writeFileSync(join(target, TEMP_A), "precious");
+    const link = join(rootOf(t.commonDir), lin(1));
+    symlinkSync(target, link);
+    const empty = join(t.commonDir, "outside-empty");
+    mkdirSync(empty);
+    const link2 = join(rootOf(t.commonDir), lin(2));
+    symlinkSync(empty, link2);
+    await createState(t.commonDir, mkRecord(L2, `sha256:${hex("1", 64)}`), OLD);
+    assert.equal(lstatSync(link).isSymbolicLink(), true);
+    assert.equal(lstatSync(link2).isSymbolicLink(), true);
+    assert.equal(readFileSync(join(target, TEMP_A), "utf8"), "precious");
+    assert.equal(existsSync(empty), true);
+  } finally {
+    t.done();
+  }
+});
+
+test("sweep: a temp with nlink > 1, a symlink or a FIFO keeps its directory and everything in it", async () => {
+  const t = tmp();
+  try {
+    await createState(t.commonDir, mkRecord());
+    const outside = join(t.commonDir, "outside.txt");
+    writeFileSync(outside, "precious");
+    const hard = abandon(t.commonDir, lin(1));
+    linkSync(outside, join(hard, TEMP_A));
+    const sym = abandon(t.commonDir, lin(2), [TEMP_B]);
+    symlinkSync(outside, join(sym, TEMP_A));
+    const fifo = abandon(t.commonDir, lin(3), [TEMP_B]);
+    assert.equal(spawnSync("mkfifo", [join(fifo, TEMP_A)]).status, 0);
+    await createState(t.commonDir, mkRecord(L2, `sha256:${hex("1", 64)}`), OLD);
+    assert.equal(readFileSync(outside, "utf8"), "precious");
+    assert.deepEqual(readdirSync(hard), [TEMP_A]);
+    assert.deepEqual(readdirSync(sym).sort(), [TEMP_A, TEMP_B]);
+    assert.deepEqual(readdirSync(fifo).sort(), [TEMP_A, TEMP_B]);
+    assert.equal(lstatSync(join(sym, TEMP_A)).isSymbolicLink(), true);
+  } finally {
+    t.done();
+  }
+});
+
+test("sweep: at most the cap per call (default 16), the rest on later calls", async () => {
+  const t = tmp();
+  try {
+    await createState(t.commonDir, mkRecord());
+    for (let i = 1; i <= 20; i++) abandon(t.commonDir, lin(i), i % 2 ? [TEMP_A] : []);
+    const left = () => readdirSync(rootOf(t.commonDir)).filter((n) => n.startsWith("review-") && n !== LINEAGE && n !== L2 && n !== lin(0xaaa));
+    await createState(t.commonDir, mkRecord(L2, `sha256:${hex("1", 64)}`), OLD);
+    assert.equal(left().length, 4, "one call removes at most 16 of 20");
+    await createState(t.commonDir, mkRecord(lin(0xaaa), `sha256:${hex("2", 64)}`), { sweep: { ...OLD.sweep, max: 3 } });
+    assert.equal(left().length, 1, "an explicit cap of 3");
+  } finally {
+    t.done();
+  }
+});
+
+test("sweep: with the root lock held by another holder nothing is swept or created", async () => {
+  const t = tmp();
+  try {
+    await createState(t.commonDir, mkRecord());
+    const d = abandon(t.commonDir, lin(1), [TEMP_A]);
+    const handle = await acquireStoreLock(rootOf(t.commonDir));
+    try {
+      await rejects(createState(t.commonDir, mkRecord(L2, `sha256:${hex("1", 64)}`), { ...OLD, ...FAST }), StoreLockContended);
+      assert.deepEqual(readdirSync(d), [TEMP_A]);
+      assert.equal(existsSync(join(rootOf(t.commonDir), L2)), false);
+    } finally {
+      handle.release();
+    }
+    await createState(t.commonDir, mkRecord(L2, `sha256:${hex("1", 64)}`), OLD);
+    assert.equal(existsSync(d), false);
+  } finally {
+    t.done();
+  }
+});
+
+test("sweep: a failure while sweeping never fails createState (a dir that cannot be removed is skipped)", async () => {
+  const t = tmp();
+  try {
+    await createState(t.commonDir, mkRecord());
+    const bad = abandon(t.commonDir, lin(1), [TEMP_A]);
+    const good = abandon(t.commonDir, lin(2));
+    chmodSync(bad, 0o500); // unlink inside fails (EACCES) unless root
+    try {
+      const rec = await createState(t.commonDir, mkRecord(L2, `sha256:${hex("1", 64)}`), OLD);
+      assert.equal(rec.lineage_id, L2);
+    } finally {
+      chmodSync(bad, 0o700);
+    }
+    assert.equal(existsSync(good), false);
+    assert.equal(readState(t.commonDir, L2).lineage_id, L2);
+  } finally {
+    t.done();
+  }
+});
+
+test("sweep: createState of the lineage whose own abandoned dir is old still succeeds", async () => {
+  const t = tmp();
+  try {
+    await createState(t.commonDir, mkRecord());
+    abandon(t.commonDir, L2, [TEMP_A]);
+    await createState(t.commonDir, mkRecord(L2, `sha256:${hex("1", 64)}`), OLD);
+    assert.equal(readState(t.commonDir, L2).lineage_id, L2);
+    assert.deepEqual(noTemps(t.commonDir, L2), []);
+  } finally {
+    t.done();
   }
 });

@@ -21,7 +21,7 @@ if (cd !== "" && arm !== "" && log !== "") {
   type Fn = (...a: unknown[]) => unknown;
   const m = fs as unknown as Record<string, Fn>;
   const o: Record<string, Fn> = {};
-  for (const k of ["openSync", "writeSync", "fsyncSync", "fchmodSync", "closeSync", "renameSync", "mkdirSync", "rmSync", "existsSync", "writeFileSync"]) o[k] = m[k]!;
+  for (const k of ["openSync", "writeSync", "fsyncSync", "fchmodSync", "closeSync", "renameSync", "mkdirSync", "rmSync", "unlinkSync", "rmdirSync", "existsSync", "writeFileSync"]) o[k] = m[k]!;
   const tracked = new Set<number>();
   const labels: string[] = [];
   let n = 0;
@@ -55,5 +55,8 @@ if (cd !== "" && arm !== "" && log !== "") {
   m.mkdirSync = (p, ...a) =>
     interesting(p) && !(a[0] as { recursive?: boolean } | undefined)?.recursive ? ev(`mkdir ${p.slice(cd.length)}`, () => o.mkdirSync!(p, ...a)) : o.mkdirSync!(p, ...a);
   m.rmSync = (p, ...a) => (interesting(p) ? ev(`rm ${p.slice(cd.length)}`, () => o.rmSync!(p, ...a)) : o.rmSync!(p, ...a));
+  // the abandoned-lineage sweep removes files and directories one by one (never rmSync recursive)
+  m.unlinkSync = (p, ...a) => (interesting(p) ? ev(`unlink ${p.slice(cd.length)}`, () => o.unlinkSync!(p, ...a)) : o.unlinkSync!(p, ...a));
+  m.rmdirSync = (p, ...a) => (interesting(p) ? ev(`rmdir ${p.slice(cd.length)}`, () => o.rmdirSync!(p, ...a)) : o.rmdirSync!(p, ...a));
   syncBuiltinESMExports();
 }

@@ -18,13 +18,18 @@
 //   * root and lineage directories are created 0700, files 0600; the three namespace directories and the lineage
 //     directory must be real directories (a symlink there is refused).
 import { randomBytes } from "node:crypto";
-import { closeSync, constants, fchmodSync, fstatSync, fsyncSync, lstatSync, mkdirSync, openSync, opendirSync, readdirSync, readSync, renameSync, rmSync, writeSync } from "node:fs";
+import { closeSync, constants, fchmodSync, fstatSync, fsyncSync, lstatSync, mkdirSync, openSync, opendirSync, readdirSync, readSync, renameSync, rmSync, rmdirSync, unlinkSync, writeSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { canonicalJson } from "./canonical.js";
 import { withStoreLock } from "./lock.js";
 import { stateRevision, validateStateRecord } from "./state.js";
 export const MAX_STATE_BYTES = 1 << 20;
 export const MAX_LINEAGES = 10_000;
+/** An abandoned lineage directory (crash mid-START) is only swept once it, and everything in it, is older than this. */
+export const ABANDONED_MIN_AGE_MS = 3_600_000;
+/** Most abandoned directories one sweep removes, and most lineage directories it examines. */
+export const ABANDONED_SWEEP_MAX = 16;
+const ABANDONED_SWEEP_EXAMINE_MAX = 512;
 const STATE_FILE = "review-state.json";
 const RECEIPT_FILE = "review-receipt.json";
 const LINEAGE_RE = /^review-[0-9a-f]{16}$/;
@@ -311,6 +316,71 @@ function sweepTemps(dir) {
         // best effort
     }
 }
+/**
+ * Removes the directories a crash in the middle of START leaves behind. Runs ONLY from createState, under the store root lock
+ * (every writer holds it, so nothing here can be mid-creation), before the new lineage is made. Never from a read-only call.
+ * A lineage directory goes only when ALL hold: the name is a lineage id; it is a real directory (lstat, never a symlink); it
+ * holds nothing but `.atomic-*` temps (so no state, no receipt, no LOCK, no other file, no subdirectory); every temp is a
+ * regular file with a single link; the directory and every temp are older than `minAgeMs`. Files go with `unlinkSync`, then
+ * `rmdirSync` (never recursive: a surprise entry makes it fail with ENOTEMPTY and the directory stays). Nothing is followed.
+ * At most `max` directories are removed and `ABANDONED_SWEEP_EXAMINE_MAX` examined per call. A failure on one directory is
+ * swallowed and that directory skipped; a sweep never fails START. Upstream has no automatic sweep (only a human-authorized
+ * `review abandon`); this one is deliberately narrower: it can only ever remove a directory that has never held authority.
+ */
+function sweepAbandonedLineages(root, options = {}) {
+    const now = (options.now ?? Date.now)();
+    const minAge = options.minAgeMs ?? ABANDONED_MIN_AGE_MS;
+    const max = options.max ?? ABANDONED_SWEEP_MAX;
+    const old = (mtimeMs) => now - mtimeMs > minAge;
+    let removed = 0;
+    let examined = 0;
+    let dir;
+    try {
+        dir = opendirSync(root);
+        for (let scanned = 0; removed < max && examined < ABANDONED_SWEEP_EXAMINE_MAX && scanned < MAX_LINEAGES; scanned++) {
+            const ent = dir.readSync();
+            if (!ent)
+                break;
+            if (!LINEAGE_RE.test(ent.name))
+                continue;
+            try {
+                const path = join(root, ent.name);
+                const st = lstatSync(path);
+                if (!st.isDirectory() || !old(st.mtimeMs))
+                    continue;
+                examined++;
+                const names = readdirSync(path);
+                if (!names.every((n) => TEMP_RE.test(n)))
+                    continue;
+                const temps = names.map((n) => join(path, n));
+                const ok = temps.every((f) => {
+                    const ts = lstatSync(f);
+                    return ts.isFile() && ts.nlink === 1 && old(ts.mtimeMs);
+                });
+                if (!ok)
+                    continue;
+                for (const f of temps)
+                    unlinkSync(f);
+                rmdirSync(path);
+                removed++;
+            }
+            catch {
+                // skipped: raced, unreadable, not empty... never fatal
+            }
+        }
+    }
+    catch {
+        // best effort
+    }
+    finally {
+        try {
+            dir?.closeSync();
+        }
+        catch {
+            // ignore
+        }
+    }
+}
 function readStateImpl(commonDir, lineage) {
     assertLineage(lineage);
     const dir = lineageDirOrThrow(commonDir, lineage);
@@ -329,6 +399,7 @@ async function createStateImpl(commonDir, record, options = {}) {
     checkRoot(commonDir, true);
     const root = storeRootFor(commonDir);
     return withStoreLock(root, () => {
+        sweepAbandonedLineages(root, options.sweep);
         const dir = join(root, lineage);
         const st = lstatOrNull(dir);
         if (st && !st.isDirectory())

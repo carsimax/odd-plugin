@@ -9,12 +9,13 @@
 // (the real `claude` is never run: a fake first on PATH).
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { existsSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { runHook } from "../hooks/run.js";
 import { isTargetConsumed, validateReceipt } from "../review/ack.js";
 import { setReviewMode } from "../review/mode.js";
-import { readReceipt, readState, StoreNotFoundError } from "../review/store.js";
+import { start } from "../review/state.js";
+import { createState, readReceipt, readState, storeRootFor, StoreNotFoundError } from "../review/store.js";
 import {
   commitHigh, commitLow, commitMedium, consentArgs, copyWorld, errorCode, good, lineageDirs, lit, makeFakeReviewer, makeWorld, McpClient, RANGE, storeFiles, withClient,
   type FakeReviewer, type World,
@@ -39,8 +40,9 @@ interface Call {
   args: Record<string, unknown>;
 }
 
-async function crashAt(template: World, fake: FakeReviewer, call: Call, k: number, phase: "before" | "after"): Promise<Crash> {
+async function crashAt(template: World, fake: FakeReviewer, call: Call, k: number, phase: "before" | "after", prepare?: (w: World) => Promise<void>): Promise<Crash> {
   const w = copyWorld(template);
+  if (prepare) await prepare(w);
   const arm = join(w.dir, "arm");
   const log = join(w.dir, "kill-log.json");
   const c = new McpClient({
@@ -155,6 +157,8 @@ interface Template {
   fake: FakeReviewer;
   call: Call;
   ack?: Ack;
+  /** Runs on every copied world before the server starts (copies lose mtimes, so backdating happens here). */
+  prepare?: (w: World) => Promise<void>;
 }
 
 const cleanups: (() => void)[] = [];
@@ -207,7 +211,7 @@ const POINTS_CAP = 80;
 
 /** Every `before` point 1..n and `after` the last call, run four at a time. */
 async function sweep(t: Template, check: (c: Crash, k: number, phase: string) => Promise<void>): Promise<{ n: number; killed: number; labels: string[] }> {
-  const count = await crashAt(t.w, t.fake, t.call, 0, "before");
+  const count = await crashAt(t.w, t.fake, t.call, 0, "before", t.prepare);
   try {
     assert.equal(count.died, false);
     assert.equal(count.result?.isError, false, JSON.stringify(count.result));
@@ -215,7 +219,7 @@ async function sweep(t: Template, check: (c: Crash, k: number, phase: string) =>
     const points: [number, "before" | "after"][] = [...Array.from({ length: count.n }, (_, i) => [i + 1, "before"] as [number, "before"]), [count.n, "after"]];
     let killed = 0;
     await pool(points, 4, async ([k, phase]) => {
-      const c = await crashAt(t.w, t.fake, t.call, k, phase);
+      const c = await crashAt(t.w, t.fake, t.call, k, phase, t.prepare);
       try {
         assert.equal(c.died, true, `k=${k} ${phase} (${count.labels[k - 1]}): the server was not killed`);
         assert.equal(c.signal, "SIGKILL");
@@ -268,6 +272,64 @@ test("kill -9 mid-START at every fs call: the authority stays readable, the rest
     }
   });
   assert.equal(r.killed, r.n + 1);
+});
+
+// ---- the abandoned-lineage sweep ----
+
+const OLD_AT = new Date(Date.now() - 2 * 3_600_000);
+const SWEEP_ID = (n: number): string => `review-${n.toString(16).padStart(16, "0")}`;
+const SWEEP_TEMP = ".atomic-4242-0123456789abcdef";
+const SWEPT = { empty: [SWEEP_ID(1), SWEEP_ID(2)], temps: [SWEEP_ID(3), SWEEP_ID(4)] };
+const LIVE = SWEEP_ID(0xfeed);
+
+/** A live lineage plus four old abandoned directories (two empty, two with a temp), everything backdated two hours. */
+async function plantAbandoned(w: World): Promise<void> {
+  const out = start({
+    lineageId: LIVE, targetIdentity: `sha256:${"7".repeat(64)}`, projection: "workspace", baseTree: "b".repeat(40), candidateTree: "c".repeat(40),
+    riskLevel: "medium", selectedLenses: ["reliability"], originalChangedLines: 8, now: "2026-11-19T10:00:00.000Z",
+  });
+  assert.equal(out.ok, true);
+  await createState(w.commonDir, (out as { ok: true; record: Parameters<typeof createState>[1] }).record);
+  const root = storeRootFor(w.commonDir);
+  for (const id of [...SWEPT.empty, ...SWEPT.temps]) mkdirSync(join(root, id), { mode: 0o700 });
+  for (const id of SWEPT.temps) writeFileSync(join(root, id, SWEEP_TEMP), "x");
+  for (const id of [...SWEPT.empty, ...SWEPT.temps, LIVE]) {
+    for (const f of readdirSync(join(root, id))) utimesSync(join(root, id, f), OLD_AT, OLD_AT);
+    utimesSync(join(root, id), OLD_AT, OLD_AT);
+  }
+}
+
+test("kill -9 mid-sweep at every fs call of START: no live lineage is lost, abandoned dirs are only ever removed whole or left as they were, the restart completes", { timeout: 140_000 }, async () => {
+  const t = await startTemplate();
+  t.prepare = plantAbandoned;
+  const liveBytes = new Map<string, string>();
+  const r = await sweep(t, async (c, k, why) => {
+    const root = join(c.w.commonDir, "odd-plugin", "review-transactions", "v2");
+    const before = assertAuthority(c.w, why);
+    assert.ok(before.lineages.includes(LIVE), `${why}: the live lineage is gone`);
+    const live = readFileSync(join(root, LIVE, "review-state.json"), "utf8");
+    liveBytes.set(live, why);
+    assert.equal(liveBytes.size, 1, `${why}: the live state changed`);
+    for (const id of SWEPT.empty) assert.deepEqual(existsSync(join(root, id)) ? readdirSync(join(root, id)) : [], [], `${why}: ${id}`);
+    for (const id of SWEPT.temps) {
+      const files = existsSync(join(root, id)) ? readdirSync(join(root, id)) : [];
+      assert.ok(files.every((f) => f === SWEEP_TEMP), `${why}: ${id} holds ${files}`);
+    }
+    await withClient({ fake: t.fake, world: c.w }, async (cl) => {
+      const again = good(await cl.call(t.call.tool, { ...t.call.args, cwd: c.w.repo }));
+      assert.ok(["created", "replayed"].includes(again.action), `${why}: ${again.action}`);
+      assert.equal(again.state, "reviewing");
+    });
+    const after = assertAuthority(c.w, `${why} (restarted)`);
+    assert.equal(after.lineages.length, 2, `${why}: the live lineage and exactly one new one`);
+    assert.ok(after.lineages.includes(LIVE));
+    assert.equal(readFileSync(join(root, LIVE, "review-state.json"), "utf8"), live, `${why}: the live state is untouched by the restart`);
+    // the restart may only REPLAY the lineage the crashed START already made (no createState, so no sweep): leftovers are as before
+    for (const id of SWEPT.empty) assert.deepEqual(existsSync(join(root, id)) ? readdirSync(join(root, id)) : [], [], `${why}: ${id} after the restart`);
+    for (const id of SWEPT.temps) assert.ok((existsSync(join(root, id)) ? readdirSync(join(root, id)) : []).every((f) => f === SWEEP_TEMP), `${why}: ${id} after the restart`);
+  });
+  assert.equal(r.killed, r.n + 1);
+  assert.ok(r.labels.some((l) => l.startsWith("unlink ")) && r.labels.some((l) => l.startsWith("rmdir ")), `the sweep's unlink/rmdir were crashed: ${r.labels}`);
 });
 
 test("kill -9 mid-capture at every fs call: no burn, no receipt, the restart reaches approval (or an explicit lost-token stop) and never consumes twice", { timeout: 140_000 }, async () => {
