@@ -35,7 +35,10 @@ export interface Row { label: string; event: string; node_ms: number; total_ms: 
 
 function arg(name: string): string | undefined {
   const i = process.argv.indexOf(name);
-  return i >= 0 ? process.argv[i + 1] : undefined;
+  if (i < 0) return undefined;
+  const v = process.argv[i + 1];
+  if (v === undefined || v.startsWith("--")) { process.stderr.write(`${name} needs a value\n`); process.exit(2); }
+  return v;
 }
 
 export function measure(runs: number, runJs: string, driverJs: string): Row[] {
@@ -89,12 +92,13 @@ export function renderTable(rows: readonly Row[]): string {
 }
 
 function main(): void {
-  const runs = Number(arg("--runs") ?? "15");
+  // Read every flag first so a missing value fails before any measuring starts.
+  const runsArg = arg("--runs"), runJsArg = arg("--run-js"), out = arg("--out");
+  const runs = Number(runsArg ?? "15");
   if (!Number.isInteger(runs) || runs < 1 || runs > 200) { process.stderr.write("--runs must be an integer in 1..200\n"); process.exit(2); }
   const here = dirname(fileURLToPath(import.meta.url));
-  const runJs = resolve(arg("--run-js") ?? resolve(here, "../../plugins/odd-claude/dist/hooks/run.js"));
+  const runJs = resolve(runJsArg ?? resolve(here, "../../plugins/odd-claude/dist/hooks/run.js"));
   const rows = measure(runs, runJs, join(here, "hookphase.js"));
-  const out = arg("--out");
   if (out !== undefined) writeFileSync(out, JSON.stringify({ schema: "odd-claude.bench-hooks/v1", node: process.version, platform: `${process.platform} ${process.arch}`, runs, rows }, null, 2) + "\n");
   process.stdout.write(`median of ${runs} fresh processes, ms (${process.version}, ${process.platform} ${process.arch})\n\n${renderTable(rows)}\n`);
 }

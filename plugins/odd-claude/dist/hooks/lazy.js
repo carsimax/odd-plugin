@@ -16,7 +16,12 @@ export const lazyHandlers = {
     SubagentStart: async (i, o) => (await import("./subagents.js")).subagentStart(i, o),
     SubagentStop: async (i, o) => (await import("./subagents.js")).subagentStop(i, o),
     SessionEnd: async (i, o) => (await import("./session-end.js")).sessionEnd(i, o),
+    // PreToolUse is registered only for the Bash matcher (hooks.json) and `preToolUse` acts only on the Bash delivery gate (it returns
+    // undefined for any other tool), so skipping it while the global RDD switch is not on drops nothing. Pinned by lazy.spec.ts.
     PreToolUse: async (i, o) => {
+        // A non-object input is not a hook payload: let the full handler run so it fails (and logs) exactly as `runHook` does.
+        if (i === null || typeof i !== "object")
+            return (await import("./pre-tool-use.js")).preToolUse(i, o);
         try {
             const { isGlobalModeOn } = await import("../review/mode.js");
             if (!isGlobalModeOn(o))

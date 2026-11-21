@@ -1,11 +1,32 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { defaultHandlers, runHook } from "./run.js";
 import { lazyHandlers, runHookLazy } from "./lazy.js";
 import { setReviewMode } from "../review/mode.js";
+import { preToolUse } from "./pre-tool-use.js";
+
+const GIT_ENV = (() => {
+  const env: NodeJS.ProcessEnv = {};
+  for (const [k, v] of Object.entries(process.env)) if (v !== undefined && !k.toUpperCase().startsWith("GIT_")) env[k] = v;
+  env.GIT_CONFIG_NOSYSTEM = "1";
+  return env;
+})();
+
+function git(cwd: string, ...args: string[]): string {
+  const r = spawnSync("git", ["-c", "user.name=t", "-c", "user.email=t@t.invalid", "-c", "commit.gpgsign=false", "-C", cwd, ...args], { env: GIT_ENV, encoding: "utf8" });
+  if (r.status !== 0) throw new Error(`git ${args.join(" ")} failed: ${r.stderr}`);
+  return r.stdout;
+}
+
+/** The hook log with timestamps removed. */
+const logLines = (dataDir: string): string[] => {
+  const f = join(dataDir, "logs", "hooks.log");
+  return existsSync(f) ? readFileSync(f, "utf8").split("\n").filter((l) => l !== "").map((l) => l.replace(/^\S+ /, "")) : [];
+};
 
 const cwd = tmpdir();
 const base = { session_id: "s1", cwd };
@@ -59,6 +80,76 @@ test("runHookLazy fails safe: unknown event, empty stdin and invalid JSON are si
     assert.deepEqual(await runHookLazy("PreToolUse", "", { dataDir: dir }), { exitCode: 0, stdout: "" });
     assert.deepEqual(await runHookLazy("PreToolUse", "not json", { dataDir: dir }), { exitCode: 0, stdout: "" });
     assert.deepEqual(await runHookLazy("SessionStart", "{oops", { dataDir: dir }), { exitCode: 0, stdout: "" });
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("runHookLazy keeps a real deny and a real Stop block (global RDD on, high-risk committed range)", async () => {
+  const dir = realpathSync(mkdtempSync(join(tmpdir(), "odd-lazy-rdd-")));
+  try {
+    const repo = join(dir, "repo");
+    mkdirSync(repo);
+    git(repo, "init", "-q", "-b", "main");
+    writeFileSync(join(repo, "package.json"), '{"name":"x"}\n');
+    git(repo, "add", "-A");
+    git(repo, "commit", "-q", "-m", "init");
+    // origin is a bare clone (no push): origin/main comes from a fetch, origin/HEAD from set-head.
+    const origin = join(dir, "origin.git");
+    git(dir, "clone", "-q", "--bare", repo, origin);
+    git(repo, "remote", "add", "origin", origin);
+    git(repo, "fetch", "-q", "origin");
+    git(repo, "remote", "set-head", "origin", "main");
+    git(repo, "checkout", "-q", "-b", "feat");
+    writeFileSync(join(repo, "package.json"), '{"name":"x","dependencies":{"left-pad":"1.0.0"}}\n');
+    git(repo, "commit", "-q", "-am", "deps");
+
+    const a = join(dir, "data-a"), b = join(dir, "data-b");
+    for (const d of [a, b]) setReviewMode("enable", "global", repo, { dataDir: d });
+    const env = { CLAUDE_PLUGIN_ROOT: "/r/odd" };
+    const delivery = ["git", "push", "origin", "feat"].join(" ");
+    const cases: [string, object, string][] = [
+      ["PreToolUse", { session_id: "s1", cwd: repo, tool_name: "Bash", tool_input: { command: delivery } }, "deny"],
+      ["Stop", { session_id: "s1", cwd: repo, stop_hook_active: false }, "block"],
+    ];
+    for (const [event, input, word] of cases) {
+      const eager = runHook(event, JSON.stringify(input), { dataDir: a, env });
+      const lazy = await runHookLazy(event, JSON.stringify(input), { dataDir: b, env });
+      assert.ok(eager.stdout.includes(word), `${event}: the eager path must ${word}: ${eager.stdout}`);
+      assert.deepEqual({ ...lazy, stdout: lazy.stdout.replaceAll(b, "<data>") }, { ...eager, stdout: eager.stdout.replaceAll(a, "<data>") }, event);
+    }
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("runHookLazy logs the same handler error as runHook for a non-object stdin with RDD off (PreToolUse, Stop)", async () => {
+  for (const event of ["PreToolUse", "Stop"]) {
+    for (const stdin of ["null", "5", '"x"', "[]"]) {
+      const a = mkdtempSync(join(tmpdir(), "odd-lazy-a-"));
+      const b = mkdtempSync(join(tmpdir(), "odd-lazy-b-"));
+      try {
+        const eager = runHook(event, stdin, { dataDir: a });
+        const lazy = await runHookLazy(event, stdin, { dataDir: b });
+        assert.deepEqual(lazy, eager, `${event} ${stdin}`);
+        assert.deepEqual(logLines(b), logLines(a), `${event} ${stdin} log`);
+        if (stdin === "null" && event === "PreToolUse") assert.equal(logLines(b).length, 1, "the handler error is logged");
+      } finally {
+        rmSync(a, { recursive: true, force: true });
+        rmSync(b, { recursive: true, force: true });
+      }
+    }
+  }
+});
+
+test("PreToolUse only handles the Bash delivery gate, so skipping it with RDD off drops nothing", () => {
+  const raw = JSON.parse(readFileSync(new URL("../../hooks/hooks.json", import.meta.url), "utf8")) as { hooks: Record<string, { matcher?: string }[]> };
+  assert.deepEqual(raw.hooks.PreToolUse!.map((e) => e.matcher), ["Bash"]);
+  const dir = mkdtempSync(join(tmpdir(), "odd-lazy-"));
+  try {
+    for (const tool_name of ["Read", "Write", "Edit", "Agent", "mcp__x__y", "bash", ""]) {
+      assert.equal(preToolUse({ session_id: "s1", cwd, tool_name, tool_input: { command: ["git", "push", "origin", "main"].join(" ") } }, { dataDir: dir }), undefined, tool_name);
+    }
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
