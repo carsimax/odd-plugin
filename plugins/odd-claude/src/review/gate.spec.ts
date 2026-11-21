@@ -1597,3 +1597,29 @@ test("T6 fast path: with the global switch ON the clone override is still read a
     f.cleanup();
   }
 });
+
+test("T6 fast path: a non-delivery command keeps the no_delivery label whatever the global switch holds", () => {
+  const NO_DELIVERY = ["git status", "ls -la", "echo git push", "git commit -m x"];
+  for (const state of ["unset", "off", "corrupt", "unreadable"] as const) {
+    const f = fx();
+    try {
+      commitHigh(f);
+      setGlobal(f, state);
+      for (const command of NO_DELIVERY) {
+        assert.deepEqual(checkDelivery({ cwd: f.repo, command }, { dataDir: f.data }), { allowed: true, reason: "no_delivery" }, `${state}: ${command}`);
+      }
+    } finally {
+      f.cleanup();
+    }
+  }
+  // control: a real delivery with the global switch unset takes the fast path and says rdd_off
+  const f = fx();
+  try {
+    commitHigh(f);
+    setGlobal(f, "unset");
+    const delivery = ["git", "push"].join(" ");
+    assert.deepEqual(checkDelivery({ cwd: f.repo, command: delivery }, { dataDir: f.data }), { allowed: true, reason: "rdd_off" });
+  } finally {
+    f.cleanup();
+  }
+});
