@@ -1,0 +1,7 @@
+{
+  "name": "odd-r07-spike",
+  "version": "0.0.1",
+  "description": "Throwaway R07 spike: file mailbox delivered by SessionStart/UserPromptSubmit hooks. Dev only, never shipped.",
+  "author": { "name": "carsimax" },
+  "license": "MIT"
+}

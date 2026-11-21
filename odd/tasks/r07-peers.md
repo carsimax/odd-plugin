@@ -37,7 +37,7 @@ Runner: `node:test` via `npm test` inside `plugins/odd-claude` + `npm run check`
 
 Route `writer` unless noted; commit pending for all.
 
-- P0 | S3 | spike (user-assisted) | commit pending (ready) — Spike: two real Claude Code sessions on this machine; session A writes a mailbox file for B via a throwaway script; B's next prompt receives it through a UserPromptSubmit hook `additionalContext`; record findings (session_id in hook input, latency, ordering, concurrency) in `docs/research/spikes/r07-mailbox.md`. Needs the user to drive two interactive sessions.
+- P0 | S3,S4 | spike (user-assisted) | tooling ready (waiting: user runs the spike) — Spike: two real Claude Code sessions on this machine; session A writes a mailbox file for B via a throwaway script; B's next prompt receives it through a UserPromptSubmit hook `additionalContext`; record findings (session_id in hook input, latency, ordering, concurrency) in `docs/research/spikes/r07-mailbox.md`. Needs the user to drive two interactive sessions.
 - P1 | S3,S4 | writer | commit pending (blocked by P0) — Mailbox store (`lib/peers.ts`): send/receive/ack, TTL, cap, rate limit, atomic writes under a lock, path confinement; tests including concurrency.
 - P2 | S3,S4 | writer | commit pending (blocked by P0) — Consent: `/odd-claude:peers allow|revoke|list` command + grant store; closed by default; the model cannot grant; tests.
 - P3 | S3,S4 | writer | commit pending (blocked by P1,P2) — MCP tools `odd_orchestrator_session_id`, `odd_orchestrator_list`, `odd_orchestrator_send_message` (send refuses without the recipient's grant).
@@ -50,3 +50,4 @@ Route `writer` unless noted; commit pending for all.
 - L2: earlier decisions (S2): "¿Los orquestadores pares (R07) entran en esta v2?" → "Después del RDD, con $.store"; roadmap Q5 "Inter-session messaging → v2".
 - L3: user decisions 2026-11-21 (S3): "Buzón en archivos + hooks (recomendado)" (supersedes "$.store"); "allow manual por sesión (recomendado)"; "Núcleo de 3 (recomendado)"; "Pull en el siguiente prompt + spike primero (recomendado)".
 - L4: Parent: P0 spike first; implementation waits for its findings.
+- L5: P0 tooling built (S3, S4; unknown (a)-(c) still open): `spikes/r07-mailbox/` (throwaway plugin `odd-r07-spike`, `send.mjs`, README in Spanish, `node --test` suite 6/6 passing, `claude plugin validate` passed) and findings template `docs/research/spikes/r07-mailbox.md`. Waiting for the user to run the two-session spike.
