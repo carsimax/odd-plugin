@@ -8,6 +8,7 @@ import { fileURLToPath } from "node:url";
 import { canonicalJson } from "./canonical.js";
 import { burn, admitLensResult, approve, start, stateRevision, type StateRecord } from "./state.js";
 import {
+  MAX_LINEAGES,
   MAX_STATE_BYTES,
   StoreAlreadyExistsError,
   StoreConcurrentUpdateError,
@@ -994,6 +995,67 @@ test("sweep: old live lineages beyond the examine cap do not starve abandoned di
     }
     assert.equal(remaining(), 0, `all swept in ${calls} calls`);
     for (let i = 1; i <= 2000; i += 199) assert.ok(existsSync(join(root, lin(i), "review-state.json")), "live lineages untouched");
+  } finally {
+    t.done();
+  }
+});
+
+test("sweep: a review-state.json of any type (symlink, dangling symlink, dir, FIFO) keeps its dir and never touches a target (S4)", async () => {
+  const t = tmp();
+  try {
+    await createState(t.commonDir, mkRecord());
+    const outside = join(t.commonDir, "outside-dir");
+    mkdirSync(outside);
+    const secret = join(outside, "secret.txt");
+    writeFileSync(secret, "precious");
+    const kinds = [
+      (f: string) => symlinkSync(outside, f),
+      (f: string) => symlinkSync(join(outside, "missing"), f),
+      (f: string) => mkdirSync(f),
+      (f: string) => assert.equal(spawnSync("mkfifo", [f]).status, 0),
+    ];
+    const dirs = kinds.map((make, i) => {
+      const d = abandon(t.commonDir, lin(i + 1), [TEMP_A]);
+      make(join(d, "review-state.json"));
+      return d;
+    });
+    const control = abandon(t.commonDir, lin(9), [TEMP_A]);
+    await createState(t.commonDir, mkRecord(L2, `sha256:${hex("1", 64)}`), OLD);
+    for (const d of dirs) assert.deepEqual(readdirSync(d).sort(), [TEMP_A, "review-state.json"]);
+    assert.equal(readFileSync(secret, "utf8"), "precious");
+    assert.deepEqual(readdirSync(outside), ["secret.txt"]);
+    assert.equal(existsSync(control), false, "the plain abandoned control was swept");
+  } finally {
+    t.done();
+  }
+});
+
+test("sweep: scans at most MAX_LINEAGES entries per call (abandoned dirs past that are not reached) (S4)", { timeout: 120_000 }, async () => {
+  const t = tmp();
+  try {
+    await createState(t.commonDir, mkRecord());
+    const root = rootOf(t.commonDir);
+    const started = Date.now();
+    for (let i = 1; i <= MAX_LINEAGES; i++) {
+      const d = join(root, lin(i));
+      mkdirSync(d, { mode: 0o700 });
+      writeFileSync(join(d, "review-state.json"), "{}");
+    }
+    const abandoned = Array.from({ length: 512 }, (_, i) => lin(0x100000 + i));
+    for (const n of abandoned) abandon(t.commonDir, n, [TEMP_A]);
+    // the sweep walks the directory in readdir order: predict which abandoned dirs sit past the first MAX_LINEAGES entries
+    // (readdirSync sorts; opendir, which the sweep uses, does not)
+    const order: string[] = [];
+    const od = fs.opendirSync(root);
+    for (let e = od.readSync(); e; e = od.readSync()) order.push(e.name);
+    od.closeSync();
+    const tail = abandoned.filter((n) => order.indexOf(n) >= MAX_LINEAGES + 2); // margin: the LOCK entry shifts positions
+    const head = abandoned.filter((n) => order.indexOf(n) < MAX_LINEAGES - 2);
+    assert.ok(tail.length > 0, "setup: some abandoned dirs sit past the scan bound");
+    assert.ok(Date.now() - started < 10_000, "setup took under 10 s");
+    await createState(t.commonDir, mkRecord(L2, `sha256:${hex("1", 64)}`), { sweep: { ...OLD.sweep, max: 1000 } });
+    for (const n of tail) assert.ok(existsSync(join(root, n)), `${n} past the bound is not reached`);
+    for (const n of head) assert.ok(!existsSync(join(root, n)), `${n} within the bound is swept`);
   } finally {
     t.done();
   }

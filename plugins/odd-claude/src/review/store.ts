@@ -308,8 +308,9 @@ function sweepTemps(dir: string): void {
  * of any type: it can never be abandoned) is skipped WITHOUT counting against the examine cap, so live lineages, however
  * many, never consume it. Rejected: a persisted rotating cursor file under the root (guarantees progress even behind junk
  * dirs, but the conformance crash tests pin the root to lineage dirs + LOCK, and a new file there is a new crash surface).
- * Worst-case cost per call: at most `MAX_LINEAGES` entries visited, two lstat each, plus 512 directory reads and 16
- * removals. Residual: 512 or more old non-live, non-removable directories (a LOCK, a stray file, a hardlinked temp: none
+ * Worst-case cost per call: at most `MAX_LINEAGES` entries visited, two lstat each, plus at most 512 directory reads (each
+ * listing the whole directory) with one lstat per entry of each examined directory (a directory full of temps is not bounded
+ * by count; only by what a crash can leave) and 16 removals. Residual: 512 or more old non-live, non-removable directories (a LOCK, a stray file, a hardlinked temp: none
  * of which START or a crash creates) ahead of an abandoned one still hold it back until they are cleaned up by hand, and
  * so does any abandoned directory beyond the first `MAX_LINEAGES` entries. A failure on one directory is
  * swallowed and that directory skipped; a sweep never fails START. Upstream has no automatic sweep (only a human-authorized
