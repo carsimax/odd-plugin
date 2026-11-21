@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { spawn, spawnSync } from "node:child_process";
-import fs, { chmodSync, existsSync, linkSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync, truncateSync, writeFileSync } from "node:fs";
+import fs, { chmodSync, existsSync, linkSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync, truncateSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -937,6 +937,63 @@ test("sweep: createState of the lineage whose own abandoned dir is old still suc
     await createState(t.commonDir, mkRecord(L2, `sha256:${hex("1", 64)}`), OLD);
     assert.equal(readState(t.commonDir, L2).lineage_id, L2);
     assert.deepEqual(noTemps(t.commonDir, L2), []);
+  } finally {
+    t.done();
+  }
+});
+
+test("sweep: future-dated dir/temp and near-miss names are kept (S4)", async () => {
+  const t = tmp();
+  try {
+    await createState(t.commonDir, mkRecord());
+    const future = new Date(Date.now() + 10 * HOUR);
+    // a directory dated in the future (clock skew): negative age, never "old"
+    const fDir = abandon(t.commonDir, lin(1), [TEMP_A]);
+    utimesSync(join(fDir, TEMP_A), new Date(Date.now() - 5 * HOUR), new Date(Date.now() - 5 * HOUR));
+    utimesSync(fDir, future, future);
+    // an old directory whose only temp is future-dated
+    const tDir = abandon(t.commonDir, lin(2), [TEMP_A]);
+    utimesSync(join(tDir, TEMP_A), future, future);
+    utimesSync(tDir, new Date(Date.now() - 5 * HOUR), new Date(Date.now() - 5 * HOUR));
+    // near-miss directory names (never a lineage id) and near-miss temp names (never a temp)
+    const nearDirs = [`review-${hex("a", 15)}`, `review-${hex("a", 17)}`, `review-${hex("E", 16)}`, `review-${hex("a", 16)}.bak`, ` review-${hex("a", 16)}`];
+    for (const n of nearDirs) abandon(t.commonDir, n);
+    const nearTemps = [".atomic-123-0123456789abcde", ".atomic-123-0123456789abcdef0", ".atomic-x-0123456789abcdef", ".atomic--0123456789abcdef", "atomic-123-0123456789abcdef", ".atomic-123-0123456789ABCDEF"];
+    nearTemps.forEach((n, i) => abandon(t.commonDir, lin(0x100 + i), [n]));
+    // control: a genuinely abandoned one goes
+    abandon(t.commonDir, lin(3), [TEMP_A]);
+    await createState(t.commonDir, mkRecord(L2, `sha256:${hex("1", 64)}`), OLD);
+    const left = readdirSync(rootOf(t.commonDir));
+    assert.ok(!left.includes(lin(3)), "the control was swept");
+    for (const n of [lin(1), lin(2), ...nearDirs, ...nearTemps.map((_, i) => lin(0x100 + i))]) assert.ok(left.includes(n), `${n} kept`);
+    assert.deepEqual(readdirSync(join(rootOf(t.commonDir), lin(1))), [TEMP_A]);
+    assert.deepEqual(readdirSync(join(rootOf(t.commonDir), lin(2))), [TEMP_A]);
+  } finally {
+    t.done();
+  }
+});
+
+test("sweep: old live lineages beyond the examine cap do not starve abandoned dirs (S4)", { timeout: 120_000 }, async () => {
+  const t = tmp();
+  try {
+    await createState(t.commonDir, mkRecord());
+    const root = rootOf(t.commonDir);
+    // 2000 live lineages (a state file) sort BEFORE 500 abandoned ones
+    for (let i = 1; i <= 2000; i++) {
+      const d = join(root, lin(i));
+      mkdirSync(d, { mode: 0o700 });
+      writeFileSync(join(d, "review-state.json"), "{}");
+    }
+    const abandoned = Array.from({ length: 500 }, (_, i) => lin(0x10000 + i));
+    for (const n of abandoned) abandon(t.commonDir, n, [TEMP_A]);
+    const remaining = () => abandoned.filter((n) => existsSync(join(root, n))).length;
+    let calls = 0;
+    while (remaining() > 0 && calls < 45) {
+      calls++;
+      await createState(t.commonDir, mkRecord(lin(0x20000 + calls), `sha256:${calls.toString(16).padStart(64, "0")}`), OLD);
+    }
+    assert.equal(remaining(), 0, `all swept in ${calls} calls`);
+    for (let i = 1; i <= 2000; i += 199) assert.ok(existsSync(join(root, lin(i), "review-state.json")), "live lineages untouched");
   } finally {
     t.done();
   }

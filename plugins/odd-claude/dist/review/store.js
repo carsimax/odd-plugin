@@ -323,7 +323,16 @@ function sweepTemps(dir) {
  * holds nothing but `.atomic-*` temps (so no state, no receipt, no LOCK, no other file, no subdirectory); every temp is a
  * regular file with a single link; the directory and every temp are older than `minAgeMs`. Files go with `unlinkSync`, then
  * `rmdirSync` (never recursive: a surprise entry makes it fail with ENOTEMPTY and the directory stays). Nothing is followed.
- * At most `max` directories are removed and `ABANDONED_SWEEP_EXAMINE_MAX` examined per call. A failure on one directory is
+ * At most `max` directories are removed and `ABANDONED_SWEEP_EXAMINE_MAX` old directories examined per call. Progress: the
+ * examine cap used to count live lineages too, and the readdir order is stable, so more than 512 old live lineages starved
+ * every abandoned directory after them. Chosen fix: a lineage directory that holds a `review-state.json` entry (one lstat,
+ * of any type: it can never be abandoned) is skipped WITHOUT counting against the examine cap, so live lineages, however
+ * many, never consume it. Rejected: a persisted rotating cursor file under the root (guarantees progress even behind junk
+ * dirs, but the conformance crash tests pin the root to lineage dirs + LOCK, and a new file there is a new crash surface).
+ * Worst-case cost per call: at most `MAX_LINEAGES` entries visited, two lstat each, plus 512 directory reads and 16
+ * removals. Residual: 512 or more old non-live, non-removable directories (a LOCK, a stray file, a hardlinked temp: none
+ * of which START or a crash creates) ahead of an abandoned one still hold it back until they are cleaned up by hand, and
+ * so does any abandoned directory beyond the first `MAX_LINEAGES` entries. A failure on one directory is
  * swallowed and that directory skipped; a sweep never fails START. Upstream has no automatic sweep (only a human-authorized
  * `review abandon`); this one is deliberately narrower: it can only ever remove a directory that has never held authority.
  */
@@ -348,6 +357,8 @@ function sweepAbandonedLineages(root, options = {}) {
                 const st = lstatSync(path);
                 if (!st.isDirectory() || !old(st.mtimeMs))
                     continue;
+                if (lstatOrNull(join(path, STATE_FILE)))
+                    continue; // live lineage: never removable, costs no examine budget
                 examined++;
                 const names = readdirSync(path);
                 if (!names.every((n) => TEMP_RE.test(n)))
