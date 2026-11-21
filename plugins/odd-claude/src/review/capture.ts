@@ -22,6 +22,7 @@ import {
   treeDiffPaths,
   type ArtifactSubject,
 } from "./artifact.js";
+import { hasRole, lensesPending } from "./lineage.js";
 import { validate, type Schema } from "./schema.js";
 import { SnapshotError, countChangedLines, type RepositoryIdentity } from "./snapshot.js";
 import {
@@ -655,9 +656,6 @@ const refusal = (code: CaptureRefusalCode, message: string, extra: { errors?: st
 
 const clock = (opts: CaptureOptions): string => (opts.now ?? (() => new Date().toISOString()))();
 
-const lensesPending = (r: StateRecord): string[] =>
-  r.selected_lenses.filter((l) => !r.admitted_role_results.some((e) => e.role === "lens" && e.lens === l));
-
 function nextOf(record: StateRecord): CaptureNext {
   switch (record.state) {
     case "approved":
@@ -691,7 +689,6 @@ function statusOf(record: StateRecord, extra: { ackToken?: string } = {}): Captu
   return status;
 }
 
-const hasRole = (r: StateRecord, role: "lens" | "refuter" | "validator"): boolean => r.admitted_role_results.some((e) => e.role === role);
 
 /** Maps the store's typed failures to capture refusals; anything else (not found, corrupt, I/O) propagates. */
 async function commit<T extends object>(

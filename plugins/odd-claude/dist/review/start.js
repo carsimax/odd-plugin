@@ -6,7 +6,8 @@
 // as the policy of state.ts allows (medium: exactly one lens; high: one to four distinct lenses).
 import { randomBytes } from "node:crypto";
 import { buildConsentEnvelope, recordDecline, REVIEW_CONTRACT } from "./consent.js";
-import { listLineages, readState, createState, StoreAlreadyExistsError } from "./store.js";
+import { createState, StoreAlreadyExistsError } from "./store.js";
+import { findLineage } from "./lineage.js";
 import { withStoreLock } from "./lock.js";
 import { freezeSnapshot, resolveRepository } from "./snapshot.js";
 import { LENSES, start as startTransition } from "./state.js";
@@ -101,26 +102,6 @@ function resultFrom(record, snapshot, assessment, action, ack) {
         result.acknowledgement = { lineage_id: record.lineage_id, target_identity: record.target_identity, expected_revision: record.revision, token: ack };
     }
     return result;
-}
-/** Existing lineage for this exact candidate: a live one wins, else a burned one. Corrupt lineages are skipped. */
-function findLineage(commonDir, targetIdentity, projection) {
-    const found = {};
-    for (const id of listLineages(commonDir).lineages) {
-        let rec;
-        try {
-            rec = readState(commonDir, id);
-        }
-        catch {
-            continue;
-        }
-        if (rec.target_identity !== targetIdentity || rec.projection !== projection)
-            continue;
-        if (rec.burned)
-            found.burned ??= rec;
-        else
-            found.live ??= rec;
-    }
-    return found;
 }
 const newLineage = () => `review-${randomBytes(8).toString("hex")}`;
 export async function startReview(input) {

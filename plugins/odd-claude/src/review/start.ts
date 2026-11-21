@@ -6,7 +6,8 @@
 // as the policy of state.ts allows (medium: exactly one lens; high: one to four distinct lenses).
 import { randomBytes } from "node:crypto";
 import { buildConsentEnvelope, recordDecline, REVIEW_CONTRACT, type ConsentEnvelope } from "./consent.js";
-import { listLineages, readState, createState, StoreAlreadyExistsError } from "./store.js";
+import { createState, StoreAlreadyExistsError } from "./store.js";
+import { findLineage } from "./lineage.js";
 import { withStoreLock } from "./lock.js";
 import { freezeSnapshot, resolveRepository, type RepositoryIdentity, type Snapshot, type SnapshotTarget } from "./snapshot.js";
 import { LENSES, start as startTransition, type Projection, type RiskLevel, type StateRecord } from "./state.js";
@@ -182,23 +183,6 @@ function resultFrom(record: StateRecord, snapshot: Snapshot, assessment: RiskAss
     result.acknowledgement = { lineage_id: record.lineage_id, target_identity: record.target_identity, expected_revision: record.revision, token: ack };
   }
   return result;
-}
-
-/** Existing lineage for this exact candidate: a live one wins, else a burned one. Corrupt lineages are skipped. */
-function findLineage(commonDir: string, targetIdentity: string, projection: Projection): { live?: StateRecord; burned?: StateRecord } {
-  const found: { live?: StateRecord; burned?: StateRecord } = {};
-  for (const id of listLineages(commonDir).lineages) {
-    let rec: StateRecord;
-    try {
-      rec = readState(commonDir, id);
-    } catch {
-      continue;
-    }
-    if (rec.target_identity !== targetIdentity || rec.projection !== projection) continue;
-    if (rec.burned) found.burned ??= rec;
-    else found.live ??= rec;
-  }
-  return found;
 }
 
 const newLineage = () => `review-${randomBytes(8).toString("hex")}`;

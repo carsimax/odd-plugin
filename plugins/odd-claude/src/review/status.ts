@@ -15,7 +15,7 @@ import { readDecline, reviewCommand } from "./consent.js";
 import { assessRisk } from "./risk.js";
 import { digestPaths, freezeSnapshot, snapshotIdentity, type Snapshot, type SnapshotOptions, type SnapshotTarget } from "./snapshot.js";
 import { blockingFindingIds, MAX_ADMITTED_ROLE_RESULTS, MAX_CORRECTION_ATTEMPTS, type Projection, type StateRecord } from "./state.js";
-import { listLineages, readState } from "./store.js";
+import { findLineage, hasRole, lensesPending } from "./lineage.js";
 import type { StartTarget } from "./start.js";
 
 export const REVIEWER_RESULT_SCHEMA = "odd-claude.review-reviewer-result/v1";
@@ -106,26 +106,6 @@ function mapTarget(opts: StatusOptions): { target: SnapshotTarget; targetArgs: T
   if (t.committedOnly === true) return { target: { kind: "base-diff", baseRef: t.baseRef }, targetArgs: [...args, arg("committed_only", "true")] };
   return { target: { kind: "base-workspace-overlay", baseRef: t.baseRef }, targetArgs: args };
 }
-
-/** Same lookup as start.ts (its helper is private): the live lineage of this exact candidate, else a burned one. */
-function lookupLineage(commonDir: string, identity: string, projection: Projection, o: StatusOptions): { live?: StateRecord; burned?: StateRecord } {
-  const found: { live?: StateRecord; burned?: StateRecord } = {};
-  for (const id of listLineages(commonDir, { limit: o.limit, maxScan: o.maxScan }).lineages) {
-    let rec: StateRecord;
-    try {
-      rec = readState(commonDir, id);
-    } catch {
-      continue;
-    }
-    if (rec.target_identity !== identity || rec.projection !== projection) continue;
-    if (rec.burned) found.burned ??= rec;
-    else found.live ??= rec;
-  }
-  return found;
-}
-
-const lensesPending = (r: StateRecord): string[] => r.selected_lenses.filter((l) => !r.admitted_role_results.some((e) => e.role === "lens" && e.lens === l));
-const hasRole = (r: StateRecord, role: "refuter" | "validator"): boolean => r.admitted_role_results.some((e) => e.role === role);
 
 const REPAIR = {
   schema: REPAIR_SCHEMA,
@@ -326,7 +306,7 @@ export function reviewStatus(cwd: string, opts: StatusOptions = {}): StatusEnvel
   const snapshot: Snapshot = frozen.snapshot;
   const scan: ConsumedResult = isTargetConsumed(commonDir, snapshot.identity, { limit: opts.limit, maxScan: opts.maxScan });
   const consumed: StatusEnvelope["consumed"] = { status: scan.status, truncated: scan.truncated, problems: scan.problems.map((p) => ({ ...p })) };
-  const lineage = lookupLineage(commonDir, snapshot.identity, snapshot.projection, opts);
+  const lineage = findLineage(commonDir, snapshot.identity, snapshot.projection, { limit: opts.limit, maxScan: opts.maxScan });
 
   if (scan.consumed === true || lineage.burned) return finish(stop("target_already_acknowledged"), snapshot, snapshot.identity, consumed, lineage.burned ?? lineage.live);
   if (lineage.live) return finish(liveHead(commonDir, lineage.live, opts.acknowledgement, { root, targetArgs }), snapshot, snapshot.identity, consumed, lineage.live);

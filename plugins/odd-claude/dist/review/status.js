@@ -12,7 +12,7 @@ import { readDecline, reviewCommand } from "./consent.js";
 import { assessRisk } from "./risk.js";
 import { digestPaths, freezeSnapshot, snapshotIdentity } from "./snapshot.js";
 import { blockingFindingIds, MAX_ADMITTED_ROLE_RESULTS, MAX_CORRECTION_ATTEMPTS } from "./state.js";
-import { listLineages, readState } from "./store.js";
+import { findLineage, hasRole, lensesPending } from "./lineage.js";
 export const REVIEWER_RESULT_SCHEMA = "odd-claude.review-reviewer-result/v1";
 // Convention (all transitions): an argument's `name` is EXACTLY a property of the review tool the transition names (snake_case), its
 // `value` the string form of that property (the server coerces "true"/"false", integers and JSON arrays to the declared type), so a
@@ -29,28 +29,6 @@ function mapTarget(opts) {
         return { target: { kind: "base-diff", baseRef: t.baseRef }, targetArgs: [...args, arg("committed_only", "true")] };
     return { target: { kind: "base-workspace-overlay", baseRef: t.baseRef }, targetArgs: args };
 }
-/** Same lookup as start.ts (its helper is private): the live lineage of this exact candidate, else a burned one. */
-function lookupLineage(commonDir, identity, projection, o) {
-    const found = {};
-    for (const id of listLineages(commonDir, { limit: o.limit, maxScan: o.maxScan }).lineages) {
-        let rec;
-        try {
-            rec = readState(commonDir, id);
-        }
-        catch {
-            continue;
-        }
-        if (rec.target_identity !== identity || rec.projection !== projection)
-            continue;
-        if (rec.burned)
-            found.burned ??= rec;
-        else
-            found.live ??= rec;
-    }
-    return found;
-}
-const lensesPending = (r) => r.selected_lenses.filter((l) => !r.admitted_role_results.some((e) => e.role === "lens" && e.lens === l));
-const hasRole = (r, role) => r.admitted_role_results.some((e) => e.role === role);
 const REPAIR = {
     schema: REPAIR_SCHEMA,
     status: "unsupported",
@@ -226,7 +204,7 @@ export function reviewStatus(cwd, opts = {}) {
     const snapshot = frozen.snapshot;
     const scan = isTargetConsumed(commonDir, snapshot.identity, { limit: opts.limit, maxScan: opts.maxScan });
     const consumed = { status: scan.status, truncated: scan.truncated, problems: scan.problems.map((p) => ({ ...p })) };
-    const lineage = lookupLineage(commonDir, snapshot.identity, snapshot.projection, opts);
+    const lineage = findLineage(commonDir, snapshot.identity, snapshot.projection, { limit: opts.limit, maxScan: opts.maxScan });
     if (scan.consumed === true || lineage.burned)
         return finish(stop("target_already_acknowledged"), snapshot, snapshot.identity, consumed, lineage.burned ?? lineage.live);
     if (lineage.live)

@@ -13,6 +13,7 @@
 // mismatch is `binding_drift` and nothing is admitted.
 import { domainHash } from "./canonical.js";
 import { artifactSubjectFor, artifactSubjectProblems, findingPath, manifestFor, refuterRequestHash, targetedValidationRequestHash, treeDiffPaths, } from "./artifact.js";
+import { hasRole, lensesPending } from "./lineage.js";
 import { validate } from "./schema.js";
 import { SnapshotError, countChangedLines } from "./snapshot.js";
 import { LENSES, MAX_ADMITTED_ROLE_RESULTS, admitLensResult, admitRefuterResult, admitValidatorResult, approve, beginValidation, blockingFindingIds, escalate, findingIdPrefixForLens, inconclusiveFindingIds, requireCorrection, } from "./state.js";
@@ -563,7 +564,6 @@ const refusal = (code, message, extra = {}) => ({
     ...extra,
 });
 const clock = (opts) => (opts.now ?? (() => new Date().toISOString()))();
-const lensesPending = (r) => r.selected_lenses.filter((l) => !r.admitted_role_results.some((e) => e.role === "lens" && e.lens === l));
 function nextOf(record) {
     switch (record.state) {
         case "approved":
@@ -597,7 +597,6 @@ function statusOf(record, extra = {}) {
     }
     return status;
 }
-const hasRole = (r, role) => r.admitted_role_results.some((e) => e.role === role);
 /** Maps the store's typed failures to capture refusals; anything else (not found, corrupt, I/O) propagates. */
 async function commit(run) {
     try {
