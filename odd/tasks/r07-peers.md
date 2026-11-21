@@ -1,0 +1,52 @@
+# Peer orchestrators (R07): inter-session messaging by file mailbox + hooks
+Goal: let one Claude Code session on this machine send a short message to another live session, with human-granted consent per session, delivered by hooks, with no dependency on mods. Branch: `chore/review-maintenance` (docs only so far).
+Runner: `node:test` via `npm test` inside `plugins/odd-claude` + `npm run check`. Docs only in this document; the P0 spike comes first and implementation (P1..P4) waits for its findings.
+
+## Specs
+
+### S1 User request (verbatim)
+
+- "podemos trabajar en todos los pendientes que mencionas"
+- The pending item: "Orquestadores pares (R07): fue lo que acordamos hacer después del RDD. Es una feature nueva, con su propio documento."
+
+### S2 Earlier user decisions on record (verbatim)
+
+- v2 question "¿Los orquestadores pares (R07) entran en esta v2?" → "Después del RDD, con $.store"
+- Roadmap Q5: "Inter-session messaging → v2"
+- The "$.store" part is superseded by S3 (first decision below).
+
+### S3 User decisions 2026-11-21 (question → chosen option, verbatim)
+
+- "En v2 decidiste orquestadores pares \"con $.store\", pero $.store es API de mods (opcionales) y el principio 2 del plugin dice que ninguna conducta depende de mods. ¿Qué canal usamos?" → "Buzón en archivos + hooks (recomendado)". Option text: "Mensajes en CLAUDE_PLUGIN_DATA/peers/, entregados por hooks; funciona sin mods." This SUPERSEDES the "$.store" part of S2.
+- "¿Quién autoriza que una sesión reciba mensajes de otra?" → "allow manual por sesión (recomendado)". Option text: "El humano corre /odd-claude:peers allow <id>; el modelo no puede concederlo; cerrado por defecto."
+- "¿Qué herramientas incluye la primera versión?" → "Núcleo de 3 (recomendado)". Option text: "session_id, list y send_message."
+- "¿Cómo llega un mensaje a la otra sesión, y hacemos antes un spike?" → "Pull en el siguiente prompt + spike primero (recomendado)". Option text: "Se entrega al siguiente prompt o SessionStart; antes un spike real de escribir en una sesión y leer en otra. TTL 24 h, tope 50."
+
+### S4 Design notes (parent's notes from the read-only research; not user words)
+
+- **Upstream reference (read-only, do not copy code):** `upstream/gentle-shell` `extensions/gentle-agents.ts`: `orchestrator_session_id` (~3069), `orchestrator_list` (~3185), `orchestrator_send_message` (~3266: message ≤ 8192 bytes, reason 8–512 bytes, result is "accepted, not a read receipt"). `lib/session-messaging-grants.ts`: per-session interactive consent, fails closed without UI, cleared on session change. `lib/agents-session-transport.ts`: sockets + presence registry, NOT ported (R08 is out of scope).
+- **odd-claude base:** session state lives in `CLAUDE_PLUGIN_DATA` via `plugins/odd-claude/src/lib/state.ts` (`sessions/<id>.json`, `atomicWriteFile`, `listSessionIds`); hooks SessionStart, UserPromptSubmit, SessionEnd; MCP servers declared in `.mcp.json`. Reuse these helpers; do not re-implement atomic writes.
+- **Tool names:** `odd_orchestrator_session_id`, `odd_orchestrator_list`, `odd_orchestrator_send_message`. `agents-guard.spec.ts` (~91) forbids `odd_review`, `gentle-review` and `review_scope`, not these.
+- **Delivery:** UserPromptSubmit and SessionStart read the session's mailbox and return `additionalContext` wrapped in tags marked untrusted / non-authoritative, then delete the delivered messages. Never block: no deny/block hooks (the RDD exception does not cover this).
+- **Storage:** `CLAUDE_PLUGIN_DATA/peers/<recipient>/`, atomic writes, TTL 24 h, cap 50 per mailbox, per-sender rate limit, path confinement of ids.
+- **Consent:** `/odd-claude:peers allow|revoke|list`, a slash command run by the human; the model cannot grant; closed by default.
+- **Constraints:** no telemetry; never put secrets in messages; Windows out of scope; prefix `odd`, no gentle identifiers in shipped plugin files (this document is not shipped).
+- **Unknowns the spike must settle (P0):** (a) whether `additionalContext` from a UserPromptSubmit hook reliably reaches the model in another live session; (b) session_id availability and stability in hook input; (c) concurrency of two sessions writing one mailbox.
+
+## Tasks
+
+Route `writer` unless noted; commit pending for all.
+
+- P0 | S3 | spike (user-assisted) | commit pending (ready) — Spike: two real Claude Code sessions on this machine; session A writes a mailbox file for B via a throwaway script; B's next prompt receives it through a UserPromptSubmit hook `additionalContext`; record findings (session_id in hook input, latency, ordering, concurrency) in `docs/research/spikes/r07-mailbox.md`. Needs the user to drive two interactive sessions.
+- P1 | S3,S4 | writer | commit pending (blocked by P0) — Mailbox store (`lib/peers.ts`): send/receive/ack, TTL, cap, rate limit, atomic writes under a lock, path confinement; tests including concurrency.
+- P2 | S3,S4 | writer | commit pending (blocked by P0) — Consent: `/odd-claude:peers allow|revoke|list` command + grant store; closed by default; the model cannot grant; tests.
+- P3 | S3,S4 | writer | commit pending (blocked by P1,P2) — MCP tools `odd_orchestrator_session_id`, `odd_orchestrator_list`, `odd_orchestrator_send_message` (send refuses without the recipient's grant).
+- P4 | S3,S4 | writer | commit pending (blocked by P1,P2) — Delivery via UserPromptSubmit + SessionStart hooks (`additionalContext`, untrusted wrapper, delete after delivery, never block); tests.
+- P5 | S1 | writer | commit pending (blocked by P3,P4) — Docs: README section, roadmap update; version bump decision left to the user.
+
+## Log
+
+- L1: user's request (S1): "podemos trabajar en todos los pendientes que mencionas" (pending item: "Orquestadores pares (R07): fue lo que acordamos hacer después del RDD. Es una feature nueva, con su propio documento.")
+- L2: earlier decisions (S2): "¿Los orquestadores pares (R07) entran en esta v2?" → "Después del RDD, con $.store"; roadmap Q5 "Inter-session messaging → v2".
+- L3: user decisions 2026-11-21 (S3): "Buzón en archivos + hooks (recomendado)" (supersedes "$.store"); "allow manual por sesión (recomendado)"; "Núcleo de 3 (recomendado)"; "Pull en el siguiente prompt + spike primero (recomendado)".
+- L4: Parent: P0 spike first; implementation waits for its findings.
