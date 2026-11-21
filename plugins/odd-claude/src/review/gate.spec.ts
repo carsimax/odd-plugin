@@ -886,7 +886,8 @@ test("F2: an unresolved delivery from a non-repository directory follows the GLO
   const f = fx();
   try {
     const cmds = [`cd ${f.repo}; git push`, `GIT_DIR=${f.repo}/.git git push`, `git --git-dir ${f.repo}/.git push`, 'cd "$X" && git push'];
-    for (const c of cmds) assert.deepEqual(checkDelivery({ cwd: f.dir, command: c }, { dataDir: f.data }), { allowed: true, reason: "not_a_repository" }, c);
+    // global unset: the T6 fast path answers before any repository is looked at (only the allow label differs)
+    for (const c of cmds) assert.deepEqual(checkDelivery({ cwd: f.dir, command: c }, { dataDir: f.data }), { allowed: true, reason: "rdd_off" }, c);
     on(f);
     for (const c of cmds) {
       const r = checkDelivery({ cwd: f.dir, command: c }, { dataDir: f.data });
@@ -1487,6 +1488,112 @@ test("budget, end to end: dist/hooks/run.js PreToolUse denies before the budget 
       assert.ok(q.ms < 10_000);
     }
   } finally {
+    f.cleanup();
+  }
+});
+
+// ---------------------------------------------------------------------------------------------
+// 5. T6 fast path: with the GLOBAL switch not on, the effective mode is off whatever any repository says (a clone
+//    override can only disable), so the gate answers without starting a single git process.
+// ---------------------------------------------------------------------------------------------
+
+/** A PATH shim `git` that records every invocation (one line each) and runs the real git. */
+function recordingGit(f: Fx): { log: string; path: string; count: () => number } {
+  const bin = join(f.dir, "rec-bin");
+  mkdirSync(bin, { recursive: true });
+  const log = join(f.dir, "git-calls.log");
+  writeFileSync(log, "");
+  const realGit = spawnSync("sh", ["-c", "command -v git"], { encoding: "utf8" }).stdout.trim();
+  writeFileSync(join(bin, "git"), `#!/bin/sh\necho "$*" >> '${log}'\nexec ${realGit} "$@"\n`, { mode: 0o755 });
+  return { log, path: `${bin}:${process.env.PATH ?? ""}`, count: () => readFileSync(log, "utf8").split("\n").filter((l) => l !== "").length };
+}
+
+const FAST_COMMANDS = (f: Fx): string[] => ["git push", "git push origin feature", "gh pr create --fill", `cd ${f.repo} && git push`, "GIT_DIR=/nowhere git push", `git -C ${f.repo} push`, 'git -C "$X" push'];
+
+type GlobalState = "unset" | "off" | "corrupt" | "wrong-version" | "unreadable";
+function setGlobal(f: Fx, state: GlobalState): void {
+  mkdirSync(f.data, { recursive: true });
+  const file = join(f.data, "review-mode.json");
+  if (state === "off") setReviewMode("disable", "global", f.repo, { dataDir: f.data });
+  else if (state === "corrupt") writeFileSync(file, "{not json");
+  else if (state === "wrong-version") writeFileSync(file, JSON.stringify({ version: 99, sessionId: "review-mode", data: { mode: "on" } }));
+  else if (state === "unreadable") mkdirSync(file); // a directory where the file should be: readFileSync fails
+}
+
+for (const state of ["unset", "off", "corrupt", "wrong-version", "unreadable"] as const) {
+  test(`T6 fast path: global ${state} -> checkDelivery allows every delivery shape with zero git processes (even with a clone override present)`, () => {
+    const f = fx();
+    const prevPath = process.env.PATH;
+    try {
+      commitHigh(f);
+      setGlobal(f, state);
+      setReviewMode("disable", "clone", f.repo, { dataDir: f.data });
+      const rec = recordingGit(f);
+      process.env.PATH = rec.path;
+      for (const command of FAST_COMMANDS(f)) {
+        const r = checkDelivery({ cwd: f.repo, command }, { dataDir: f.data });
+        assert.equal(r.allowed, true, command);
+        assert.equal(rec.count(), 0, `no git for: ${command}\n${readFileSync(rec.log, "utf8")}`);
+      }
+      // a non-repository cwd is no different
+      assert.equal(checkDelivery({ cwd: f.dir, command: "git push" }, { dataDir: f.data }).allowed, true);
+      assert.equal(rec.count(), 0);
+    } finally {
+      process.env.PATH = prevPath;
+      f.cleanup();
+    }
+  });
+}
+
+test("T6 fast path: the shipped dist/hooks/run.js PreToolUse is silent with zero git processes while the global switch is unset or off", async () => {
+  const f = fx();
+  try {
+    commitHigh(f);
+    const run = join(PLUGIN_ROOT, "dist", "hooks", "run.js");
+    const rec = recordingGit(f);
+    const one = (command: string): Promise<{ code: number | null; out: string; err: string }> =>
+      new Promise((resolve) => {
+        const c = spawn(process.execPath, [run, "PreToolUse"], { env: { ...ENV, PATH: rec.path, CLAUDE_PLUGIN_DATA: f.data }, stdio: ["pipe", "pipe", "pipe"] });
+        let out = "";
+        let err = "";
+        c.stdout.on("data", (d: Buffer) => (out += d.toString()));
+        c.stderr.on("data", (d: Buffer) => (err += d.toString()));
+        c.on("close", (code) => resolve({ code, out, err }));
+        c.stdin.end(JSON.stringify({ session_id: "p", cwd: f.repo, tool_name: "Bash", tool_input: { command } }));
+      });
+    for (const state of ["unset", "off"] as const) {
+      setGlobal(f, state);
+      for (const command of FAST_COMMANDS(f)) {
+        const r = await one(command);
+        assert.deepEqual({ code: r.code, out: r.out, err: r.err }, { code: 0, out: "", err: "" }, `${state}: ${command}`);
+        assert.equal(rec.count(), 0, `${state}: no git for ${command}\n${readFileSync(rec.log, "utf8")}`);
+      }
+    }
+    // control: with the global switch on, git is used and the high-risk range is still denied
+    on(f);
+    const denied = await one("git push origin feature");
+    assert.equal(JSON.parse(denied.out).hookSpecificOutput.permissionDecision, "deny");
+    assert.ok(rec.count() > 0, "global on still uses git");
+  } finally {
+    f.cleanup();
+  }
+});
+
+test("T6 fast path: with the global switch ON the clone override is still read and decisions are unchanged", () => {
+  const f = fx();
+  const prevPath = process.env.PATH;
+  try {
+    commitHigh(f);
+    on(f);
+    const rec = recordingGit(f);
+    process.env.PATH = rec.path;
+    const denied = checkDelivery({ cwd: f.repo, command: "git push" }, { dataDir: f.data });
+    assert.equal(denied.allowed === false && denied.code, "review_due");
+    assert.ok(rec.count() > 0);
+    setReviewMode("disable", "clone", f.repo, { dataDir: f.data });
+    assert.equal(checkDelivery({ cwd: f.repo, command: "git push" }, { dataDir: f.data }).allowed, true);
+  } finally {
+    process.env.PATH = prevPath;
     f.cleanup();
   }
 });

@@ -3,7 +3,7 @@ import { fileURLToPath } from "node:url";
 import { recordAgentStatus } from "../lib/agent-status.js";
 import { logError, updateSessionState } from "../lib/state.js";
 import { shellQuote } from "../review/consent.js";
-import { readReviewMode } from "../review/mode.js";
+import { isGlobalModeOn, readReviewMode } from "../review/mode.js";
 import { assessCandidate } from "../review/risk.js";
 import { resolveRepository, runGit } from "../review/snapshot.js";
 import { reviewStatus } from "../review/status.js";
@@ -94,6 +94,9 @@ function settleReminder(input, opts) {
     const session = typeof input.session_id === "string" && SAFE_SESSION.test(input.session_id) ? input.session_id : undefined;
     // Without a session id the "once" guarantee cannot be kept, so there is no reminder at all.
     if (cwd === undefined || session === undefined)
+        return undefined;
+    // Fast path: a clone override can only disable, so a global switch that is not on means off everywhere: no git.
+    if (!isGlobalModeOn(opts))
         return undefined;
     if (readReviewMode(cwd, { ...opts, gitTimeoutMs: GIT_MS }).effective !== "on")
         return undefined;

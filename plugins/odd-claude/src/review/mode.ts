@@ -48,6 +48,15 @@ function readGlobal(opts: StateOptions): "on" | "off" | "unset" {
   return mode === "on" || mode === "off" ? mode : "unset";
 }
 
+/**
+ * Fast-path guard (T6): is the GLOBAL switch on? Same reader as `readReviewMode`: unset, off, unreadable, corrupt or
+ * a wrong-version file are all "not on". A clone-local override can only DISABLE, so when this is false the effective
+ * mode is off whatever any repository holds, and a caller may answer "off" without starting git. Reads nothing else.
+ */
+export function isGlobalModeOn(opts: StateOptions = {}): boolean {
+  return readGlobal(opts) === "on";
+}
+
 /** The `odd-plugin` dir of a clone: absent, a real directory, or anything else (symlink, file): never followed. */
 function pluginDirKind(commonDir: string): "absent" | "dir" | "bad" {
   try {

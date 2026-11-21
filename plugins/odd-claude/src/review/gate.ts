@@ -59,6 +59,9 @@
 //    An untrusted repository is therefore NOT waved through: a `-c safe.directory` or GIT_CONFIG_* override in the
 //    command would make git work, so with global on and no readable off the delivery is denied.
 //
+// FAST PATH: with the GLOBAL switch not on (unset, off, unreadable or corrupt) the mode is off whatever any repository
+// holds (a clone override can only disable), so a detected delivery is allowed without starting any git process.
+//
 // TIME: every git call is bounded one by one (default 5 s) AND the whole check by a hard deadline (default 20 s):
 // `checkDelivery` fixes `deadlineAt = start + budget` and threads it (SnapshotOptions.deadlineAt, ModeOptions.deadlineAt,
 // GitCall.deadlineAt) into EVERY git invocation, including those of resolveRepository, readReviewMode and the candidate
@@ -74,7 +77,7 @@ import { fileURLToPath } from "node:url";
 import type { StateOptions } from "../lib/state.js";
 import { isTargetConsumed } from "./ack.js";
 import { readDecline, shellQuote } from "./consent.js";
-import { readReviewMode } from "./mode.js";
+import { isGlobalModeOn, readReviewMode } from "./mode.js";
 import { assessCandidate } from "./risk.js";
 import { resolveRepository, runGit, SnapshotError } from "./snapshot.js";
 
@@ -749,6 +752,9 @@ export function checkDelivery(input: { cwd: string; command: string }, opts: Gat
   }
   const deliveries = actions.filter((a) => a.kind === "delivery");
   if (deliveries.length === 0) return { allowed: true, reason: "no_delivery" };
+  // Fast path: a clone override can only DISABLE, so with the global switch not on the effective mode is off for every
+  // repository (mode.ts) and every outcome below would be an allow. Answer without starting a git process.
+  if (!isGlobalModeOn(opts)) return { allowed: true, reason: "rdd_off" };
   const hasChange = actions.some((a) => a.kind === "change");
   // The budget is a HARD deadline for the whole check, enforced by the gate's own clock: every git call anywhere below
   // (repository resolution, the mode reads, the base probes, the candidate assessment) gets min(its own bound, time

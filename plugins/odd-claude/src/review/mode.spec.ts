@@ -4,7 +4,7 @@ import { spawnSync } from "node:child_process";
 import { chmodSync, existsSync, lstatSync, statSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { cloneModePath, readReviewMode, ReviewModeError, setReviewMode } from "./mode.js";
+import { cloneModePath, isGlobalModeOn, readReviewMode, ReviewModeError, setReviewMode } from "./mode.js";
 import { resolveRepository, SnapshotError } from "./snapshot.js";
 
 const ENV = (() => {
@@ -370,5 +370,28 @@ test("dubious-ownership classifier: a warning line is not the fatal line (S3)", 
   } finally {
     process.env.PATH = prevPath;
     f.cleanup();
+  }
+});
+
+test("T6: isGlobalModeOn is true only for a readable global on, and agrees with readReviewMode's global value for every state", () => {
+  const dir = realpathSync(mkdtempSync(join(tmpdir(), "odd-mode-g-")));
+  try {
+    const file = join(dir, "review-mode.json");
+    const envelope = (data: unknown, version = 1): string => JSON.stringify({ version, sessionId: "review-mode", data });
+    assert.equal(isGlobalModeOn({ dataDir: dir }), false, "unset");
+    writeFileSync(file, envelope({ mode: "on" }));
+    assert.equal(isGlobalModeOn({ dataDir: dir }), true, "on");
+    assert.equal(readReviewMode(undefined, { dataDir: dir }).effective, "on");
+    for (const [name, body] of [["off", envelope({ mode: "off" })], ["corrupt", "{nope"], ["wrong version", envelope({ mode: "on" }, 99)], ["unknown value", envelope({ mode: "maybe" })], ["no data", envelope(null)]] as const) {
+      writeFileSync(file, body);
+      assert.equal(isGlobalModeOn({ dataDir: dir }), false, name);
+      assert.equal(readReviewMode(undefined, { dataDir: dir }).effective, "off", name);
+    }
+    rmSync(file);
+    mkdirSync(file); // unreadable: a directory where the file belongs
+    assert.equal(isGlobalModeOn({ dataDir: dir }), false, "unreadable");
+    assert.equal(readReviewMode(undefined, { dataDir: dir }).effective, "off", "unreadable");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
   }
 });

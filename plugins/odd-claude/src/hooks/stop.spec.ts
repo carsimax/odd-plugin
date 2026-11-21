@@ -292,3 +292,36 @@ test("the reminder names CLAUDE_PLUGIN_ROOT when the hook environment sets it", 
     f.cleanup();
   }
 });
+
+test("T6 fast path: with the global switch unset or off a due high-risk candidate stays silent and the Stop hook starts zero git processes", () => {
+  const f = fx();
+  const prevPath = process.env.PATH;
+  try {
+    const bin = join(f.dir, "rec-bin");
+    mkdirSync(bin);
+    const log = join(f.dir, "git-calls.log");
+    writeFileSync(log, "");
+    const realGit = spawnSync("sh", ["-c", "command -v git"], { encoding: "utf8" }).stdout.trim();
+    writeFileSync(join(bin, "git"), `#!/bin/sh\necho "$*" >> '${log}'\nexec ${realGit} "$@"\n`, { mode: 0o755 });
+    const count = (): number => readFileSync(log, "utf8").split("\n").filter((l) => l !== "").length;
+    process.env.PATH = `${bin}:${prevPath ?? ""}`;
+    assert.deepEqual(stop(f, "fast-unset"), { exitCode: 0, stdout: "" });
+    assert.equal(count(), 0, `unset: ${readFileSync(log, "utf8")}`);
+    setReviewMode("disable", "global", f.repo, { dataDir: f.data }); // reads the mode back through git: not under test
+    writeFileSync(log, "");
+    assert.deepEqual(stop(f, "fast-off"), { exitCode: 0, stdout: "" });
+    assert.equal(count(), 0, `off: ${readFileSync(log, "utf8")}`);
+    // the shipped entry point too
+    const r = spawnSync(process.execPath, [join(PLUGIN_ROOT, "dist", "hooks", "run.js"), "Stop"], { env: { ...ENV, PATH: process.env.PATH, CLAUDE_PLUGIN_DATA: f.data }, input: JSON.stringify({ session_id: "fast-run", cwd: f.repo, stop_hook_active: false }), encoding: "utf8" });
+    assert.deepEqual({ status: r.status, stdout: r.stdout }, { status: 0, stdout: "" });
+    assert.equal(count(), 0, `run.js: ${readFileSync(log, "utf8")}`);
+    // control: global on still uses git and reminds
+    on(f);
+    const reminded = stop(f, "fast-on");
+    assert.equal((JSON.parse(reminded.stdout) as { decision: string }).decision, "block");
+    assert.ok(count() > 0);
+  } finally {
+    process.env.PATH = prevPath;
+    f.cleanup();
+  }
+});
