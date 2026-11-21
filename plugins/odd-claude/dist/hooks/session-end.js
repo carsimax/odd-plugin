@@ -1,4 +1,6 @@
 import { recordAgentStatus } from "../lib/agent-status.js";
+import { revokeAll } from "../lib/peer-grants.js";
+import { isValidSessionId } from "../lib/peers.js";
 import { removeSessionScratch } from "../lib/scratch.js";
 import { logError } from "../lib/state.js";
 import { CLEAR_TITLE } from "../lib/terminal.js";
@@ -17,6 +19,15 @@ export function sessionEnd(input, opts = {}) {
         }
         catch (err) {
             logError(`SessionEnd scratch: ${err instanceof Error ? err.message : String(err)}`, opts);
+        }
+        // Peer consent lives only as long as the session that granted it (R07 P2).
+        if (isValidSessionId(id)) {
+            try {
+                revokeAll(id, opts);
+            }
+            catch (err) {
+                logError(`SessionEnd peer grants: ${err instanceof Error ? err.message : String(err)}`, opts);
+            }
         }
         recordAgentStatus(input, "ended", opts);
     }
