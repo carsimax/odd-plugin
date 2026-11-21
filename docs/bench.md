@@ -236,3 +236,8 @@ subjects, except the events a subject declares for its steps (prompts, commands,
 - Comparison: `odd-claude.bench-comparison/v1` (`bench/src/compare.ts`): per journey a `kind` (`comparable|divergent|unsupported|missing`), odd vs
   oracle per metric with `equal|better|worse|not_comparable`, latency per operation (`ratio`, medians, p95), the thresholds used and a summary.
   Projections are compared, never bytes or hashes. `report.md` is rendered from it by `bench/src/report.ts`.
+
+## Baseline and findings
+
+- First recorded baseline (K=3, odd 2.0.0 vs oracle 4.6.0): [`docs/bench/baseline-2026-11-20/`](bench/baseline-2026-11-20/README.md).
+- What it says about S2 ("as efficient as upstream"), the cells that are worse and the proposed follow-ups: [`docs/bench/findings.md`](bench/findings.md).
