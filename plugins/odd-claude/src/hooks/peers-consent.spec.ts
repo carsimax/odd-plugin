@@ -205,3 +205,59 @@ test("PRESERVE: ordinary and other slash prompts keep their previous output (anc
     rmSync(dir, { recursive: true, force: true });
   }
 });
+
+test("A1: SessionStart clears this session's grants on resume/startup/clear and keeps them on compact", () => {
+  const dir = tmp();
+  try {
+    for (const source of ["resume", "startup", "clear"]) {
+      allow(R, S, { dataDir: dir });
+      allow(T, S, { dataDir: dir });
+      const r = runHook("SessionStart", JSON.stringify({ session_id: R, source }), { dataDir: dir, env: {} });
+      assert.equal(r.exitCode, 0, source);
+      assert.equal(isAllowed(R, S, { dataDir: dir }), false, source);
+      assert.equal(isAllowed(T, S, { dataDir: dir }), true, `${source}: other sessions keep theirs`);
+    }
+    allow(R, S, { dataDir: dir });
+    runHook("SessionStart", JSON.stringify({ session_id: R, source: "compact" }), { dataDir: dir, env: {} });
+    assert.equal(isAllowed(R, S, { dataDir: dir }), true, "compact keeps the grant (same live conversation)");
+    // an invalid session id never breaks the hook
+    assert.equal(runHook("SessionStart", JSON.stringify({ session_id: "../x", source: "resume" }), { dataDir: dir, env: {} }).exitCode, 0);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("near-misses with unicode, whitespace and control characters never grant; trailing blank lines still do", () => {
+  const dir = tmp();
+  try {
+    const cmd = `/odd-claude:peers allow ${S}`;
+    const prompts = [
+      `/odd-claude:peers\tallow ${S}`,
+      `/odd-claude:peers\u00a0allow ${S}`,
+      `/odd-claude:peers allow\u00a0${S}`,
+      `/odd-claude:peers allow ${S.slice(0, 5)}\u200b${S.slice(5)}`,
+      `/odd-claude:peers\u200ballow ${S}`,
+      `/odd-claude:peers \u0430llow ${S}`, // Cyrillic а
+      `\uff0fodd-claude:peers allow ${S}`, // fullwidth slash
+      cmd.toUpperCase(),
+      `${cmd}\u0000`,
+      `\u0000${cmd}`,
+      `${cmd}\rsecond`,
+      `${cmd}\u2028second`,
+      `\u2028${cmd}\u2028x`,
+      "```\n" + cmd + "\n```",
+      `[transcript]\nuser: ${cmd}`,
+    ];
+    for (const p of prompts) {
+      const r = ups(dir, p);
+      assert.equal(r.exitCode, 0);
+      assert.doesNotMatch(ctx(r), /Peer grants? (recorded|revoked)/, JSON.stringify(p)); // a valid command with an invalid id may be refused visibly
+      assert.deepEqual(grantsFiles(dir), [], JSON.stringify(p));
+    }
+    const ok = ups(dir, cmd + "\r\n\n   \n");
+    assert.match(ctx(ok), /Peer grant recorded/);
+    assert.equal(isAllowed(R, S, { dataDir: dir }), true);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});

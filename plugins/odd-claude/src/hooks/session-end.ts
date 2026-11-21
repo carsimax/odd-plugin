@@ -1,6 +1,7 @@
 import { recordAgentStatus } from "../lib/agent-status.js";
 import { revokeAll } from "../lib/peer-grants.js";
 import { isValidSessionId } from "../lib/peers.js";
+import { forgetCurrentSession } from "../lib/peers-session.js";
 import { removeSessionScratch } from "../lib/scratch.js";
 import { logError, type StateOptions } from "../lib/state.js";
 import { CLEAR_TITLE } from "../lib/terminal.js";
@@ -27,6 +28,11 @@ export function sessionEnd(input: HookInput, opts: StateOptions = {}): HookOutpu
         revokeAll(id, opts);
       } catch (err) {
         logError(`SessionEnd peer grants: ${err instanceof Error ? err.message : String(err)}`, opts);
+      }
+      try {
+        forgetCurrentSession(id, opts);
+      } catch (err) {
+        logError(`SessionEnd peers current: ${err instanceof Error ? err.message : String(err)}`, opts);
       }
     }
     recordAgentStatus(input, "ended", opts);

@@ -5,8 +5,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
 import { pathToFileURL } from "node:url";
-import { currentDir, CURRENT_STALE_MS, MAX_CURRENT_ENTRIES, readCurrentSession, recordCurrentSession, resolveSessionId } from "./peers-session.js";
+import { currentDir, CURRENT_STALE_MS, forgetCurrentSession, MAX_CURRENT_ENTRIES, readCurrentSession, recordCurrentSession, resolveSessionId } from "./peers-session.js";
 import { sessionStart } from "../hooks/session-start.js";
+import { sessionEnd } from "../hooks/session-end.js";
 
 const A = "aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa";
 const B = "bbbbbbbb-2222-4222-8222-bbbbbbbbbbbb";
@@ -157,6 +158,54 @@ test("SessionStart hook records the entry for its parent pid and still returns i
     } finally {
       rmSync(dir2, { recursive: true, force: true });
     }
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("forgetCurrentSession removes only entries of this session; other files, symlinks and corrupt entries stay", () => {
+  const dir = tmp();
+  const outside = tmp();
+  try {
+    const o = { dataDir: dir };
+    recordCurrentSession(A, 4242, o);
+    recordCurrentSession(A, 4243, o);
+    recordCurrentSession(B, 4244, o);
+    const cur = currentDir(o);
+    writeFileSync(join(cur, "notes.txt"), "keep");
+    writeFileSync(join(cur, "4245.json"), "{corrupt");
+    writeFileSync(join(outside, "target.json"), JSON.stringify({ session_id: A }));
+    symlinkSync(join(outside, "target.json"), join(cur, "4246.json"));
+    forgetCurrentSession(A, o);
+    assert.deepEqual(readdirSync(cur).sort(), ["4244.json", "4245.json", "4246.json", "notes.txt"]);
+    assert.equal(existsSync(join(outside, "target.json")), true);
+    assert.throws(() => forgetCurrentSession("../x", o));
+    forgetCurrentSession(A, { dataDir: join(dir, "nope") });
+    const linked = tmp();
+    try {
+      mkdirSync(join(linked, "peers"));
+      symlinkSync(cur, join(linked, "peers", ".current"));
+      assert.throws(() => forgetCurrentSession(B, { dataDir: linked }));
+      assert.equal(existsSync(join(cur, "4244.json")), true);
+    } finally {
+      rmSync(linked, { recursive: true, force: true });
+    }
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+    rmSync(outside, { recursive: true, force: true });
+  }
+});
+
+test("SessionEnd removes this session's .current entries and never fails the hook", () => {
+  const dir = tmp();
+  try {
+    const o = { dataDir: dir, env: { CLAUDE_PLUGIN_DATA: dir } };
+    recordCurrentSession(A, 4242, o);
+    recordCurrentSession(B, 4244, o);
+    sessionEnd({ session_id: A, reason: "other" }, o);
+    assert.deepEqual(readdirSync(currentDir(o)), ["4244.json"]);
+    assert.doesNotThrow(() => sessionEnd({ session_id: "../x" }, o));
+    assert.doesNotThrow(() => sessionEnd({ session_id: A }, { dataDir: join(dir, "none"), env: {} }));
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

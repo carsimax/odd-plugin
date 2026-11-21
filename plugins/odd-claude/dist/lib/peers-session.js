@@ -130,3 +130,34 @@ export function currentEntryCount(opts = {}) {
         return 0;
     }
 }
+/** SessionEnd cleanup: removes only `<pid>.json` regular files whose session_id equals `sessionId`. Never touches other files or symlinks; a missing dir is a no-op; a symlinked/unsafe dir throws. */
+export function forgetCurrentSession(sessionId, opts = {}) {
+    if (!isValidSessionId(sessionId))
+        throw new Error("invalid session id");
+    const dir = currentDir(opts);
+    let names;
+    try {
+        const st = lstatSync(dir);
+        if (st.isSymbolicLink() || !st.isDirectory())
+            throw new Error(`unsafe peers dir: ${dir}`);
+        names = readdirSync(dir);
+    }
+    catch (err) {
+        if (err.code === "ENOENT")
+            return;
+        throw err;
+    }
+    for (const name of names) {
+        const m = ENTRY_RE.exec(name);
+        if (m === null)
+            continue;
+        const pid = Number(m[1]);
+        try {
+            if (lstatSync(join(dir, name)).isFile() && readCurrentSession(pid, opts) === sessionId)
+                unlinkSync(join(dir, name));
+        }
+        catch {
+            // already gone or unreadable: leave it
+        }
+    }
+}

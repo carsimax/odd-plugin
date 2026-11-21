@@ -94,3 +94,15 @@ test("the peers skill disables model invocation and passes no user argument text
   assert.match(skill, /dist\/cli\/peers\.js" list --session/);
   assert.doesNotMatch(skill, /\b(allow|revoke)\b[^\n]*dist\/cli\/peers\.js|peers\.js"? (allow|revoke)/);
 });
+
+test("the CLI imports exactly { listGrants } from peer-grants and nothing that writes", () => {
+  const src = readFileSync(join(pluginRoot, "src", "cli", "peers.ts"), "utf8");
+  const code = src.replace(/\/\/.*$/gm, "");
+  const lines = code.split("\n").map((l) => l.trim());
+  assert.deepEqual(lines.filter((l) => /peer-grants/.test(l)), ['import { listGrants } from "../lib/peer-grants.js";']);
+  assert.doesNotMatch(code, /import\s*\*\s*as/);
+  assert.doesNotMatch(code, /import[^;]*["'][^"']*\/(lock|state)\.js["']/);
+  for (const w of ["allow", "revoke", "revokeAll", "atomicWriteFile", "writeFileSync", "rmSync"]) {
+    assert.doesNotMatch(code, new RegExp(`\\b${w}\\s*\\(`), w);
+  }
+});
