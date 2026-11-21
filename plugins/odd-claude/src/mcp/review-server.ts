@@ -8,41 +8,24 @@
 // `isError: true` and a typed body `{error:{code,message,...}}` so the model can read and correct it.
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { pathToFileURL } from "node:url";
-import { realpathSync } from "node:fs";
 import type { Readable, Writable } from "node:stream";
 import { pluginRootDir } from "../review/consent.js";
 import { callTool, fail, TOOL_BY_NAME, TOOLS, type ToolDeps } from "./tools.js";
+import { inflightKey, isMain, isObject, MAX_LINE_BYTES, rpcError, runMain, serveLines, SUPPORTED_PROTOCOLS, type Id, type Request, type Response } from "./server-core.js";
+
+export { MAX_LINE_BYTES, SUPPORTED_PROTOCOLS };
+export type { Response };
 
 export const SERVER_NAME = "odd-claude-review";
-export const SUPPORTED_PROTOCOLS = ["2025-06-18", "2025-03-26", "2024-11-05"] as const;
-/** Longest accepted input line (bytes); a longer line is dropped with an invalid-request error. */
-export const MAX_LINE_BYTES = 4 * 1024 * 1024;
 
 const INSTRUCTIONS =
   "Review tools of the odd-claude plugin. Start with review_status and follow only the next_transition it returns. Consent is the human's: review_start relays the question, review_answer_consent records only their explicit answer. Reviewers cost money: acknowledge a forecast before they run.";
-
-type Id = string | number | null;
-interface Request {
-  jsonrpc: "2.0";
-  id?: Id;
-  method: string;
-  params?: unknown;
-}
-export interface Response {
-  jsonrpc: "2.0";
-  id: Id;
-  result?: unknown;
-  error?: { code: number; message: string; data?: unknown };
-}
 
 export interface ServerOptions {
   deps?: ToolDeps;
   /** Directory used when a tool call gives no cwd (default: process.cwd()). */
   cwd?: string;
 }
-
-const rpcError = (id: Id, code: number, message: string, data?: unknown): Response => ({ jsonrpc: "2.0", id, error: { code, message, ...(data !== undefined ? { data } : {}) } });
 
 function serverVersion(): string {
   try {
@@ -52,11 +35,6 @@ function serverVersion(): string {
     return "0.0.0";
   }
 }
-
-/** JSON-RPC ids 6 and "6" are different ids. */
-const inflightKey = (id: Id | undefined): string => `${typeof id}:${String(id)}`;
-
-const isObject = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
 
 export class ReviewServer {
   private readonly inflight = new Map<string, AbortController>();
@@ -127,68 +105,7 @@ export class ReviewServer {
 /** Reads newline-delimited JSON from `input` and writes responses to `output` until `input` ends and every call settled. */
 export function serve(input: Readable, output: Writable, opts: ServerOptions = {}): Promise<void> {
   const server = new ReviewServer(opts);
-  const pending = new Set<Promise<void>>();
-  const send = (r: Response): void => {
-    output.write(`${JSON.stringify(r)}\n`);
-  };
-  const dispatch = (line: string): void => {
-    let message: unknown;
-    try {
-      message = JSON.parse(line);
-    } catch {
-      send(rpcError(null, -32700, "parse error"));
-      return;
-    }
-    const p = server.handle(message).then(
-      (r) => { if (r !== undefined) send(r); },
-      (e) => send(rpcError(null, -32603, e instanceof Error ? e.message : "internal error")),
-    ).finally(() => pending.delete(p));
-    pending.add(p);
-  };
-  return new Promise<void>((resolve) => {
-    let buf = "";
-    let dropping = false;
-    input.setEncoding("utf8");
-    input.on("data", (chunk: string) => {
-      buf += chunk;
-      let nl: number;
-      while ((nl = buf.indexOf("\n")) >= 0) {
-        const line = buf.slice(0, nl).replace(/\r$/, "");
-        buf = buf.slice(nl + 1);
-        if (dropping) dropping = false;
-        else if (line.trim() !== "") {
-          if (Buffer.byteLength(line) > MAX_LINE_BYTES) send(rpcError(null, -32600, "message too large"));
-          else dispatch(line);
-        }
-      }
-      if (buf.length > MAX_LINE_BYTES) {
-        // An unterminated line past the cap: answer once, drop everything up to the next newline.
-        send(rpcError(null, -32600, "message too large"));
-        buf = "";
-        dropping = true;
-      }
-    });
-    input.on("end", () => {
-      if (!dropping && buf.trim() !== "") dispatch(buf);
-      void Promise.all([...pending]).then(() => resolve());
-    });
-    input.on("error", () => resolve());
-  });
+  return serveLines(input, output, (m) => server.handle(m));
 }
 
-function isMain(): boolean {
-  const entry = process.argv[1];
-  if (entry === undefined) return false;
-  try {
-    return import.meta.url === pathToFileURL(realpathSync(entry)).href;
-  } catch {
-    return false;
-  }
-}
-
-if (isMain()) {
-  // Exit only once stdout has flushed what was written: process.exit would cut a large pending reply on a pipe.
-  void serve(process.stdin, process.stdout).then(() => {
-    process.stdout.write("", () => process.exit(0));
-  });
-}
+if (isMain(import.meta.url)) runMain(() => serve(process.stdin, process.stdout));

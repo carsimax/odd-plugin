@@ -7,6 +7,10 @@
     "review": {
       "command": "node",
       "args": ["${CLAUDE_PLUGIN_ROOT}/dist/mcp/review-server.js"]
+    },
+    "peers": {
+      "command": "node",
+      "args": ["${CLAUDE_PLUGIN_ROOT}/dist/mcp/peers-server.js"]
     }
   }
 }

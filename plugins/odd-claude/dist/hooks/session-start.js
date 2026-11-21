@@ -11,6 +11,7 @@ import { refreshStatuslineShim } from "../lib/setup-fs.js";
 import { bannerEnabled, bannerText } from "../lib/banner.js";
 import { pluginVersion } from "../lib/version.js";
 import { profileContextLine } from "../lib/profiles.js";
+import { recordCurrentSession } from "../lib/peers-session.js";
 import { recordTranscriptPath } from "../lib/stats.js";
 /**
  * Records the session start in state (when a session id and data dir exist) and injects the
@@ -31,6 +32,15 @@ export function sessionStart(input, opts = {}) {
         }
     }
     recordTranscriptPath(input, opts);
+    // R07: let this session's peers MCP server find its own id (keyed by the Claude Code pid, our parent). Never blocks.
+    if (typeof input.session_id === "string" && input.session_id !== "") {
+        try {
+            recordCurrentSession(input.session_id, process.ppid, opts);
+        }
+        catch {
+            // not a valid peer id or no data dir: the peers tools then answer "unknown"
+        }
+    }
     const env = opts.env ?? process.env;
     // After a plugin update the root moves: keep an existing statusLine shim (see /odd-claude:setup) pointing at it.
     const shimData = opts.dataDir ?? env.CLAUDE_PLUGIN_DATA;
