@@ -256,7 +256,7 @@ test("send: invalid ids, oversized message/reason and wrong types are invalid_in
       SEND({ recipient_session_id: 5 }),
       SEND({ message: "" }),
       SEND({ message: "x".repeat(8193) }),
-      SEND({ reason: "short" }),
+      SEND({ reason: "ab" }), // under 3 UTF-16 units can never reach 8 bytes; 3-7 unit reasons are checked by lib/peers (invalid_reason)
       SEND({ reason: "r".repeat(513) }),
       SEND({ message: 5 }),
       SEND({ extra: true }),
@@ -356,4 +356,48 @@ test("real server process under a fake Claude Code parent: finds the id the Sess
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
+});
+
+test("send: reason limit counts UTF-8 bytes, not characters (S4)", async () => {
+  await withFx(async ({ dir, call }) => {
+    allow(PEER, ME, { dataDir: dir });
+    for (const reason of ["éééé", "añadido"]) { // 4 chars / 8 bytes, 7 chars / 8 bytes
+      const r = await call("odd_orchestrator_send_message", SEND({ reason }));
+      assert.equal(r.result.isError, undefined, reason);
+      assert.equal(body(r).accepted, true);
+    }
+    assert.equal(count(PEER, { dataDir: dir }), 2);
+    for (const reason of ["ééé", "abcdefg", "ñandú", "short"]) { // 6, 7, 7 and 5 bytes
+      const r = await call("odd_orchestrator_send_message", SEND({ reason }));
+      assert.equal(r.result.isError, true, reason);
+      assert.equal(body(r).error.code, "invalid_reason", reason);
+    }
+    assert.equal(count(PEER, { dataDir: dir }), 2);
+  });
+});
+
+test("send: a `sender`-like argument cannot spoof the sender (S3/S4, risk 2)", async () => {
+  await withFx(async ({ dir, call }) => {
+    allow(PEER, ME, { dataDir: dir });
+    allow(PEER, OTHER, { dataDir: dir });
+    for (const key of ["sender", "from", "sender_session_id"]) {
+      const r = await call("odd_orchestrator_send_message", SEND({ [key]: OTHER }));
+      assert.equal(r.result.isError, true, key);
+      assert.equal(body(r).error.code, "invalid_input", key);
+      assert.deepEqual(mailboxFiles(dir, PEER), [], key);
+    }
+    assert.equal(body(await call("odd_orchestrator_send_message", SEND())).accepted, true);
+    assert.equal(peek(PEER, { dataDir: dir })[0].from, ME);
+  });
+});
+
+test("send: refusal order is session_unknown > self > not_granted (risk 2)", async () => {
+  await withFx(async ({ call }) => {
+    assert.equal(body(await call("odd_orchestrator_send_message", SEND({ recipient_session_id: ME }))).error.code, "session_unknown");
+    assert.equal(body(await call("odd_orchestrator_send_message", SEND())).error.code, "session_unknown");
+  }, { session: null });
+  await withFx(async ({ call }) => {
+    assert.equal(body(await call("odd_orchestrator_send_message", SEND({ recipient_session_id: ME }))).error.code, "self_recipient");
+    assert.equal(body(await call("odd_orchestrator_send_message", SEND())).error.code, "not_granted");
+  });
 });

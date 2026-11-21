@@ -133,7 +133,7 @@ export const PEERS_TOOLS: readonly PeersToolDefinition[] = [
       properties: {
         recipient_session_id: { type: "string", pattern: ID_PATTERN, description: "Id of the recipient session (from odd_orchestrator_list)." },
         message: { type: "string", minLength: 1, maxLength: MAX_MESSAGE_BYTES, description: `The message, at most ${MAX_MESSAGE_BYTES} bytes (UTF-8).` },
-        reason: { type: "string", minLength: MIN_REASON_BYTES, maxLength: MAX_REASON_BYTES, description: `Why you are sending it, ${MIN_REASON_BYTES}-${MAX_REASON_BYTES} bytes.` },
+        reason: { type: "string", minLength: 3, maxLength: MAX_REASON_BYTES, description: `Why you are sending it, ${MIN_REASON_BYTES}-${MAX_REASON_BYTES} bytes (UTF-8).` },
       },
       required: ["recipient_session_id", "message", "reason"],
       additionalProperties: false,

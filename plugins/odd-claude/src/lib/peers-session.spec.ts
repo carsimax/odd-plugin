@@ -32,12 +32,65 @@ test("record then read: atomic private entry keyed by pid", () => {
   }
 });
 
-test("unknown when nothing recorded; env CLAUDE_SESSION_ID wins only when it is a valid id", () => {
+test("unknown when nothing recorded; env CLAUDE_CODE_SESSION_ID is only a fallback and only when it is a valid id", () => {
   const dir = tmp();
   try {
     assert.equal(resolveSessionId(process.pid, { dataDir: dir, env: EMPTY_ENV }), null);
-    assert.deepEqual(resolveSessionId(process.pid, { dataDir: dir, env: { CLAUDE_SESSION_ID: B } }), { session_id: B, source: "env" });
-    assert.equal(resolveSessionId(process.pid, { dataDir: dir, env: { CLAUDE_SESSION_ID: "../x" } }), null);
+    assert.deepEqual(resolveSessionId(process.pid, { dataDir: dir, env: { CLAUDE_CODE_SESSION_ID: B } }), { session_id: B, source: "env" });
+    assert.equal(resolveSessionId(process.pid, { dataDir: dir, env: { CLAUDE_CODE_SESSION_ID: "../x" } }), null);
+    assert.equal(resolveSessionId(process.pid, { dataDir: dir, env: { CLAUDE_SESSION_ID: B } }), null); // legacy name is not read
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("a valid hook entry beats a different env id; an invalid entry falls back to the env", () => {
+  const dir = tmp();
+  try {
+    recordCurrentSession(A, process.pid, { dataDir: dir });
+    assert.deepEqual(resolveSessionId(process.pid, { dataDir: dir, env: { CLAUDE_CODE_SESSION_ID: B } }), { session_id: A, source: "hook" });
+    writeFileSync(join(currentDir({ dataDir: dir }), `${process.pid}.json`), "{not json");
+    assert.deepEqual(resolveSessionId(process.pid, { dataDir: dir, env: { CLAUDE_CODE_SESSION_ID: B } }), { session_id: B, source: "env" });
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("a symlinked peers or peers/.current dir reads as unknown (fail closed), even with a valid entry behind it", () => {
+  const real = tmp();
+  const dir = tmp();
+  try {
+    recordCurrentSession(A, process.pid, { dataDir: real });
+    mkdirSync(join(dir, "peers"));
+    symlinkSync(currentDir({ dataDir: real }), join(dir, "peers", ".current"));
+    assert.equal(readCurrentSession(process.pid, { dataDir: dir }), null);
+    assert.equal(resolveSessionId(process.pid, { dataDir: dir, env: EMPTY_ENV }), null);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+    rmSync(real, { recursive: true, force: true });
+  }
+  const real2 = tmp();
+  const dir2 = tmp();
+  try {
+    recordCurrentSession(A, process.pid, { dataDir: real2 });
+    symlinkSync(join(real2, "peers"), join(dir2, "peers"));
+    assert.equal(readCurrentSession(process.pid, { dataDir: dir2 }), null);
+    assert.equal(resolveSessionId(process.pid, { dataDir: dir2, env: EMPTY_ENV }), null);
+  } finally {
+    rmSync(dir2, { recursive: true, force: true });
+    rmSync(real2, { recursive: true, force: true });
+  }
+});
+
+test("own entry survives its own prune even when its pid is dead", () => {
+  const dir = tmp();
+  try {
+    const dead = 2147483001; // practically never a live pid
+    recordCurrentSession(A, dead, { dataDir: dir });
+    assert.equal(readCurrentSession(dead, { dataDir: dir }), A);
+    recordCurrentSession(B, 2147483002, { dataDir: dir }); // prunes the other dead entry, keeps only its own
+    assert.equal(readCurrentSession(2147483002, { dataDir: dir }), B);
+    assert.equal(readCurrentSession(dead, { dataDir: dir }), null);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

@@ -2,7 +2,10 @@
 // SessionStart hook records `<data>/peers/.current/<claude-pid>.json` ({session_id}) keyed by its parent process (the Claude Code
 // process); the MCP server, a sibling child of that same process, reads the entry for its own parent pid.
 // ASSUMPTION (unverified against the real claude): the hook's process.ppid and the MCP server's process.ppid are the same pid.
-// Order of resolution: env CLAUDE_SESSION_ID (when valid) -> the pid entry -> null (the tool says "unknown" with guidance).
+// Order of resolution: the hook's pid entry (when valid) -> env CLAUDE_CODE_SESSION_ID (fallback only, when valid; the name Claude Code
+// exports into its Bash tool environment, whether MCP servers receive it is unverified) -> null (the tool says "unknown" with guidance).
+// The hook entry wins because it comes from the hook input; an inherited env var could be stale or belong to another session.
+// CLAUDE_SESSION_ID is not read: Claude Code does not export that name.
 import { closeSync, constants, fstatSync, lstatSync, mkdirSync, openSync, readdirSync, readFileSync, statSync, unlinkSync } from "node:fs";
 import { join } from "node:path";
 import { atomicWriteFile, resolveDataDir } from "./state.js";
@@ -94,6 +97,12 @@ export function readCurrentSession(pid, opts = {}) {
     if (!isPid(pid))
         return null;
     try {
+        const data = resolveDataDir(opts);
+        for (const d of [join(data, "peers"), currentDir(opts)]) {
+            const st = lstatSync(d);
+            if (st.isSymbolicLink() || !st.isDirectory())
+                return null;
+        }
         const file = join(currentDir(opts), `${pid}.json`);
         if (!lstatSync(file).isFile())
             return null;
@@ -114,11 +123,11 @@ export function readCurrentSession(pid, opts = {}) {
     }
 }
 export function resolveSessionId(pid, opts = {}) {
-    const env = (opts.env ?? process.env).CLAUDE_SESSION_ID;
-    if (isValidSessionId(env))
-        return { session_id: env, source: "env" };
     const id = readCurrentSession(pid, opts);
-    return id === null ? null : { session_id: id, source: "hook" };
+    if (id !== null)
+        return { session_id: id, source: "hook" };
+    const env = (opts.env ?? process.env).CLAUDE_CODE_SESSION_ID;
+    return isValidSessionId(env) ? { session_id: env, source: "env" } : null;
 }
 /** mtime-free helper kept for tests: number of entries in the dir. */
 export function currentEntryCount(opts = {}) {
