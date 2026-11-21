@@ -95,7 +95,7 @@ function withLock(id, opts, fn) {
     mkdirSync(locks, { recursive: true, mode: 0o700 });
     isRealDir(locks);
     const lock = join(locks, `${id}.lock`);
-    const deadline = Date.now() + LOCK_WAIT_MS;
+    const deadline = Date.now() + (opts.lockWaitMs ?? LOCK_WAIT_MS);
     while (!acquireLock(lock, process.pid, { staleMs: LOCK_STALE_MS })) {
         if (Date.now() > deadline)
             throw new PeersError("lock_timeout", "mailbox is busy");
@@ -288,6 +288,34 @@ export function take(recipient, opts = {}) {
         for (const e of live)
             rmSync(join(dir, e.name), { force: true });
         return live.map((e) => toMessage(e.stored));
+    });
+}
+/**
+ * Selective take (P4 delivery): under the mailbox lock, walks the live messages in seq order and asks `select` about each one:
+ * "take" removes and returns it, "drop" removes it without returning it, "skip" leaves it queued and continues with the next one, "stop" ends the walk leaving it and every later message
+ * queued. Expired messages are removed (never offered to `select`). If `select` throws nothing is removed and the error propagates.
+ */
+export function takeSelect(recipient, select, opts = {}) {
+    requireId(recipient, "recipient");
+    const now = (opts.now ?? Date.now)();
+    const dir = ensureMailbox(recipient, opts, false);
+    if (!dir)
+        return [];
+    return withLock(recipient, opts, () => {
+        const live = sweepDir(dir, now);
+        const decided = [];
+        for (const e of live) {
+            const m = toMessage(e.stored);
+            const d = select(m);
+            if (d === "stop")
+                break;
+            if (d === "skip")
+                continue;
+            decided.push({ e, take: d === "take" });
+        }
+        for (const { e } of decided)
+            rmSync(join(dir, e.name), { force: true });
+        return decided.filter((x) => x.take).map((x) => toMessage(x.e.stored));
     });
 }
 /** Read-only view of the live (unexpired) messages, for diagnostics. Removes nothing. */

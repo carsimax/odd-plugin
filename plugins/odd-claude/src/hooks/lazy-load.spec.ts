@@ -78,3 +78,19 @@ test("PreToolUse and Stop load the gate and the settle engine once the global RD
   const stop = loaded("Stop", { ...base, stop_hook_active: false }, on);
   assert.ok(stop.files.includes("hooks/stop.js"), stop.files.join(", "));
 });
+
+// R07 P4: the delivery module (and the mailbox scan behind it) is loaded only when the session has a mailbox with queued messages.
+const PEER_R = "rrrrrrrr-1111-4111-8111-rrrrrrrrrrrr";
+for (const [event, extra] of [["UserPromptSubmit", { prompt: "hola" }], ["SessionStart", { source: "compact" }]] as const) {
+  test(`${event}: peers-delivery loads only when the session has queued mail`, { skip }, () => {
+    const input = { session_id: PEER_R, cwd: tmpdir(), ...extra };
+    const none = loaded(event, input);
+    assert.ok(!none.files.includes("lib/peers-delivery.js"), none.files.join(", "));
+    assert.ok(!none.stdout.includes("peer-messages"));
+    const withMail = loaded(event, input, (data) => {
+      mkdirSync(join(data, "peers", PEER_R), { recursive: true });
+      writeFileSync(join(data, "peers", PEER_R, "0000000001.json"), "{}");
+    });
+    assert.ok(withMail.files.includes("lib/peers-delivery.js"), withMail.files.join(", "));
+  });
+}

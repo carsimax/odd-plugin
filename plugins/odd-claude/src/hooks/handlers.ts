@@ -8,12 +8,14 @@ import { stop } from "./stop.js";
 import { stopFailure } from "./stop-failure.js";
 import { subagentStart, subagentStop } from "./subagents.js";
 import { userPromptSubmit } from "./user-prompt-submit.js";
+import { mergePeerDelivery } from "../lib/peers-delivery.js";
 import type { Handlers } from "./run.js";
 
 /** Registered events. Keep minimal: hooks/hooks.json must list exactly these (and `lazy.ts` must register the same events). */
 export const handlers: Handlers = {
-  SessionStart: sessionStart,
-  UserPromptSubmit: userPromptSubmit,
+  // R07 P4: pending peer messages are appended after the handler ran (after SessionStart's grant reset, after the consent confirmation).
+  SessionStart: (i, o) => mergePeerDelivery("SessionStart", i, sessionStart(i, o), o),
+  UserPromptSubmit: (i, o) => mergePeerDelivery("UserPromptSubmit", i, userPromptSubmit(i, o), o),
   PreToolUse: preToolUse,
   PostToolUse: postToolUse,
   StopFailure: stopFailure,

@@ -1,6 +1,37 @@
 // Lazy dispatch of the hook process (T9): each event imports only the handler it needs, on demand, so a cheap event never loads the
 // review engine or another event's handler. Same contract as `runHook` (run.ts): fail safe, exit 0, same output bytes.
-import { logError } from "../lib/state.js";
+import { lstatSync, readdirSync } from "node:fs";
+import { join } from "node:path";
+import { logError, resolveDataDir } from "../lib/state.js";
+/**
+ * R07 P4: cheap pre-check (same rule as `hasPendingMail`, duplicated here so that a session without queued mail never loads the peers
+ * delivery module): a plain mailbox directory for the session id holding at least one message file. Never throws.
+ */
+export function mailboxHasMail(input, opts) {
+    try {
+        const sid = input !== null && typeof input === "object" ? input.session_id : undefined;
+        if (typeof sid !== "string" || !/^[A-Za-z0-9][A-Za-z0-9-]{7,63}$/.test(sid))
+            return false;
+        const dir = join(resolveDataDir(opts), "peers", sid);
+        const st = lstatSync(dir);
+        if (st.isSymbolicLink() || !st.isDirectory())
+            return false;
+        return readdirSync(dir).some((n) => /^\d{10}\.json$/.test(n));
+    }
+    catch {
+        return false;
+    }
+}
+async function withPeerMail(event, i, out, o) {
+    if (!mailboxHasMail(i, o))
+        return out;
+    try {
+        return (await import("../lib/peers-delivery.js")).mergePeerDelivery(event, i, out, o);
+    }
+    catch {
+        return out; // delivery never fails the hook
+    }
+}
 /**
  * One loader per registered event (the same set as `handlers.ts`; a test pins it against hooks.json).
  *
@@ -9,8 +40,8 @@ import { logError } from "../lib/state.js";
  * answer without loading the gate, the settle engine and its risk/status/start dependencies; with the switch on, the full handler runs.
  */
 export const lazyHandlers = {
-    SessionStart: async (i, o) => (await import("./session-start.js")).sessionStart(i, o),
-    UserPromptSubmit: async (i, o) => (await import("./user-prompt-submit.js")).userPromptSubmit(i, o),
+    SessionStart: async (i, o) => withPeerMail("SessionStart", i, (await import("./session-start.js")).sessionStart(i, o), o),
+    UserPromptSubmit: async (i, o) => withPeerMail("UserPromptSubmit", i, (await import("./user-prompt-submit.js")).userPromptSubmit(i, o), o),
     PostToolUse: async (i, o) => (await import("./post-tool-use.js")).postToolUse(i, o),
     StopFailure: async (i, o) => (await import("./stop-failure.js")).stopFailure(i, o),
     SubagentStart: async (i, o) => (await import("./subagents.js")).subagentStart(i, o),
