@@ -94,7 +94,8 @@ function reminderText(root: string, status: StatusEnvelope, target: StartTarget,
   ].join("\n");
 }
 
-function settleReminder(input: HookInput, opts: StateOptions): HookOutput | undefined {
+/** The Stop reminder proper (exported for the lazy entry, `lazy.ts`, which loads this module only when the global RDD switch is on). */
+export function settleReminder(input: HookInput, opts: StateOptions): HookOutput | undefined {
   if (input.stop_hook_active === true) return undefined;
   const cwd = typeof input.cwd === "string" && input.cwd !== "" ? input.cwd : undefined;
   const session = typeof input.session_id === "string" && SAFE_SESSION.test(input.session_id) ? input.session_id : undefined;

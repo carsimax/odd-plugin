@@ -87,7 +87,8 @@ function reminderText(root, status, target, opts) {
         `To turn review-driven development off, the human can run: ${modeCommand("disable")} (user-wide), or ${modeCommand(`disable --scope clone --cwd ${shellQuote(root)}`)} (this repository only).`,
     ].join("\n");
 }
-function settleReminder(input, opts) {
+/** The Stop reminder proper (exported for the lazy entry, `lazy.ts`, which loads this module only when the global RDD switch is on). */
+export function settleReminder(input, opts) {
     if (input.stop_hook_active === true)
         return undefined;
     const cwd = typeof input.cwd === "string" && input.cwd !== "" ? input.cwd : undefined;

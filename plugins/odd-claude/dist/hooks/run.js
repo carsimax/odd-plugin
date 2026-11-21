@@ -4,26 +4,12 @@
 import { readFileSync, realpathSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { logError } from "../lib/state.js";
-import { postToolUse } from "./post-tool-use.js";
-import { preToolUse } from "./pre-tool-use.js";
-import { sessionEnd } from "./session-end.js";
-import { sessionStart } from "./session-start.js";
-import { stop } from "./stop.js";
-import { stopFailure } from "./stop-failure.js";
-import { subagentStart, subagentStop } from "./subagents.js";
-import { userPromptSubmit } from "./user-prompt-submit.js";
-/** Registered events. Keep minimal: hooks/hooks.json must list exactly these. */
-export const defaultHandlers = {
-    SessionStart: sessionStart,
-    UserPromptSubmit: userPromptSubmit,
-    PreToolUse: preToolUse,
-    PostToolUse: postToolUse,
-    StopFailure: stopFailure,
-    Stop: stop,
-    SubagentStart: subagentStart,
-    SubagentStop: subagentStop,
-    SessionEnd: sessionEnd,
-};
+/**
+ * Registered events with every handler loaded eagerly (see `handlers.ts`), for callers that import this module (tests, tools): populated
+ * on import. When this module is the hook entrypoint (`node dist/hooks/run.js <event>`) nothing eager is loaded: the process dispatches
+ * through `lazy.ts`, which imports only the handler its event needs.
+ */
+export const defaultHandlers = {};
 export function runHook(event, stdin, opts = {}) {
     const handlers = opts.handlers ?? defaultHandlers;
     const handler = Object.hasOwn(handlers, event) ? handlers[event] : undefined;
@@ -40,7 +26,7 @@ export function runHook(event, stdin, opts = {}) {
         return { exitCode: 0, stdout: "" };
     }
 }
-function main() {
+async function main() {
     const event = process.argv[2] ?? "";
     let stdin = "";
     try {
@@ -49,15 +35,27 @@ function main() {
     catch {
         // no stdin: treat as empty
     }
-    const result = runHook(event, stdin);
+    const { runHookLazy } = await import("./lazy.js");
+    const result = await runHookLazy(event, stdin);
     if (result.stdout !== "")
         process.stdout.write(result.stdout + "\n");
     process.exitCode = result.exitCode;
 }
+let isEntrypoint = false;
 try {
-    if (process.argv[1] && realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url)))
-        main();
+    isEntrypoint = Boolean(process.argv[1]) && realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url));
 }
 catch {
     // fail safe
+}
+if (isEntrypoint) {
+    try {
+        await main();
+    }
+    catch {
+        // fail safe
+    }
+}
+else {
+    Object.assign(defaultHandlers, (await import("./handlers.js")).handlers);
 }

@@ -24,6 +24,7 @@ npm run bench -- --subject oracle --out /tmp/oracle.json   # the upstream binary
 npm run bench -- --subject both --out /tmp/bench-out        # both, plus the comparison (see below)
 npm run bench -- --subject both --repeat 5 --out /tmp/bench-out   # repeat every journey 5 times (default 3, 1..20)
 npm run bench -- --compare /tmp/bench-out/odd.json /tmp/bench-out/oracle.json --out /tmp/again   # rebuild the report, runs nothing
+npm run bench:hooks -- --runs 25 --out /tmp/hooks.json  # hook start-up breakdown per event (see docs/bench/hook-startup.md)
 npm run test:bench                                      # unit tests of the bench itself
 ```
 

@@ -4,14 +4,6 @@
 import { readFileSync, realpathSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { logError, type StateOptions } from "../lib/state.js";
-import { postToolUse } from "./post-tool-use.js";
-import { preToolUse } from "./pre-tool-use.js";
-import { sessionEnd } from "./session-end.js";
-import { sessionStart } from "./session-start.js";
-import { stop } from "./stop.js";
-import { stopFailure } from "./stop-failure.js";
-import { subagentStart, subagentStop } from "./subagents.js";
-import { userPromptSubmit } from "./user-prompt-submit.js";
 
 export interface HookInput {
   session_id?: string;
@@ -23,18 +15,12 @@ export type HookOutput = Record<string, unknown>;
 export type Handler = (input: HookInput, opts: StateOptions) => HookOutput | undefined;
 export type Handlers = Record<string, Handler>;
 
-/** Registered events. Keep minimal: hooks/hooks.json must list exactly these. */
-export const defaultHandlers: Handlers = {
-  SessionStart: sessionStart,
-  UserPromptSubmit: userPromptSubmit,
-  PreToolUse: preToolUse,
-  PostToolUse: postToolUse,
-  StopFailure: stopFailure,
-  Stop: stop,
-  SubagentStart: subagentStart,
-  SubagentStop: subagentStop,
-  SessionEnd: sessionEnd,
-};
+/**
+ * Registered events with every handler loaded eagerly (see `handlers.ts`), for callers that import this module (tests, tools): populated
+ * on import. When this module is the hook entrypoint (`node dist/hooks/run.js <event>`) nothing eager is loaded: the process dispatches
+ * through `lazy.ts`, which imports only the handler its event needs.
+ */
+export const defaultHandlers: Handlers = {};
 
 export interface RunOptions extends StateOptions {
   handlers?: Handlers;
@@ -60,7 +46,7 @@ export function runHook(event: string, stdin: string, opts: RunOptions = {}): Ru
   }
 }
 
-function main(): void {
+async function main(): Promise<void> {
   const event = process.argv[2] ?? "";
   let stdin = "";
   try {
@@ -68,13 +54,24 @@ function main(): void {
   } catch {
     // no stdin: treat as empty
   }
-  const result = runHook(event, stdin);
+  const { runHookLazy } = await import("./lazy.js");
+  const result = await runHookLazy(event, stdin);
   if (result.stdout !== "") process.stdout.write(result.stdout + "\n");
   process.exitCode = result.exitCode;
 }
 
+let isEntrypoint = false;
 try {
-  if (process.argv[1] && realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url))) main();
+  isEntrypoint = Boolean(process.argv[1]) && realpathSync(process.argv[1]!) === realpathSync(fileURLToPath(import.meta.url));
 } catch {
   // fail safe
+}
+if (isEntrypoint) {
+  try {
+    await main();
+  } catch {
+    // fail safe
+  }
+} else {
+  Object.assign(defaultHandlers, (await import("./handlers.js")).handlers);
 }
