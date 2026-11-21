@@ -21,7 +21,8 @@ export const DEFAULT_THRESHOLDS: Required<Thresholds> = {
 /** The per-operation sample the runner adds to every journey: the sum of every process time of one run, one sample per repeat. Comparable across subjects (their operation names differ). */
 export const JOURNEY_TOTAL_OP = "journey.total";
 
-export type JourneyKind = "comparable" | "divergent" | "unsupported" | "missing";
+/** `not_comparable`: both sides ran, but a row is marked (`JourneyRow.not_comparable`) because one side's numbers say nothing about efficiency (for example the oracle's gate never decides, so its near-zero cost is no win for it). */
+export type JourneyKind = "comparable" | "divergent" | "unsupported" | "missing" | "not_comparable";
 export interface MetricComparison { odd: number | null; oracle: number | null; verdict: Verdict }
 type Stat = Pick<LatencyStat, "samples" | "median_ms" | "p95_ms">;
 export interface LatencyComparison { odd: Stat; oracle?: Stat; ratio: number | null; verdict: Verdict }
@@ -33,6 +34,8 @@ export interface JourneyComparison {
   reason?: string;
   /** Declared divergences of the oracle on this journey: findings, never wins or losses. */
   divergence?: string[];
+  /** Why a `not_comparable` row is excluded: the marks of both sides. Raw numbers stay in `metrics` with verdict `not_comparable`, for information. */
+  not_comparable?: string[];
   metrics: Partial<Record<DimensionName | "blocks", MetricComparison>>;
   /** Per operation present in odd; only operations the oracle also has get a verdict (`journey.total` always does). */
   latency: Record<string, LatencyComparison>;
@@ -47,8 +50,8 @@ export interface ComparisonReport {
   summary: {
     outcome: Record<"equal" | "different" | "not_comparable", number>;
     metrics: Record<Verdict, number>;
-    journeys: { total: number; comparable: number; divergent: number; unsupported: number; missing: number };
-    /** Over comparable journeys only (divergent and unsupported rows never count). */
+    journeys: { total: number; comparable: number; divergent: number; unsupported: number; missing: number; not_comparable: number };
+    /** Over comparable journeys only (divergent, unsupported and not_comparable rows never count). */
     per_metric: Partial<Record<DimensionName | "blocks", PerMetricSummary>>;
     latency: { compared: number; verdicts: Record<Verdict, number>; median_ratio: number | null };
   };
@@ -94,7 +97,7 @@ export function compareResults(odd: BenchResult, oracle: BenchResult, thresholds
   const summary: ComparisonReport["summary"] = {
     outcome: { equal: 0, different: 0, not_comparable: 0 },
     metrics: zeroVerdicts(),
-    journeys: { total: 0, comparable: 0, divergent: 0, unsupported: 0, missing: 0 },
+    journeys: { total: 0, comparable: 0, divergent: 0, unsupported: 0, missing: 0, not_comparable: 0 },
     per_metric: {},
     latency: { compared: 0, verdicts: zeroVerdicts(), median_ratio: null },
   };
@@ -102,10 +105,12 @@ export function compareResults(odd: BenchResult, oracle: BenchResult, thresholds
   const journeys = odd.journeys.map((o): JourneyComparison => {
     const r = byId.get(o.id);
     const divergence = [...(o.divergence ?? []), ...(r?.divergence ?? [])];
+    const marks = [...new Set([...(o.not_comparable ?? []), ...(r?.not_comparable ?? [])])];
     const out: JourneyComparison = { id: o.id, kind: "comparable", outcome: "not_comparable", metrics: {}, latency: {} };
     if (r === undefined) out.kind = "missing";
     else if (o.status === "unsupported" || r.status === "unsupported") { out.kind = "unsupported"; out.reason = r.status === "unsupported" ? r.reason : o.reason; }
     else if (divergence.length > 0) { out.kind = "divergent"; out.divergence = divergence; }
+    else if (marks.length > 0) { out.kind = "not_comparable"; out.not_comparable = marks; }
     summary.journeys.total += 1;
     summary.journeys[out.kind] += 1;
     if (comparable(o) && comparable(r)) {

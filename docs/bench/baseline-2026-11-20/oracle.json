@@ -3,7 +3,7 @@
   "meta": {
     "subject": "oracle",
     "binary": {
-      "path": "/Users/carsimax/.local/share/odd-claude-oracle/gentle-ai-4.6.0/bin/gentle-ai",
+      "path": "~/.local/share/odd-claude-oracle/gentle-ai-4.6.0/bin/gentle-ai",
       "version": "4.6.0"
     },
     "node": "v26.12.1",
@@ -1740,7 +1740,10 @@
             ]
           }
         }
-      }
+      },
+      "not_comparable": [
+        "the oracle gate reported delivery=unmanaged: it never decides, so its near-zero cost is no win over a gate that does"
+      ]
     },
     {
       "id": "gate-push-allowed-for-medium-risk-range",
@@ -1816,7 +1819,10 @@
             ]
           }
         }
-      }
+      },
+      "not_comparable": [
+        "the oracle gate reported delivery=unmanaged: it never decides, so its near-zero cost is no win over a gate that does"
+      ]
     },
     {
       "id": "gate-pr-open-denied-unreviewed",

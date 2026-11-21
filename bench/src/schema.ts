@@ -26,6 +26,8 @@ export interface JourneyRow {
   reason?: string;
   /** Declared divergences: where this subject legitimately behaves differently from the shared expectation. Findings, never wins or losses. */
   divergence?: string[];
+  /** Why this row's numbers must not be compared with the other subject's (for example a gate that never decides, so its near-zero cost is no win). Excluded from every verdict, like a divergence, but for a measurement reason. */
+  not_comparable?: string[];
 }
 
 export interface BenchResult {
@@ -89,6 +91,7 @@ export function validateResult(x: unknown): string[] {
       if (st !== "passed" && st !== "failed" && st !== "unsupported") return void errs.push(`${at}.status: expected passed|failed|unsupported`);
       counts[st] = (counts[st] ?? 0) + 1;
       if (row.divergence !== undefined && !(Array.isArray(row.divergence) && row.divergence.every((d) => typeof d === "string" && d !== ""))) errs.push(`${at}.divergence: expected an array of non-empty strings`);
+      if (row.not_comparable !== undefined && !(Array.isArray(row.not_comparable) && row.not_comparable.every((d) => typeof d === "string" && d !== ""))) errs.push(`${at}.not_comparable: expected an array of non-empty strings`);
       if (st === "unsupported") {
         if (typeof row.reason !== "string" || row.reason === "") errs.push(`${at}.reason: required for unsupported rows`);
         if (row.metrics !== null) errs.push(`${at}.metrics: must be null for unsupported rows`);

@@ -3,31 +3,31 @@
 ## Run
 
 - odd: 2.0.0 (/private/var/folders/3f/3v9dql657451v90kmmjx7nwr0000gn/T/gpm4LcQ3/odd-bench/plugins/odd-claude/dist/mcp/review-server.js), commit d0a30237455d, node v26.12.1, darwin arm64 27.2.0, repeats: 3, started 2026-11-21T02:35:05.208Z
-- oracle: 4.6.0 (/Users/carsimax/.local/share/odd-claude-oracle/gentle-ai-4.6.0/bin/gentle-ai), commit binary-only, node v26.12.1, darwin arm64 27.2.0, repeats: 3, started 2026-11-21T02:37:27.190Z
+- oracle: 4.6.0 (~/.local/share/odd-claude-oracle/gentle-ai-4.6.0/bin/gentle-ai), commit binary-only, node v26.12.1, darwin arm64 27.2.0, repeats: 3, started 2026-11-21T02:37:27.190Z
 
 Both subjects ran in the same bench invocation on this machine, each journey in fresh processes inside its own sandbox, repeated `repeats` times; latency uses the median of the repeats.
 The oracle is 4.6.0; the journeys were ported from sources pinned at 08317b9 (version skew, see docs/bench.md).
 
 ## Summary
 
-- journeys: 23; comparable: 12 of 23; divergent: 5; unsupported: 6; missing: 0
-- outcome projections on comparable journeys: equal 12, different 0
+- journeys: 23; comparable: 10 of 23; divergent: 5; unsupported: 6; not comparable: 2; missing: 0
+- outcome projections on comparable journeys: equal 10, different 0
 - thresholds: counts exact (±0, 0%); human_surface_bytes ±0 or 10%; manual_tokens ±0 or 10%; latency: ratio of medians within ×1.25 (or 5 ms apart) is equal
 
 Per metric over the comparable journeys (lower is better; totals sum journeys where both sides are observable):
 
 | metric | equal | better | worse | not_comparable | odd total | oracle total |
 | --- | --- | --- | --- | --- | --- | --- |
-| human_prompts | 6 | 0 | 6 | 0 | 13 | 6 |
-| manual_tokens | 6 | 0 | 6 | 0 | 77 | 36 |
-| commands_to_completion | 5 | 7 | 0 | 0 | 52 | 72 |
-| recovery_round_trips | 12 | 0 | 0 | 0 | 1 | 1 |
-| model_runs | 10 | 2 | 0 | 0 | 17 | 19 |
-| human_surface_bytes | 2 | 10 | 0 | 0 | 130868 | 231454 |
-| git_subprocesses | 1 | 9 | 2 | 0 | 1512 | 3698 |
-| blocks | 12 | 0 | 0 | 0 | 4 | 4 |
+| human_prompts | 4 | 0 | 6 | 0 | 13 | 6 |
+| manual_tokens | 4 | 0 | 6 | 0 | 77 | 36 |
+| commands_to_completion | 3 | 7 | 0 | 0 | 50 | 70 |
+| recovery_round_trips | 10 | 0 | 0 | 0 | 1 | 1 |
+| model_runs | 8 | 2 | 0 | 0 | 17 | 19 |
+| human_surface_bytes | 2 | 8 | 0 | 0 | 130868 | 230765 |
+| git_subprocesses | 1 | 9 | 0 | 0 | 1478 | 3692 |
+| blocks | 10 | 0 | 0 | 0 | 4 | 4 |
 
-Latency (whole-journey time, median of repeats): 12 journeys compared; equal 4, better 5, worse 3; median ratio 0.90 (odd / oracle, below 1 is faster); p95 per journey is in the tables below.
+Latency (whole-journey time, median of repeats): 10 journeys compared; equal 4, better 5, worse 1; median ratio 0.74 (odd / oracle, below 1 is faster); p95 per journey is in the tables below.
 
 ## Efficiency verdict
 
@@ -35,17 +35,17 @@ Is odd-claude at least as efficient as upstream on the comparable journeys, per 
 
 | dimension | verdict | equal | better | worse | note |
 | --- | --- | --- | --- | --- | --- |
-| human_prompts | less_efficient | 6 | 0 | 6 | 6 worse of 12 compared |
-| manual_tokens | less_efficient | 6 | 0 | 6 | 6 worse of 12 compared |
-| commands_to_completion | at_least_as_efficient | 5 | 7 | 0 | 0 worse of 12 compared |
-| recovery_round_trips | at_least_as_efficient | 12 | 0 | 0 | 0 worse of 12 compared |
-| model_runs | at_least_as_efficient | 10 | 2 | 0 | 0 worse of 12 compared |
-| human_surface_bytes | at_least_as_efficient | 2 | 10 | 0 | 0 worse of 12 compared |
-| git_subprocesses | less_efficient | 1 | 9 | 2 | 2 worse of 12 compared |
-| blocks | at_least_as_efficient | 12 | 0 | 0 | 0 worse of 12 compared |
-| latency | at_least_as_efficient | 4 | 5 | 3 | median ratio 0.90 against a limit of 1.25 |
+| human_prompts | less_efficient | 4 | 0 | 6 | 6 worse of 10 compared |
+| manual_tokens | less_efficient | 4 | 0 | 6 | 6 worse of 10 compared |
+| commands_to_completion | at_least_as_efficient | 3 | 7 | 0 | 0 worse of 10 compared |
+| recovery_round_trips | at_least_as_efficient | 10 | 0 | 0 | 0 worse of 10 compared |
+| model_runs | at_least_as_efficient | 8 | 2 | 0 | 0 worse of 10 compared |
+| human_surface_bytes | at_least_as_efficient | 2 | 8 | 0 | 0 worse of 10 compared |
+| git_subprocesses | at_least_as_efficient | 1 | 9 | 0 | 0 worse of 10 compared |
+| blocks | at_least_as_efficient | 10 | 0 | 0 | 0 worse of 10 compared |
+| latency | at_least_as_efficient | 4 | 5 | 1 | median ratio 0.74 against a limit of 1.25 |
 
-Overall: odd-claude is less efficient than upstream in: human_prompts, manual_tokens, git_subprocesses. Read the caveats below before concluding anything.
+Overall: odd-claude is less efficient than upstream in: human_prompts, manual_tokens. Read the caveats below before concluding anything.
 
 Caveats (accounting conventions, see docs/bench.md):
 
@@ -54,7 +54,7 @@ Caveats (accounting conventions, see docs/bench.md):
 - `git_subprocesses` counts only `git` invocations that go through the sandbox `PATH` shim (what each product spawns); a git call made by an absolute path or an in-process library is invisible, and setup git calls are never counted.
 - `manual_tokens` is a proxy (bytes / 4 of declared human text); `human_surface_bytes` counts stdout and stderr, so it compares how verbose each product is, not how useful.
 - Latency compares different surfaces (odd: MCP server, hooks and CLI on node; oracle: one native binary per command), so it is a same-machine cost comparison, not a quality one. The oracle is 4.6.0, not the pinned reference.
-- Unsupported (6) and divergent (5) journeys are excluded from every verdict above.
+- Unsupported (6), divergent (5) and not comparable (2) journeys are excluded from every verdict above.
 
 ## Journeys
 
@@ -172,38 +172,6 @@ Outcome projection: **equal**
 | blocks | 1 | 1 | equal |
 | latency (median of whole-journey time) | 2524.9 ms | 7863.4 ms | better (ratio 0.32; p95 2552.7 ms vs 8601 ms) |
 
-### gate-silent-with-rdd-off
-
-Outcome projection: **equal**
-
-| metric | odd | oracle | verdict |
-| --- | --- | --- | --- |
-| human_prompts | 0 | 0 | equal |
-| manual_tokens | 0 | 0 | equal |
-| commands_to_completion | 1 | 1 | equal |
-| recovery_round_trips | 0 | 0 | equal |
-| model_runs | 0 | 0 | equal |
-| human_surface_bytes | 0 | 349 | better |
-| git_subprocesses | 6 | 3 | worse |
-| blocks | 0 | 0 | equal |
-| latency (median of whole-journey time) | 205.4 ms | 35 ms | worse (ratio 5.87; p95 209.7 ms vs 35.2 ms) |
-
-### gate-push-allowed-for-medium-risk-range
-
-Outcome projection: **equal**
-
-| metric | odd | oracle | verdict |
-| --- | --- | --- | --- |
-| human_prompts | 0 | 0 | equal |
-| manual_tokens | 0 | 0 | equal |
-| commands_to_completion | 1 | 1 | equal |
-| recovery_round_trips | 0 | 0 | equal |
-| model_runs | 0 | 0 | equal |
-| human_surface_bytes | 0 | 340 | better |
-| git_subprocesses | 28 | 3 | worse |
-| blocks | 0 | 0 | equal |
-| latency (median of whole-journey time) | 269.6 ms | 37.3 ms | worse (ratio 7.23; p95 350.9 ms vs 39.1 ms) |
-
 ### stop-reminds-once-per-session-and-candidate
 
 Outcome projection: **equal**
@@ -252,6 +220,15 @@ Outcome projection: **equal**
 | blocks | 0 | 0 | equal |
 | latency (median of whole-journey time) | 642.8 ms | 524.7 ms | equal (ratio 1.23; p95 653.8 ms vs 536.5 ms) |
 
+## Not comparable journeys
+
+Both products ran these, but a measurement says the numbers cannot be read as efficiency (for example the oracle's gate never decides, so its near-zero cost is no win for it). Never counted as wins or losses; the raw numbers are shown for information.
+
+| journey | why | commands odd/oracle | git_subprocesses odd/oracle | latency odd/oracle |
+| --- | --- | --- | --- | --- |
+| gate-silent-with-rdd-off | the oracle gate reported delivery=unmanaged: it never decides, so its near-zero cost is no win over a gate that does | 1 / 1 | 6 / 3 | 205.4 ms / 35 ms |
+| gate-push-allowed-for-medium-risk-range | the oracle gate reported delivery=unmanaged: it never decides, so its near-zero cost is no win over a gate that does | 1 / 1 | 28 / 3 | 269.6 ms / 37.3 ms |
+
 ## Unsupported journeys
 
 The oracle cannot express these (marked, never faked); they are not wins or losses.
@@ -279,5 +256,5 @@ Where the oracle legitimately behaves differently from the shared expectation. D
 
 ## How to read
 
-- `equal | better | worse | not_comparable` are from odd's point of view; lower is better for every metric. `not_comparable` means a side is unobservable, unsupported or divergent.
+- `equal | better | worse | not_comparable` are from odd's point of view; lower is better for every metric. `not_comparable` means a side is unobservable, unsupported, divergent or marked as not comparable.
 - Counts are exact by default; bytes and tokens tolerate 10%; latency uses the ratio of medians with the tolerance above. Details, derivations and limits: docs/bench.md.

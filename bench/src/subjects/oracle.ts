@@ -8,6 +8,8 @@
 // Isolation: the binary only ever sees the sandbox env (own HOME and XDG dirs; its own state lives in `$HOME/.gentle-ai`), and
 // telemetry is switched off with the product's own kill switches (see `oracleEnv`). Nothing else of the product is read or written.
 import { existsSync } from "node:fs";
+import { homedir } from "node:os";
+import { join } from "node:path";
 import type { BlockClass } from "../metrics.js";
 import {
   type FixtureSpec, type JourneyDef, type JourneyEnv, type MetricEvent, type NormalizedFacts, type Observation, type StepSpec, type Subject, type SubjectSession, type TargetKind,
@@ -19,7 +21,7 @@ import { runProcess } from "../process.js";
 import { HUMAN_TEXT } from "./odd.js";
 
 /** The oracle binary (upstream 4.6.0, older than the 08317b9 sources the journeys were ported from). Override with ODD_BENCH_ORACLE_BIN. */
-export const ORACLE_DEFAULT_BINARY = "/Users/carsimax/.local/share/odd-claude-oracle/gentle-ai-4.6.0/bin/gentle-ai";
+export const ORACLE_DEFAULT_BINARY = join(homedir(), ".local/share/odd-claude-oracle/gentle-ai-4.6.0/bin/gentle-ai");
 export const oracleBinaryPath = (): string => process.env.ODD_BENCH_ORACLE_BIN || ORACLE_DEFAULT_BINARY;
 export const oracleAvailable = (): boolean => existsSync(oracleBinaryPath());
 
@@ -199,6 +201,9 @@ export function invocationArgs(invocation: string): string[] {
   if (cur !== "" || any) tokens.push(cur);
   return tokens.slice(1);
 }
+
+/** Why a row whose gate reported `delivery=unmanaged` is excluded from the comparison. */
+export const UNMANAGED_GATE_REASON = "the oracle gate reported delivery=unmanaged: it never decides, so its near-zero cost is no win over a gate that does";
 
 const tokenOf = (args: J[] | undefined, name: string): string | undefined => (args ?? []).find((a) => a.name === name)?.value;
 
@@ -440,6 +445,8 @@ class OracleSession implements SubjectSession {
     const r = await this.cli(["review", "validate", "--cwd", this.env.sandbox.repo, "--gate", gate]);
     if (r.code !== 0) return this.failed(r);
     const decision = mapValue("gate", String(r.json.delivery));
+    // A gate that only reports `unmanaged` never decides, so its near-zero cost is not a measure of how cheaply it protects: the row is not comparable.
+    if (/unmanaged/.test(String(r.json.delivery))) this.events.push({ kind: "not_comparable", reason: UNMANAGED_GATE_REASON });
     return { outcome: decision, gate: decision as "allow" | "deny" };
   }
 

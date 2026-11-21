@@ -143,3 +143,25 @@ test("buildResult records repeats when given", () => {
   assert.equal(buildResult("odd", [], { binaryPath: "x", binaryVersion: "y", commit: "z", repeats: 3 }).meta.repeats, 3);
   assert.equal(buildResult("odd", [], { binaryPath: "x", binaryVersion: "y", commit: "z" }).meta.repeats, undefined);
 });
+
+test("not_comparable journeys get their own section with the reason, are counted in the summary and never appear among the comparable ones", () => {
+  const nc = row("gate-allow", 1); nc.not_comparable = ["the gate reported delivery=unmanaged | never decides"];
+  const md = renderReport(compareResults(result("odd", [row("alpha", 1), row("gate-allow", 1)]), result("oracle", [row("alpha", 1), nc])));
+  assert.match(md, /comparable: 1 of 2; divergent: 0; unsupported: 0; not comparable: 1; missing: 0/);
+  const heads = ["## Journeys", "## Not comparable journeys", "## Unsupported journeys"];
+  let at = -1;
+  for (const h of heads) { const i = md.indexOf(`\n${h}\n`); assert.ok(i > at, `${h} missing or out of order`); at = i; }
+  const sec = md.slice(md.indexOf("## Not comparable journeys"), md.indexOf("## Unsupported journeys"));
+  assert.match(sec, /gate-allow/);
+  assert.match(sec, /delivery=unmanaged \\\| never decides/);
+  assert.match(sec, /[Nn]ever counted as wins or losses/);
+  assert.doesNotMatch(md.slice(md.indexOf("## Journeys"), md.indexOf("## Not comparable journeys")), /### gate-allow/);
+  assert.match(md, /excluded from every verdict above/);
+});
+
+test("aggregateRepeats keeps the not_comparable marks of the runs", () => {
+  const a = run({ "cli.a": [1] }); a.not_comparable = ["unmanaged"];
+  const b = run({ "cli.a": [1] }); b.not_comparable = ["unmanaged"];
+  assert.deepEqual(aggregateRepeats([a, b]).not_comparable, ["unmanaged"]);
+  assert.equal(aggregateRepeats([run({ "cli.a": [1] })]).not_comparable, undefined);
+});

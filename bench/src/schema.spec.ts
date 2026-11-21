@@ -74,3 +74,13 @@ test("optional repeats and divergence are validated when present", () => {
   assert.ok(errs.some((e) => e.startsWith("meta.repeats")));
   assert.ok(errs.some((e) => e.startsWith("journeys[0].divergence")));
 });
+
+test("optional not_comparable marks are validated when present", () => {
+  const r = sample() as unknown as Record<string, any>;
+  r.journeys[0].not_comparable = ["the gate reported delivery=unmanaged"];
+  assert.deepEqual(validateResult(r), []);
+  r.journeys[0].not_comparable = ["", 1];
+  assert.ok(validateResult(r).some((e) => e.startsWith("journeys[0].not_comparable")));
+  r.journeys[0].not_comparable = "unmanaged";
+  assert.ok(validateResult(r).some((e) => e.startsWith("journeys[0].not_comparable")));
+});

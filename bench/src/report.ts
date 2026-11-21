@@ -82,7 +82,7 @@ export function renderReport(c: ComparisonReport): string {
     c.odd.binary.version !== c.oracle.binary.version ? `The oracle is ${c.oracle.binary.version}; the journeys were ported from sources pinned at 08317b9 (version skew, see docs/bench.md).` : "", "");
 
   L.push("## Summary", "",
-    `- journeys: ${s.journeys.total}; comparable: ${s.journeys.comparable} of ${s.journeys.total}; divergent: ${s.journeys.divergent}; unsupported: ${s.journeys.unsupported}; missing: ${s.journeys.missing}`,
+    `- journeys: ${s.journeys.total}; comparable: ${s.journeys.comparable} of ${s.journeys.total}; divergent: ${s.journeys.divergent}; unsupported: ${s.journeys.unsupported}; not comparable: ${s.journeys.not_comparable}; missing: ${s.journeys.missing}`,
     `- outcome projections on comparable journeys: equal ${s.outcome.equal}, different ${s.outcome.different}`,
     `- thresholds: counts exact (±${th.default.absolute}, ${th.default.relative * 100}%); ${Object.entries(th.per_metric).map(([k, t]) => `${k} ±${t.absolute} or ${t.relative * 100}%`).join("; ") || "no per-metric overrides"}; latency: ratio of medians within ×${(1 + th.latency.tolerance).toFixed(2)} (or ${th.latency.floor_ms} ms apart) is equal`,
     "", "Per metric over the comparable journeys (lower is better; totals sum journeys where both sides are observable):", "",
@@ -107,11 +107,22 @@ export function renderReport(c: ComparisonReport): string {
     "- `git_subprocesses` counts only `git` invocations that go through the sandbox `PATH` shim (what each product spawns); a git call made by an absolute path or an in-process library is invisible, and setup git calls are never counted.",
     "- `manual_tokens` is a proxy (bytes / 4 of declared human text); `human_surface_bytes` counts stdout and stderr, so it compares how verbose each product is, not how useful.",
     `- Latency compares different surfaces (odd: MCP server, hooks and CLI on node; oracle: one native binary per command), so it is a same-machine cost comparison, not a quality one.${c.odd.binary.version !== c.oracle.binary.version ? ` The oracle is ${c.oracle.binary.version}, not the pinned reference.` : ""}`,
-    `- Unsupported (${s.journeys.unsupported}) and divergent (${s.journeys.divergent}) journeys are excluded from every verdict above.`, "");
+    `- Unsupported (${s.journeys.unsupported}), divergent (${s.journeys.divergent}) and not comparable (${s.journeys.not_comparable}) journeys are excluded from every verdict above.`, "");
 
   const cmp = c.journeys.filter((j) => j.kind === "comparable");
   L.push("## Journeys", "", cmp.length ? "Comparable journeys: odd vs oracle per metric." : "No comparable journey.", "");
   for (const j of cmp) L.push(...journeySection(j));
+
+  const nc = c.journeys.filter((j) => j.kind === "not_comparable");
+  L.push("## Not comparable journeys", "", "Both products ran these, but a measurement says the numbers cannot be read as efficiency (for example the oracle's gate never decides, so its near-zero cost is no win for it). Never counted as wins or losses; the raw numbers are shown for information.", "");
+  if (nc.length) {
+    L.push("| journey | why | commands odd/oracle | git_subprocesses odd/oracle | latency odd/oracle |", "| --- | --- | --- | --- | --- |");
+    for (const j of nc) {
+      const t = j.latency[JOURNEY_TOTAL_OP];
+      L.push(`| ${j.id} | ${esc((j.not_comparable ?? []).join("; "))} | ${num(j.metrics.commands_to_completion?.odd ?? null)} / ${num(j.metrics.commands_to_completion?.oracle ?? null)} | ${num(j.metrics.git_subprocesses?.odd ?? null)} / ${num(j.metrics.git_subprocesses?.oracle ?? null)} | ${t?.oracle ? `${ms(t.odd.median_ms)} / ${ms(t.oracle.median_ms)}` : "n/a"} |`);
+    }
+    L.push("");
+  } else L.push("None.", "");
 
   const unsup = c.journeys.filter((j) => j.kind === "unsupported" || j.kind === "missing");
   L.push("## Unsupported journeys", "", "The oracle cannot express these (marked, never faked); they are not wins or losses.", "");
@@ -126,7 +137,7 @@ export function renderReport(c: ComparisonReport): string {
     L.push("");
   } else L.push("None.", "");
 
-  L.push("## How to read", "", "- `equal | better | worse | not_comparable` are from odd's point of view; lower is better for every metric. `not_comparable` means a side is unobservable, unsupported or divergent.",
+  L.push("## How to read", "", "- `equal | better | worse | not_comparable` are from odd's point of view; lower is better for every metric. `not_comparable` means a side is unobservable, unsupported, divergent or marked as not comparable.",
     "- Counts are exact by default; bytes and tokens tolerate 10%; latency uses the ratio of medians with the tolerance above. Details, derivations and limits: docs/bench.md.", "");
   return L.join("\n");
 }

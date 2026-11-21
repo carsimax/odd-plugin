@@ -114,7 +114,7 @@ test("kinds: comparable, divergent (declared, never a win or loss), unsupported 
   assert.equal(k("u").kind, "unsupported");
   assert.equal(k("u").reason, "no deny in 4.6.0");
   assert.equal(k("m").kind, "missing");
-  assert.deepEqual(rep.summary.journeys, { total: 4, comparable: 1, divergent: 1, unsupported: 1, missing: 1 });
+  assert.deepEqual(rep.summary.journeys, { total: 4, comparable: 1, divergent: 1, unsupported: 1, missing: 1, not_comparable: 0 });
   // the divergent journey (odd 5 vs 1) is excluded from every total and verdict count
   assert.equal(rep.summary.per_metric.human_prompts!.odd_total, 1);
   assert.equal(rep.summary.per_metric.human_prompts!.verdicts.worse, 0);
@@ -177,4 +177,38 @@ test("efficiency verdict for latency follows the overall median ratio", () => {
   const f = (o: number) => efficiencyVerdict(compareResults(result("odd", [withLatency(row("a", 1), o)]), result("oracle", [withLatency(row("a", 1), 100)]))).dimensions.find((x) => x.dimension === "latency")!;
   assert.equal(f(110).verdict, "at_least_as_efficient");
   assert.equal(f(300).verdict, "less_efficient");
+});
+
+// ---- T8: rows the oracle marks not_comparable (its gate reports delivery=unmanaged) ----
+
+test("a row marked not_comparable is excluded from every verdict: its git and latency gap is neither a win nor a loss", () => {
+  const withGit = (id: string, git: number, ms: number, extra: Partial<JourneyRow> = {}): JourneyRow => {
+    const r = row(id, 0);
+    r.metrics!.git_subprocesses = measured(git);
+    r.metrics!.latency["journey.total"] = summarizeLatency([ms]);
+    return { ...r, ...extra };
+  };
+  const reason = "the gate reported delivery=unmanaged: it never decides, so near-zero cost is no win";
+  const odd = result("odd", [withGit("same", 3, 100), withGit("gate-allow", 6, 200)]);
+  const oracle = result("oracle", [withGit("same", 3, 100), withGit("gate-allow", 3, 30, { not_comparable: [reason] })]);
+  const rep = compareResults(odd, oracle);
+  const g = rep.journeys.find((j) => j.id === "gate-allow")!;
+  assert.equal(g.kind, "not_comparable");
+  assert.equal(g.outcome, "not_comparable");
+  assert.deepEqual(g.not_comparable, [reason]);
+  assert.equal(g.metrics.git_subprocesses!.verdict, "not_comparable");
+  assert.equal(g.latency["journey.total"]!.verdict, "not_comparable");
+  assert.deepEqual(rep.summary.journeys, { total: 2, comparable: 1, divergent: 0, unsupported: 0, missing: 0, not_comparable: 1 });
+  assert.equal(rep.summary.per_metric.git_subprocesses!.verdicts.worse, 0);
+  assert.equal(rep.summary.per_metric.git_subprocesses!.odd_total, 3);
+  assert.equal(rep.summary.latency.compared, 1);
+  const ev = efficiencyVerdict(rep);
+  assert.equal(ev.dimensions.find((d) => d.dimension === "git_subprocesses")!.verdict, "at_least_as_efficient");
+  assert.equal(ev.overall, "at_least_as_efficient");
+  // the flag on the odd side excludes the row as well; an unflagged pair is still compared
+  const flaggedOdd = compareResults(result("odd", [withGit("gate-allow", 6, 200, { not_comparable: [reason] })]), result("oracle", [withGit("gate-allow", 3, 30)]));
+  assert.equal(flaggedOdd.journeys[0]!.kind, "not_comparable");
+  const plain = compareResults(result("odd", [withGit("gate-allow", 6, 200)]), result("oracle", [withGit("gate-allow", 3, 30)]));
+  assert.equal(plain.journeys[0]!.kind, "comparable");
+  assert.equal(plain.journeys[0]!.metrics.git_subprocesses!.verdict, "worse");
 });

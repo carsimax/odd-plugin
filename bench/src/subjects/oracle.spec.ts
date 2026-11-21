@@ -2,7 +2,10 @@
 // options, and the journeys executed against the REAL upstream binary (skipped with a clear message when it is absent).
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
+import { homedir, userInfo } from "node:os";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { expectedProjection, runJourney, toJourney, type JourneyDef, type JourneyResultRow } from "../journey.js";
 import { blocksTotal } from "../metrics.js";
 import { buildResult } from "../report.js";
@@ -281,4 +284,28 @@ test("oracle rows, unsupported ones included, form a valid result document that 
   assert.equal(res.meta.binary.version, version);
   const expectedUnsupported = JOURNEY_DEFS.filter((d) => oracleUnsupportedReason(d) !== undefined).length;
   assert.deepEqual(res.aggregate.counts, { passed: JOURNEY_DEFS.length - expectedUnsupported, failed: 0, unsupported: expectedUnsupported });
+});
+
+// ---- T8: the unmanaged gate marks its rows not_comparable ----
+
+test("the default binary lives under the current user's home, derived from os.homedir(), with no username in the source or the docs", () => {
+  assert.equal(ORACLE_DEFAULT_BINARY, join(homedir(), ".local/share/odd-claude-oracle/gentle-ai-4.6.0/bin/gentle-ai"));
+  const user = userInfo().username;
+  const root = join(dirname(fileURLToPath(import.meta.url)), "../../..");
+  for (const f of ["bench/src/subjects/oracle.ts", "docs/bench.md", "docs/bench/findings.md", "docs/bench/baseline-2026-11-20/README.md", "docs/bench/baseline-2026-11-20/report.md", "docs/bench/baseline-2026-11-20/comparison.json", "docs/bench/baseline-2026-11-20/oracle.json", "odd/tasks/efficiency-bench.md"]) {
+    const text = readFileSync(join(root, f), "utf8");
+    assert.equal(text.includes(`/Users/${user}`) || text.includes(`/home/${user}`), false, `${f} names the home directory of ${user}`);
+  }
+});
+
+test("a gate that reports delivery=unmanaged marks the row not_comparable; rows without a gate check carry no mark", { skip }, async () => {
+  for (const id of ["gate-silent-with-rdd-off", "gate-push-allowed-for-medium-risk-range"]) {
+    const row = await run(id);
+    assert.equal(row.status, "passed", JSON.stringify(row));
+    assert.equal(row.not_comparable?.length, 1, id);
+    assert.match(row.not_comparable![0]!, /delivery=unmanaged/);
+    assert.match(row.not_comparable![0]!, /near-zero|no win/);
+  }
+  const plain = await run("stop-silent-with-rdd-off");
+  assert.equal("not_comparable" in plain, false);
 });

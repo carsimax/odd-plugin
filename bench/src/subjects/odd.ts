@@ -5,6 +5,7 @@
 // Reviewer verdicts come from the fake `claude` on the sandbox PATH (synthesized from the sandbox's verdict plan, no model).
 // Observations are normalized: outcome, state, gate decision, reason class, counts; never bytes, hashes or ids.
 import type { BlockClass } from "../metrics.js";
+import type { ProcessResult } from "../process.js";
 import type { FixtureSpec, JourneyEnv, MetricEvent, NormalizedFacts, Observation, StepSpec, Subject, SubjectSession, TargetKind } from "../journey.js";
 import { applyEdit, applyFixture } from "../journeys/fixtures.js";
 
@@ -30,6 +31,14 @@ const SEVERE = {
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type J = Record<string, any>;
+
+/** Why a hook or CLI process did not run cleanly (crash, timeout, kill), or undefined. A step never reads such a run as allow or silent. */
+export function hookFailure(name: string, r: Pick<ProcessResult, "code" | "timedOut">): string | undefined {
+  if (r.timedOut) return `${name} hook timed out`;
+  if (r.code === null) return `${name} hook was killed`;
+  if (r.code !== 0) return `${name} hook exited with code ${r.code}`;
+  return undefined;
+}
 
 /** The arguments of an invocation string like `review_answer_consent --a-b 'v'`, as the tool's own (snake_case) argument names. */
 export function parseInvocation(invocation: string): { tool: string; args: Record<string, string> } {
@@ -267,8 +276,11 @@ class OddSession implements SubjectSession {
     const payload = JSON.stringify({ hook_event_name: event, cwd: this.env.sandbox.repo, ...input });
     const r = await this.env.runHook(event === "PreToolUse" ? "pre_tool_use" : "stop", process.execPath, [this.env.plugin.hooks, event], payload);
     this.events.push({ kind: "command" });
+    const failure = hookFailure(event, r);
+    if (failure !== undefined) throw new Error(failure + (r.stderr.trim() !== "" ? `: ${r.stderr.trim().slice(0, 200)}` : ""));
     const text = r.stdout.trim();
-    return text === "" ? undefined : (JSON.parse(text) as J);
+    if (text === "") return undefined;
+    try { return JSON.parse(text) as J; } catch { throw new Error(`${event} hook printed non-JSON output: ${text.slice(0, 200)}`); }
   }
 
   private async gateCheck(command: "push" | "prOpen"): Promise<NormalizedFacts> {
@@ -293,6 +305,7 @@ class OddSession implements SubjectSession {
     const args = [this.env.plugin.reviewMode, verb, ...(scope === "clone" ? ["--scope", "clone", "--cwd", this.env.sandbox.repo] : []), "--data-dir", this.env.sandbox.dataDir, "--json"];
     const r = await this.env.runHook("review_mode", process.execPath, args);
     this.events.push({ kind: "command" });
+    if (r.timedOut || r.code === null) throw new Error(hookFailure("review-mode", r));
     if (r.code !== 0) return this.refused("mode_error");
     return { outcome: "mode_set", mode: (JSON.parse(r.stdout) as J).status?.effective };
   }
@@ -302,7 +315,11 @@ export const oddSubject: Subject = {
   name: "odd",
   async open(env, fixture) {
     applyFixture(env.sandbox, fixture);
-    if (fixture.rdd === "on") await env.runHook("review_mode", process.execPath, [env.plugin.reviewMode, "enable", "--data-dir", env.sandbox.dataDir]);
+    if (fixture.rdd === "on") {
+      const r = await env.runHook("review_mode", process.execPath, [env.plugin.reviewMode, "enable", "--data-dir", env.sandbox.dataDir]);
+      const failure = hookFailure("review-mode setup", r);
+      if (failure !== undefined) throw new Error(failure);
+    }
     return new OddSession(env, fixture);
   },
 };

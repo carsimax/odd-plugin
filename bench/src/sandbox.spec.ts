@@ -1,6 +1,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { existsSync } from "node:fs";
+import { existsSync, mkdtempSync, readdirSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { createSandbox } from "./sandbox.js";
 import { runProcess } from "./process.js";
 
@@ -169,5 +171,20 @@ test("fake claude also answers the upstream provider prompts: lens result bound 
     assert.equal(sb.countModelRuns(), 6, "lens x3, validator x2, refuter x1");
   } finally {
     sb.cleanup();
+  }
+});
+
+test("a setup failure removes the half-built sandbox before it rethrows", async () => {
+  const scratch = mkdtempSync(join(tmpdir(), "odd-bench-scratch-"));
+  const saved = { TMPDIR: process.env.TMPDIR, PATH: process.env.PATH };
+  process.env.TMPDIR = scratch;
+  process.env.PATH = join(scratch, "no-git-here");
+  try {
+    await assert.rejects(createSandbox());
+    assert.deepEqual(readdirSync(scratch), []);
+  } finally {
+    process.env.PATH = saved.PATH;
+    if (saved.TMPDIR === undefined) delete process.env.TMPDIR; else process.env.TMPDIR = saved.TMPDIR;
+    rmSync(scratch, { recursive: true, force: true });
   }
 });

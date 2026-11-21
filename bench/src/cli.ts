@@ -4,9 +4,10 @@
 // `<name>.comparison.json` and `<name>.report.md`. `--repeat K` (default 3) runs each journey K times; `--compare <odd.json> <oracle.json> [--out]` rebuilds the report from saved results.
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
-import { dirname, join, resolve } from "node:path";
+import { homedir } from "node:os";
+import { dirname, join, resolve, sep } from "node:path";
 import { pathToFileURL } from "node:url";
-import { DEFAULT_SERVER_PATH, runJourney, type JourneyResultRow, type Subject as JourneySubject } from "./journey.js";
+import { DEFAULT_PLUGIN_DIR, DEFAULT_SERVER_PATH, runJourney, type JourneyResultRow, type Subject as JourneySubject } from "./journey.js";
 import { journeysFor } from "./journeys/index.js";
 import { oddSubject } from "./subjects/odd.js";
 import { captureOracleVersion, oracleAvailable, oracleBinaryPath, oracleSubject } from "./subjects/oracle.js";
@@ -50,6 +51,12 @@ export function parse(argv: string[]): Args {
   }
   if (!out && !compare) return { only, subject, error: USAGE };
   return { ...(out !== undefined ? { out } : {}), only, subject, ...(repeat !== undefined ? { repeat } : {}), ...(compare ? { compare } : {}) };
+}
+
+/** A path under the home directory as `~/...`: recorded metadata names no user. */
+export function tildePath(p: string): string {
+  const home = homedir();
+  return p === home ? "~" : p.startsWith(home + sep) ? `~${p.slice(home.length)}` : p;
 }
 
 /** Where each subject's result goes: the one file, or (with `both`) a pair next to each other. */
@@ -124,11 +131,10 @@ async function runSubject(subject: JourneySubject, only: string[], repeat: numbe
   }
   let bin: { binaryPath: string; binaryVersion: string; commit: string };
   if (subject.name === "oracle") {
-    bin = { binaryPath: oracleBinaryPath(), binaryVersion: await captureOracleVersion(), commit: "binary-only" };
+    bin = { binaryPath: tildePath(oracleBinaryPath()), binaryVersion: await captureOracleVersion(), commit: "binary-only" };
   } else {
-    const pluginDir = dirname(dirname(dirname(DEFAULT_SERVER_PATH)));
-    const version = (JSON.parse(readFileSync(`${pluginDir}/package.json`, "utf8")) as { version: string }).version;
-    bin = { binaryPath: DEFAULT_SERVER_PATH, binaryVersion: version, commit: spawnSync("git", ["rev-parse", "HEAD"], { cwd: pluginDir, encoding: "utf8" }).stdout.trim() || "unknown" };
+    const version = (JSON.parse(readFileSync(join(DEFAULT_PLUGIN_DIR, "package.json"), "utf8")) as { version: string }).version;
+    bin = { binaryPath: tildePath(DEFAULT_SERVER_PATH), binaryVersion: version, commit: spawnSync("git", ["rev-parse", "HEAD"], { cwd: DEFAULT_PLUGIN_DIR, encoding: "utf8" }).stdout.trim() || "unknown" };
   }
   const result = buildResult(subject.name, rows, { ...bin, repeats: repeat });
   const errs = validateResult(result);

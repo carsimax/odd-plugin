@@ -19,7 +19,7 @@
   "oracle": {
     "subject": "oracle",
     "binary": {
-      "path": "/Users/carsimax/.local/share/odd-claude-oracle/gentle-ai-4.6.0/bin/gentle-ai",
+      "path": "~/.local/share/odd-claude-oracle/gentle-ai-4.6.0/bin/gentle-ai",
       "version": "4.6.0"
     },
     "node": "v26.12.1",
@@ -1311,48 +1311,48 @@
     },
     {
       "id": "gate-silent-with-rdd-off",
-      "kind": "comparable",
-      "outcome": "equal",
+      "kind": "not_comparable",
+      "outcome": "not_comparable",
       "metrics": {
         "human_prompts": {
           "odd": 0,
           "oracle": 0,
-          "verdict": "equal"
+          "verdict": "not_comparable"
         },
         "manual_tokens": {
           "odd": 0,
           "oracle": 0,
-          "verdict": "equal"
+          "verdict": "not_comparable"
         },
         "commands_to_completion": {
           "odd": 1,
           "oracle": 1,
-          "verdict": "equal"
+          "verdict": "not_comparable"
         },
         "recovery_round_trips": {
           "odd": 0,
           "oracle": 0,
-          "verdict": "equal"
+          "verdict": "not_comparable"
         },
         "model_runs": {
           "odd": 0,
           "oracle": 0,
-          "verdict": "equal"
+          "verdict": "not_comparable"
         },
         "human_surface_bytes": {
           "odd": 0,
           "oracle": 349,
-          "verdict": "better"
+          "verdict": "not_comparable"
         },
         "git_subprocesses": {
           "odd": 6,
           "oracle": 3,
-          "verdict": "worse"
+          "verdict": "not_comparable"
         },
         "blocks": {
           "odd": 0,
           "oracle": 0,
-          "verdict": "equal"
+          "verdict": "not_comparable"
         }
       },
       "latency": {
@@ -1377,54 +1377,57 @@
             "p95_ms": 35.224
           },
           "ratio": 5.866,
-          "verdict": "worse"
+          "verdict": "not_comparable"
         }
-      }
+      },
+      "not_comparable": [
+        "the oracle gate reported delivery=unmanaged: it never decides, so its near-zero cost is no win over a gate that does"
+      ]
     },
     {
       "id": "gate-push-allowed-for-medium-risk-range",
-      "kind": "comparable",
-      "outcome": "equal",
+      "kind": "not_comparable",
+      "outcome": "not_comparable",
       "metrics": {
         "human_prompts": {
           "odd": 0,
           "oracle": 0,
-          "verdict": "equal"
+          "verdict": "not_comparable"
         },
         "manual_tokens": {
           "odd": 0,
           "oracle": 0,
-          "verdict": "equal"
+          "verdict": "not_comparable"
         },
         "commands_to_completion": {
           "odd": 1,
           "oracle": 1,
-          "verdict": "equal"
+          "verdict": "not_comparable"
         },
         "recovery_round_trips": {
           "odd": 0,
           "oracle": 0,
-          "verdict": "equal"
+          "verdict": "not_comparable"
         },
         "model_runs": {
           "odd": 0,
           "oracle": 0,
-          "verdict": "equal"
+          "verdict": "not_comparable"
         },
         "human_surface_bytes": {
           "odd": 0,
           "oracle": 340,
-          "verdict": "better"
+          "verdict": "not_comparable"
         },
         "git_subprocesses": {
           "odd": 28,
           "oracle": 3,
-          "verdict": "worse"
+          "verdict": "not_comparable"
         },
         "blocks": {
           "odd": 0,
           "oracle": 0,
-          "verdict": "equal"
+          "verdict": "not_comparable"
         }
       },
       "latency": {
@@ -1449,9 +1452,12 @@
             "p95_ms": 39.133
           },
           "ratio": 7.228,
-          "verdict": "worse"
+          "verdict": "not_comparable"
         }
-      }
+      },
+      "not_comparable": [
+        "the oracle gate reported delivery=unmanaged: it never decides, so its near-zero cost is no win over a gate that does"
+      ]
     },
     {
       "id": "gate-pr-open-denied-unreviewed",
@@ -1705,27 +1711,28 @@
   ],
   "summary": {
     "outcome": {
-      "equal": 12,
+      "equal": 10,
       "different": 0,
-      "not_comparable": 11
+      "not_comparable": 13
     },
     "metrics": {
-      "equal": 54,
-      "better": 28,
-      "worse": 14,
-      "not_comparable": 40
+      "equal": 42,
+      "better": 26,
+      "worse": 12,
+      "not_comparable": 56
     },
     "journeys": {
       "total": 23,
-      "comparable": 12,
+      "comparable": 10,
       "divergent": 5,
       "unsupported": 6,
-      "missing": 0
+      "missing": 0,
+      "not_comparable": 2
     },
     "per_metric": {
       "human_prompts": {
         "verdicts": {
-          "equal": 6,
+          "equal": 4,
           "better": 0,
           "worse": 6,
           "not_comparable": 0
@@ -1735,7 +1742,7 @@
       },
       "manual_tokens": {
         "verdicts": {
-          "equal": 6,
+          "equal": 4,
           "better": 0,
           "worse": 6,
           "not_comparable": 0
@@ -1745,17 +1752,17 @@
       },
       "commands_to_completion": {
         "verdicts": {
-          "equal": 5,
+          "equal": 3,
           "better": 7,
           "worse": 0,
           "not_comparable": 0
         },
-        "odd_total": 52,
-        "oracle_total": 72
+        "odd_total": 50,
+        "oracle_total": 70
       },
       "recovery_round_trips": {
         "verdicts": {
-          "equal": 12,
+          "equal": 10,
           "better": 0,
           "worse": 0,
           "not_comparable": 0
@@ -1765,7 +1772,7 @@
       },
       "model_runs": {
         "verdicts": {
-          "equal": 10,
+          "equal": 8,
           "better": 2,
           "worse": 0,
           "not_comparable": 0
@@ -1776,26 +1783,26 @@
       "human_surface_bytes": {
         "verdicts": {
           "equal": 2,
-          "better": 10,
+          "better": 8,
           "worse": 0,
           "not_comparable": 0
         },
         "odd_total": 130868,
-        "oracle_total": 231454
+        "oracle_total": 230765
       },
       "git_subprocesses": {
         "verdicts": {
           "equal": 1,
           "better": 9,
-          "worse": 2,
+          "worse": 0,
           "not_comparable": 0
         },
-        "odd_total": 1512,
-        "oracle_total": 3698
+        "odd_total": 1478,
+        "oracle_total": 3692
       },
       "blocks": {
         "verdicts": {
-          "equal": 12,
+          "equal": 10,
           "better": 0,
           "worse": 0,
           "not_comparable": 0
@@ -1805,14 +1812,14 @@
       }
     },
     "latency": {
-      "compared": 12,
+      "compared": 10,
       "verdicts": {
         "equal": 4,
         "better": 5,
-        "worse": 3,
+        "worse": 1,
         "not_comparable": 0
       },
-      "median_ratio": 0.895
+      "median_ratio": 0.737
     }
   }
 }

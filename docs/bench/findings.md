@@ -1,31 +1,30 @@
 # Efficiency findings: is odd-claude as efficient as upstream?
 
-Source: baseline `docs/bench/baseline-2026-11-20/` (K=3, odd 2.0.0 at plugin main 56b5291, oracle `gentle-ai` 4.6.0, darwin arm64, node v26.12.1). Question (S2, user, verbatim): "La idea de hacer los evals es que sea igual de eificiente que el uptream".
+Source: baseline `docs/bench/baseline-2026-11-20/` (K=3, odd 2.0.0 at plugin main 56b5291, oracle `gentle-ai` 4.6.0, darwin arm64, node v26.12.1). The numbers below are the baseline re-rendered after T8 (proposal C): the two oracle gate-allow rows are marked `not_comparable` and no longer count. Before T8 the same data read 12 comparable journeys and `less_efficient` in 3 dimensions (git subprocesses 1512 vs 3698, latency median ratio 0.90, 3 slow latency rows); that history is kept in the Gaps table. Question (S2, user, verbatim): "La idea de hacer los evals es que sea igual de eificiente que el uptream".
 
 ## Short answer
 
-On the 12 journeys both sides can express, **odd is as efficient or better in 6 of 9 dimensions, and not in 3**:
+On the 10 journeys both sides can express and measure fairly, **odd is as efficient or better in 7 of 9 dimensions, and not in 2**:
 
-- Better or equal: commands, recovery round trips, model runs, bytes shown, blocks, and overall latency (median ratio 0.90, odd faster).
-- Worse: human prompts and manual tokens (one extra approval per review run), and git subprocesses in 2 journeys.
-- Of those, the two git rows and the three slow-latency rows are **not a fair comparison** (the oracle's gate evaluates nothing, see below). Only the prompt cost is a real, by-design difference, and it is parity with the Pi harness odd ports.
-- 11 of 23 journeys are excluded from every verdict (6 unsupported, 5 divergent). The result says nothing about them.
+- Better or equal: commands, recovery round trips, model runs, bytes shown, blocks, git subprocesses and overall latency (median ratio 0.74, odd faster).
+- Worse: human prompts and manual tokens (one extra approval per review run). This is a real, by-design difference, and it is parity with the Pi harness odd ports.
+- 13 of 23 journeys are excluded from every verdict (6 unsupported, 5 divergent, 2 not comparable). The result says nothing about them. The 2 not comparable journeys are the oracle's gate-allow rows: its gate reports `delivery=unmanaged` and evaluates nothing, so its near-zero cost (3 git calls, about 35 ms) is not a win over a gate that does the work (odd: 6 and 28 git calls, 205 and 270 ms). They stay in the report as raw numbers, with verdict `not_comparable`.
 
-The verdict rule in `report.md` is strict (`less_efficient` as soon as one comparable journey is worse), so "less efficient in 3 dimensions" there is a headline of the rule, not of the magnitude. Totals over comparable journeys: git 1512 vs 3698, bytes 130868 vs 231454, commands 52 vs 72, model runs 17 vs 19.
+The verdict rule in `report.md` is strict (`less_efficient` as soon as one comparable journey is worse), so "less efficient in 2 dimensions" there is a headline of the rule, not of the magnitude. Totals over comparable journeys: git 1478 vs 3692, bytes 130868 vs 230765, commands 50 vs 70, model runs 17 vs 19.
 
 ## Verdict per dimension
 
 | dimension | report verdict | equal / better / worse | totals odd vs oracle | honest reading |
 | --- | --- | --- | --- | --- |
-| human_prompts | less_efficient | 6 / 0 / 6 | 13 vs 6 | Real, by design: one cost-forecast approval per reviewer run. Parity with Pi, gap vs the 4.6.0 CLI |
-| manual_tokens | less_efficient | 6 / 0 / 6 | 77 vs 36 | Same cause (proxy: bytes/4 of the human text) |
-| commands_to_completion | at_least_as_efficient | 5 / 7 / 0 | 52 vs 72 | odd starts and inspects in one call; the oracle needs a status preflight |
-| recovery_round_trips | at_least_as_efficient | 12 / 0 / 0 | 1 vs 1 | Identical |
-| model_runs | at_least_as_efficient | 10 / 2 / 0 | 17 vs 19 | Equal on reviewers; odd saves one run in two correction journeys |
-| human_surface_bytes | at_least_as_efficient | 2 / 10 / 0 | 130868 vs 231454 | odd is about 43% less verbose (verbosity, not usefulness) |
-| git_subprocesses | less_efficient | 1 / 9 / 2 | 1512 vs 3698 | 9 better; the 2 worse are gate allow rows that are not comparable |
-| blocks | at_least_as_efficient | 12 / 0 / 0 | 4 vs 4 | Identical |
-| latency (median of ratios) | at_least_as_efficient | 4 / 5 / 3 | ratio 0.90 | Faster overall; 3 slow rows are short hook calls |
+| human_prompts | less_efficient | 4 / 0 / 6 | 13 vs 6 | Real, by design: one cost-forecast approval per reviewer run. Parity with Pi, gap vs the 4.6.0 CLI |
+| manual_tokens | less_efficient | 4 / 0 / 6 | 77 vs 36 | Same cause (proxy: bytes/4 of the human text) |
+| commands_to_completion | at_least_as_efficient | 3 / 7 / 0 | 50 vs 70 | odd starts and inspects in one call; the oracle needs a status preflight |
+| recovery_round_trips | at_least_as_efficient | 10 / 0 / 0 | 1 vs 1 | Identical |
+| model_runs | at_least_as_efficient | 8 / 2 / 0 | 17 vs 19 | Equal on reviewers; odd saves one run in two correction journeys |
+| human_surface_bytes | at_least_as_efficient | 2 / 8 / 0 | 130868 vs 230765 | odd is about 43% less verbose (verbosity, not usefulness) |
+| git_subprocesses | at_least_as_efficient | 1 / 9 / 0 | 1478 vs 3692 | Was `less_efficient` (2 worse) before T8; the 2 worse rows were the oracle's non-deciding gate and are now `not_comparable` |
+| blocks | at_least_as_efficient | 10 / 0 / 0 | 4 vs 4 | Identical |
+| latency (median of ratios) | at_least_as_efficient | 4 / 5 / 1 | ratio 0.74 | Faster overall; the one slow row is a short hook call (Stop) |
 
 ## Cells that are worse
 
@@ -42,7 +41,7 @@ Is it parity or a gap? **Parity with the Pi harness; a gap only against the 4.6.
 
 odd ports the Pi host relay, where reviewers are model runs billed to the user's session. The CLI has no equivalent step because it spawns reviewers itself. So the difference is a deliberate safety step inherited from the reference, not an odd regression. Whether it is the right friction for Claude Code is a product decision (proposal B below). Not verified: how often the Pi flow asks for it in practice; this bench only shows one forecast per run.
 
-### 2. git_subprocesses worse in two gate rows
+### 2. git_subprocesses and latency in two gate rows (now `not_comparable`)
 
 | journey | odd | oracle | latency odd / oracle |
 | --- | --- | --- | --- |
@@ -50,7 +49,7 @@ odd ports the Pi host relay, where reviewers are model runs billed to the user's
 | `gate-push-allowed-for-medium-risk-range` | 28 | 3 | 269.6 ms / 37.3 ms (7.23x) |
 | `stop-silent-with-rdd-off` (latency only; git 3 vs 3) | 3 | 3 | 182.5 ms / 35.7 ms (5.11x) |
 
-**Comparability: no.** Per L7 of the task doc, 4.6.0 `review validate --gate` is non-deciding: for every candidate it reports `delivery=unmanaged` and leaves the decision to the repository's policy. That is why 6 gate journeys that need a denial are `unsupported`. The two that "run" are allow-only, and the oracle's allow costs almost nothing because it evaluates nothing: 3 git calls, about 340-350 bytes of "unmanaged" text, 35-37 ms, whatever the range. The bench currently marks them `comparable` because both sides return "allow"; that is a bench flaw (proposal C), not evidence that odd is slower at the same work.
+**Comparability: no.** Per L7 of the task doc, 4.6.0 `review validate --gate` is non-deciding: for every candidate it reports `delivery=unmanaged` and leaves the decision to the repository's policy. That is why 6 gate journeys that need a denial are `unsupported`. The two that "run" are allow-only, and the oracle's allow costs almost nothing because it evaluates nothing: 3 git calls, about 340-350 bytes of "unmanaged" text, 35-37 ms, whatever the range. The bench used to mark them `comparable` because both sides return "allow"; that was a bench flaw, not evidence that odd is slower at the same work. T8 (proposal C) fixed it: when the oracle's gate reports `delivery=unmanaged`, the row carries a `not_comparable` mark, is excluded from every verdict and shown in its own report section with the raw numbers. The git verdict is now `at_least_as_efficient` and the latency median ratio 0.74.
 
 What odd does in that time:
 
@@ -62,7 +61,7 @@ Honest conclusion: in these two rows odd does more work than the oracle, but the
 
 ### 3. Latency overall
 
-12 journeys compared: equal 4, better 5, worse 3, median ratio **0.90** (limit 1.25). p95 is over 3 samples, so it is a max in practice.
+10 journeys compared: equal 4, better 5, worse 1, median ratio **0.74** (limit 1.25; 0.90 over 12 before the two gate rows were excluded). p95 is over 3 samples, so it is a max in practice.
 
 | | journey | odd | oracle | ratio |
 | --- | --- | --- | --- | --- |
@@ -73,21 +72,21 @@ Honest conclusion: in these two rows odd does more work than the oracle, but the
 | best | `explicit-lens-selection-narrows-review` | 1945.7 ms | 2964.5 ms | 0.66 |
 | near edge, equal | `rdd-mode-global-and-clone-scopes` | 642.8 ms | 524.7 ms | 1.23 |
 | near edge, equal | `low-risk-closes-with-zero-lenses` | 993.2 ms | 883.6 ms | 1.12 |
-| worst | `gate-push-allowed-for-medium-risk-range` | 269.6 ms | 37.3 ms | 7.23 |
-| worst | `gate-silent-with-rdd-off` | 205.4 ms | 35.0 ms | 5.87 |
 | worst | `stop-silent-with-rdd-off` | 182.5 ms | 35.7 ms | 5.11 |
+| excluded (`not_comparable`) | `gate-push-allowed-for-medium-risk-range` | 269.6 ms | 37.3 ms | 7.23 |
+| excluded (`not_comparable`) | `gate-silent-with-rdd-off` | 205.4 ms | 35.0 ms | 5.87 |
 
-Odd wins on the long journeys (many git calls and process starts on the oracle) and loses on one-shot hooks, where fixed process start dominates and the oracle is a native binary. In absolute terms the worst rows cost 150-230 ms more per hook call; a push gate or a Stop hook is paid once per command, not per journey. Different surfaces: this is a same-machine cost comparison, not a quality one.
+Odd wins on the long journeys (many git calls and process starts on the oracle) and loses on one-shot hooks, where fixed process start dominates and the oracle is a native binary. In absolute terms the slow hook rows cost 150-230 ms more per call (the two gate rows, now excluded, included); a push gate or a Stop hook is paid once per command, not per journey. Different surfaces: this is a same-machine cost comparison, not a quality one.
 
 ## Gaps and proposals
 
-None of these is implemented here. Each needs its own task (T6+ in `odd/tasks/efficiency-bench.md`).
+Each needs its own task (T6+ in `odd/tasks/efficiency-bench.md`); only C is a bench change and is done (T8). Per the user's decisions (see the task Log): A is T6, B (T7) was dropped (the forecast approval stays), D (T9) is to be measured and optimized.
 
 | id | proposal | expected impact | effort | risk | changes behavior? |
 | --- | --- | --- | --- | --- | --- |
 | A | Gate fast path when global RDD is not on: skip git entirely | Removes 6 of 6 git calls and about 20-25 ms in the RDD-off gate (about 10% of 205 ms); also the 3 calls in the RDD-off Stop hook if applied there. Most users have RDD off (the default), so this is the common case | small (one early return plus tests) | low, if done as below | Decision: no. Only the allow reason label changes (`not_a_repository` -> `rdd_off`) where cwd is not a repository |
 | B | Optional auto-approve of small reviewer forecasts | Would bring human prompts to parity with the CLI for small runs (1 lens) | medium | medium: removes a cost-consent step the reference deliberately has | **Yes. Product decision for the user; not recommended or decided here** |
-| C | Bench: mark the oracle gate allow rows `not_comparable` when the oracle reports `unmanaged` | Removes 2 false "worse" git cells and 2 false latency "worse" cells from the verdict; the git verdict would become at_least_as_efficient | small (bench change) | low | No product change; changes verdict output |
+| C | Bench: mark the oracle gate allow rows `not_comparable` when the oracle reports `unmanaged` | **Done (T8).** Removed 2 false "worse" git cells and 2 false latency "worse" cells from the verdict; the git verdict became at_least_as_efficient | small (bench change) | low | No product change; changes verdict output |
 | D | Measure and cut hook start-up (module load) | Targets the real cause of the 5-7x one-shot ratios: roughly 110 ms of 182 ms in Stop. Candidate: lazy-load handlers per event, or a bundle per hook | medium | medium (hook entry wiring, fail-safe behavior must hold) | No, if only load order changes |
 
 ### A. Exact proposal (verified by reading `gate.ts` and `mode.ts`, not by running it)
@@ -105,7 +104,8 @@ Caveat to state in the task: A fixes the 6 vs 3 count (becomes 0 vs 3) but moves
 ## Limits of this baseline
 
 - K=3 per journey; p95 is the max of 3 samples. One run on one machine; noise was visible (for example 350.9 ms vs a 269.6 ms median in the medium gate row).
-- 11 of 23 journeys excluded from verdicts (6 unsupported because 4.6.0 has no deciding gate; 5 divergent by declared behavior). Notably, **gate denial efficiency is not measured at all** against the oracle.
+- 13 of 23 journeys excluded from verdicts (6 unsupported because 4.6.0 has no deciding gate; 5 divergent by declared behavior; 2 not comparable because the oracle's gate is non-deciding). Notably, **gate denial efficiency is not measured at all** against the oracle.
 - Oracle is 4.6.0, journeys were ported from 08317b9.
 - Reviewer outputs are synthesized; model quality and real model cost are out of scope. `model_runs` counts runs, not tokens or money.
 - `git_subprocesses` counts only calls through the sandbox `PATH` shim.
+- The saved `oracle.json` predates the `not_comparable` mark, so its two gate-allow rows were annotated by hand with the mark the bench now records on its own (the reason string is `UNMANAGED_GATE_REASON`), and its binary path was rewritten to `~/...` (no username). Nothing was rerun; every measurement in it is as recorded.

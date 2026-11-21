@@ -1,9 +1,10 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { comparisonPaths, declaredDivergences, parse, runCompare } from "./cli.js";
+import { homedir, tmpdir } from "node:os";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+import { comparisonPaths, declaredDivergences, parse, runCompare, tildePath } from "./cli.js";
 import { COMPARISON_SCHEMA_ID } from "./compare.js";
 import { emptyMetricSet, measured } from "./metrics.js";
 import { RESULT_SCHEMA_ID, type BenchResult, type JourneyRow } from "./schema.js";
@@ -71,4 +72,18 @@ test("--compare rejects unreadable, invalid or swapped inputs with exit 2 and wr
   const swapped = runCompare(r, o, out);
   assert.equal(swapped.code, 2); assert.match(swapped.error ?? "", /expected the odd result first/);
   assert.equal(existsSync(out), false);
+});
+
+test("tildePath shows a path under the home directory as ~/..., so recorded metadata names no user", () => {
+  assert.equal(tildePath(join(homedir(), ".local/share/x")), "~/.local/share/x");
+  assert.equal(tildePath(homedir()), "~");
+  assert.equal(tildePath("/opt/other/bin"), "/opt/other/bin");
+  assert.equal(tildePath(`${homedir()}-sibling/x`), `${homedir()}-sibling/x`, "a sibling directory with the same prefix is not under home");
+});
+
+test("test:bench lists spec files through the shell, not a quoted glob (node --test needs Node 21+ for that)", () => {
+  const pkg = JSON.parse(readFileSync(join(dirname(fileURLToPath(import.meta.url)), "../../package.json"), "utf8")) as { scripts: Record<string, string>; engines: { node: string } };
+  assert.match(pkg.scripts["test:bench"]!, /node --test bench\/dist\/\*\.spec\.js bench\/dist\/\*\/\*\.spec\.js/);
+  assert.doesNotMatch(pkg.scripts["test:bench"]!, /["']bench\/dist/);
+  assert.equal(pkg.engines.node, ">=20");
 });

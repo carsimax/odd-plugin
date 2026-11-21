@@ -1,7 +1,9 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { existsSync } from "node:fs";
-import { expectedProjection, runJourney, toJourney, UnsupportedError, type FixtureSpec, type Journey, type JourneyDef, type MetricEvent, type NormalizedFacts, type StepSpec, type Subject } from "./journey.js";
+import { existsSync, mkdtempSync, readdirSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { DEFAULT_PLUGIN_DIR, DEFAULT_SERVER_PATH, expectedProjection, runJourney, toJourney, UnsupportedError, type FixtureSpec, type Journey, type JourneyDef, type MetricEvent, type NormalizedFacts, type StepSpec, type Subject } from "./journey.js";
 import { exampleStatusJourney } from "./journeys/example.js";
 import { validateResult } from "./schema.js";
 import { buildResult } from "./report.js";
@@ -215,4 +217,80 @@ test("runCli runs one process in the sandbox env (or the env the subject gives),
   assert.deepEqual(Object.keys(row.metrics!.latency).sort(), ["cli.probe_a", "cli.probe_b"]);
   const home = seen.env!, cwd = seen.cwd!;
   assert.equal(row.metrics!.human_surface_bytes.value, Buffer.byteLength(`${home}|${cwd}`) + Buffer.byteLength("err!") + Buffer.byteLength("mine"));
+});
+
+// ---- T8: comparability marks, deadline, failing steps, sandbox setup failure ----
+
+test("a not_comparable event marks the row with its reason once, however many times it is reported; a row without one has no field", async () => {
+  const subject = scripted(() => ({ facts: { outcome: "inspected", lineages: 0 }, events: [{ kind: "not_comparable", reason: "the gate reported delivery=unmanaged" }, { kind: "not_comparable", reason: "the gate reported delivery=unmanaged" }, { kind: "command" }] }));
+  const row = await runJourney(toJourney(one(), subject));
+  assert.equal(row.status, "passed", JSON.stringify(row));
+  assert.deepEqual(row.not_comparable, ["the gate reported delivery=unmanaged"]);
+  assert.equal(row.metrics!.commands_to_completion.value, 1, "the mark is not a command");
+  const plain = await runJourney(toJourney(one(), scripted(() => ({ facts: { outcome: "inspected", lineages: 0 }, events: [] }))));
+  assert.equal("not_comparable" in plain, false);
+  const res = buildResult("oracle", [row], { binaryPath: "x", binaryVersion: "y", commit: "z" });
+  assert.deepEqual(validateResult(JSON.parse(JSON.stringify(res))), []);
+});
+
+test("a step that reports ok:false without a block class fails the journey", async () => {
+  const j: Journey = { id: "silent-failure", description: "", expected: { done: true }, steps: [{ name: "quietly broken", actor: "agent", run: async () => ({ ok: false, observed: { done: true } }) }] };
+  const row = await runJourney(j);
+  assert.equal(row.status, "failed");
+  assert.match(row.reason ?? "", /quietly broken.*ok:false.*without a block class/);
+  const blocked: Journey = { ...j, id: "blocked-ok", steps: [{ name: "blocked", actor: "agent", run: async () => ({ ok: false, block: "in_band", observed: { done: true } }) }] };
+  assert.equal((await runJourney(blocked)).status, "passed", "ok:false with a block class is a block, not a failure");
+});
+
+test("when the journey deadline wins, the in-flight body is cancelled: no process starts after the row is built and the late step's counters are ignored", async () => {
+  const marker = mkdtempSync(join(tmpdir(), "odd-bench-marker-"));
+  const late = join(marker, "late.txt");
+  let after = "";
+  const j: Journey = {
+    id: "deadline-cancels", description: "", expected: {}, deadlineMs: 150,
+    steps: [{
+      name: "hang then act", actor: "agent",
+      run: async (env) => {
+        await new Promise((r) => setTimeout(r, 450));
+        try { await env.runCli("late", process.execPath, ["-e", `require("node:fs").writeFileSync(${JSON.stringify(late)}, "x")`]); after = "ran"; } catch (e) { after = e instanceof Error ? e.message : String(e); }
+        return { ok: true };
+      },
+    }],
+  };
+  try {
+    const row = await runJourney(j);
+    assert.equal(row.status, "failed");
+    assert.match(row.reason ?? "", /deadline/);
+    const before = JSON.stringify(row);
+    await new Promise((r) => setTimeout(r, 900));
+    assert.equal(existsSync(late), false, "the late step spawned a process after the row was built");
+    assert.match(after, /journey (ended|deadline)/, "the late operation was refused");
+    assert.equal(JSON.stringify(row), before);
+  } finally {
+    rmSync(marker, { recursive: true, force: true });
+  }
+});
+
+test("a sandbox that cannot be created yields a failed row (never a throw) and leaks no temp dir", async () => {
+  const scratch = mkdtempSync(join(tmpdir(), "odd-bench-scratch-"));
+  const saved = { TMPDIR: process.env.TMPDIR, PATH: process.env.PATH };
+  process.env.TMPDIR = scratch;
+  process.env.PATH = join(scratch, "no-git-here");
+  try {
+    const row = await runJourney(exampleStatusJourney);
+    process.env.PATH = saved.PATH;
+    assert.equal(row.status, "failed");
+    assert.match(row.reason ?? "", /sandbox setup failed/);
+    assert.deepEqual(validateResult(JSON.parse(JSON.stringify(buildResult("odd", [row], { binaryPath: "x", binaryVersion: "y", commit: "z" })))), []);
+    assert.deepEqual(readdirSync(scratch), [], "the half-built sandbox was removed");
+  } finally {
+    process.env.PATH = saved.PATH;
+    if (saved.TMPDIR === undefined) delete process.env.TMPDIR; else process.env.TMPDIR = saved.TMPDIR;
+    rmSync(scratch, { recursive: true, force: true });
+  }
+});
+
+test("the plugin directory has one named constant the server path derives from", () => {
+  assert.ok(existsSync(join(DEFAULT_PLUGIN_DIR, "package.json")));
+  assert.equal(DEFAULT_SERVER_PATH, join(DEFAULT_PLUGIN_DIR, "dist/mcp/review-server.js"));
 });

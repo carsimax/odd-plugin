@@ -8,9 +8,10 @@ and compares them with the upstream oracle (the `gentle-ai` binary). It lives in
 
 - The plugin built and its dependencies installed: `cd plugins/odd-claude && npm ci` (the bench compiles with the plugin's `tsc` and drives
   `plugins/odd-claude/dist/`; run the plugin build first if `dist/` is stale).
-- Node >= 20 and `git` on `PATH`.
+- Node >= 20 and `git` on `PATH`. `npm run test:bench` passes the spec files to `node --test` as shell globs (`bench/dist/*.spec.js bench/dist/*/*.spec.js`): a quoted glob needs Node 21+, so the spec files must stay at most one directory deep under `bench/src`.
 - For the oracle: the upstream `gentle-ai` binary. The default path is
-  `~/.local/share/odd-claude-oracle/gentle-ai-4.6.0/bin/gentle-ai`; point `ODD_BENCH_ORACLE_BIN` at another binary. Without it,
+  `~/.local/share/odd-claude-oracle/gentle-ai-4.6.0/bin/gentle-ai` (under the current user's home, from `os.homedir()`); point
+  `ODD_BENCH_ORACLE_BIN` at another binary. The result records the path as `~/...` when it is under home. Without the binary,
   `--subject oracle|both` exits 2 (use `--subject odd`) and the oracle tests skip.
 - No network, no model, no Claude login: the reviewer is a fake `claude` in the sandbox, and telemetry of the oracle is switched off
   (see Isolation).
@@ -71,7 +72,7 @@ Normalized facts (`NormalizedFacts`): `outcome`, `risk`, `state`, `lenses`, `nex
 ones a step declares are part of its projection. The projection of a journey is `{steps: [{step, ...facts}]}`, in order.
 
 Metric events a subject reports per step (`MetricEvent`): `human_prompt{text}`, `command`, `block{class}`, `recovery`, `model_run`,
-`git_subprocess`, `surface{bytes}`, `latency{op, ms}`. Model runs and git subprocesses are normally observed on the sandbox `PATH`
+`git_subprocess`, `surface{bytes}`, `latency{op, ms}`, and `not_comparable{reason}` (not a friction event: it marks the row, see *Not comparable rows*). Model runs and git subprocesses are normally observed on the sandbox `PATH`
 (the odd subject reports none of those two); a subject that cannot be observed that way reports them as events. Setup (fixture,
 RDD mode) is never counted.
 
@@ -130,8 +131,9 @@ An upstream refusal code without a row keeps its own name prefixed `oracle:` so 
 
 **Unsupported** (6 of 23, marked `unsupported` with the product's reason, never faked): every journey that needs a delivery denial.
 In 4.6.0 `review validate --gate` is non-deciding: for every candidate it reports `delivery=unmanaged` (`allowed=false`, ordinary
-repository policy decides), so there is no deny to compare. The two journeys that only expect an allow run and pass, and a test
-pins the evidence (the fixture odd denies comes back as an unmanaged allow for a push and a pull request alike).
+repository policy decides), so there is no deny to compare. The two journeys that only expect an allow run and pass, but their rows
+are marked `not_comparable` (see below), and a test pins the evidence (the fixture odd denies comes back as an unmanaged allow for a
+push and a pull request alike).
 
 **Divergences** (`DIVERGENCES` in `oracle.ts`; the oracle's expected projection, so the oracle row passes and the difference shows
 in the projections): a decline persists nothing (status offers the start again; odd offers nothing); no duplicate-start guard while a
@@ -171,6 +173,16 @@ To add a journey, add a `JourneyDef` to one of those files (`bench/src/journeys/
 
 `unobservable` dimensions carry `value: null`, never a fabricated 0.
 
+## Deadlines
+
+`Journey.deadlineMs` (default 60 s) has two scopes. It is the budget of the **whole journey**: when it passes the journey fails with
+"journey deadline exceeded", the in-flight step is cancelled (its running processes are killed and every later operation is refused, so
+nothing is counted or spawned after the row is built). It is also the longest any **single** process or MCP operation may run (each one
+is killed at that deadline and reported as timed out), so one hung operation cannot outlive the journey. A step that reports `ok:false`
+without a block class fails the journey; one with a block class is a block. A hook or review-mode CLI of the odd subject that crashes, times
+out, is killed or prints non-JSON fails the step: it is never read as `allow` or `silent`. A sandbox that cannot be created yields a failed
+row (`sandbox setup failed: ...`) and its temp directory is removed; the run goes on with the next journey.
+
 ## Latency and repeats
 
 Both subjects are measured in the same invocation, on the same machine, each operation in a fresh process (MCP server, hook or CLI
@@ -189,16 +201,23 @@ its own sandbox. The result records node, OS and binary versions and `repeats` i
 
 ## Reading `report.md`
 
-Sections, in order: **Run** (versions, node, OS, repeats of both subjects), **Summary** (journeys comparable / divergent / unsupported;
+Sections, in order: **Run** (versions, node, OS, repeats of both subjects), **Summary** (journeys comparable / divergent / unsupported / not comparable;
 thresholds; per metric the verdict counts and totals over comparable journeys; latency), **Efficiency verdict**, **Journeys** (one table per
-comparable journey: odd, oracle, verdict per metric plus whole-journey latency with p95), **Unsupported journeys**, **Declared divergences**,
+comparable journey: odd, oracle, verdict per metric plus whole-journey latency with p95), **Not comparable journeys**, **Unsupported journeys**, **Declared divergences**,
 **How to read**.
 
 - Verdicts are from odd's point of view and lower is better everywhere: `equal`, `better`, `worse`, `not_comparable` (a side is
-  unobservable, unsupported or divergent).
+  unobservable, unsupported, divergent or marked not comparable).
 - Thresholds: counts (prompts, commands, blocks, recovery round trips, model runs, git subprocesses) are exact; `human_surface_bytes` and
   `manual_tokens` tolerate 10% (`|odd - oracle| <= max(absolute, relative * max(odd, oracle))`); `blocks` compare by total, `by_design`
   included. `compareResults` takes custom thresholds (`per_metric`: `{relative, absolute}`, i.e. ±N or a ratio).
+- **Not comparable rows.** A journey row can carry `not_comparable` (a list of reasons; schema field, optional). The oracle subject
+  sets it whenever its gate reports `delivery=unmanaged` (4.6.0: always): that gate never decides, so its near-zero cost (3 git calls,
+  about 35 ms) says nothing about how cheaply a deciding gate protects, and counting it would make upstream look like the winner on
+  git subprocesses and latency. Such a row gets `kind: not_comparable`, every metric verdict `not_comparable`, its own report section with the reason
+  and the raw numbers, and is excluded from the per-metric counts, the totals, the latency summary and the efficiency verdict, exactly like
+  a divergence. A mark on either side excludes the journey. Results recorded before the mark existed carry none; the committed baseline
+  was annotated by hand (see `docs/bench/findings.md`, limits).
 - Unsupported rows and declared divergences are listed apart and are **never** wins or losses: they are excluded from per-metric
   counts and totals, from the latency summary and from the efficiency verdict. A divergent journey keeps its raw numbers for information.
 - **Efficiency verdict**: per dimension, `at_least_as_efficient` when no comparable journey is `worse`, `less_efficient` otherwise,
@@ -219,7 +238,8 @@ subjects, except the events a subject declares for its steps (prompts, commands,
 ## Known limits
 
 - **Unsupported journeys** (6 of 23): every journey needing a delivery denial. Oracle 4.6.0's `review validate --gate` never denies
-  (`delivery=unmanaged`), so there is nothing to compare; they are marked with that reason, not faked.
+  (`delivery=unmanaged`), so there is nothing to compare; they are marked with that reason, not faked. The 2 allow-only gate journeys
+  run but are `not_comparable` for the same reason.
 - **Version skew**: the oracle is 4.6.0 while the journeys were ported from sources pinned at 08317b9. A behavior change between them shows
   up as a divergence or an unsupported row.
 - **Declared divergences** (see the oracle subject above): a decline persists nothing; no duplicate-start guard during a pending correction;
@@ -233,7 +253,7 @@ subjects, except the events a subject declares for its steps (prompts, commands,
 
 - Result: `odd-claude.bench-result/v1` (`bench/src/schema.ts`): run metadata (`subject` odd|oracle, binary, node, OS, commit), per-journey rows
   (`id`, `status` passed|failed|unsupported, outcome projection, metrics) and an aggregate.
-- Comparison: `odd-claude.bench-comparison/v1` (`bench/src/compare.ts`): per journey a `kind` (`comparable|divergent|unsupported|missing`), odd vs
+- Comparison: `odd-claude.bench-comparison/v1` (`bench/src/compare.ts`): per journey a `kind` (`comparable|divergent|unsupported|missing|not_comparable`), odd vs
   oracle per metric with `equal|better|worse|not_comparable`, latency per operation (`ratio`, medians, p95), the thresholds used and a summary.
   Projections are compared, never bytes or hashes. `report.md` is rendered from it by `bench/src/report.ts`.
 

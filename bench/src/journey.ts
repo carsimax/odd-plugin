@@ -19,7 +19,9 @@ export type MetricEvent =
   | { kind: "model_run" }
   | { kind: "git_subprocess" }
   | { kind: "surface"; bytes: number }
-  | { kind: "latency"; op: string; ms: number };
+  | { kind: "latency"; op: string; ms: number }
+  /** The row's numbers must not be compared with the other subject's (see `JourneyRow.not_comparable`); not a friction event. */
+  | { kind: "not_comparable"; reason: string };
 
 export interface StepOutcome {
   ok: boolean;
@@ -46,7 +48,11 @@ export interface Journey {
   refId?: string;
   description: string;
   needsOrigin?: boolean;
-  /** Whole-journey deadline (default 60s). */
+  /**
+   * Deadline in ms (default 60s), with two scopes. The journey as a whole must finish within it: when it passes the journey fails, the
+   * in-flight step is cancelled (its processes are killed, later operations are refused). It is also the longest any single process or MCP
+   * operation may run (their own per-operation timeout), so one hung operation cannot outlive the journey.
+   */
   deadlineMs?: number;
   /** Set when the subject cannot express this journey: the row is `unsupported` with this reason and nothing runs. */
   unsupported?: string;
@@ -80,25 +86,39 @@ export interface RunOptions { serverPath?: string }
 /** Result row of one journey: the shared row plus the upstream id it traces to, when there is one. */
 export interface JourneyResultRow extends JourneyRow { ref_id?: string }
 
-export const DEFAULT_SERVER_PATH = resolve(dirname(fileURLToPath(import.meta.url)), "../../plugins/odd-claude/dist/mcp/review-server.js");
+/** The plugin checkout the odd subject drives (`bench/dist` -> repo root -> `plugins/odd-claude`). */
+export const DEFAULT_PLUGIN_DIR = resolve(dirname(fileURLToPath(import.meta.url)), "../../plugins/odd-claude");
+export const DEFAULT_SERVER_PATH = resolve(DEFAULT_PLUGIN_DIR, "dist/mcp/review-server.js");
 const DEFAULT_DEADLINE_MS = 60_000;
 const utf8 = (s: string): number => Buffer.byteLength(s, "utf8");
 
 export async function runJourney(journey: Journey, opts: RunOptions = {}): Promise<JourneyResultRow> {
-  if (journey.unsupported !== undefined) return { id: journey.id, ...(journey.refId !== undefined ? { ref_id: journey.refId } : {}), status: "unsupported", outcome: null, metrics: null, reason: journey.unsupported };
+  const trace = journey.refId !== undefined ? { ref_id: journey.refId } : {};
+  if (journey.unsupported !== undefined) return { id: journey.id, ...trace, status: "unsupported", outcome: null, metrics: null, reason: journey.unsupported };
   const serverPath = opts.serverPath ?? DEFAULT_SERVER_PATH;
   const deadlineMs = journey.deadlineMs ?? DEFAULT_DEADLINE_MS;
-  const sandbox = await createSandbox({ origin: journey.needsOrigin === true });
+  let sandbox: Sandbox;
+  try {
+    sandbox = await createSandbox({ origin: journey.needsOrigin === true });
+  } catch (e) {
+    return { id: journey.id, ...trace, status: "failed", outcome: {}, metrics: emptyMetricSet(), reason: `sandbox setup failed: ${e instanceof Error ? e.message : String(e)}` };
+  }
   const latency = new Map<string, number[]>();
   const sample = (op: string, ms: number): void => void latency.set(op, [...(latency.get(op) ?? []), ms]);
   let surface = 0;
+  /** Set once the journey is over (deadline or failure): operations are refused and in-flight ones are killed, so a late step changes nothing. */
+  const cancel = new AbortController();
+  const live = (): AbortSignal => {
+    if (cancel.signal.aborted) throw new Error("journey ended: operation refused after the row was built");
+    return cancel.signal;
+  };
   const hooksDir = resolve(dirname(serverPath), "../hooks"), cliDir = resolve(dirname(serverPath), "../cli");
   const env: JourneyEnv = {
     sandbox,
     plugin: { server: serverPath, hooks: resolve(hooksDir, "run.js"), reviewMode: resolve(cliDir, "review-mode.js") },
     see: (t) => void (surface += utf8(t)),
     async mcpCall(tool, args = {}) {
-      const r = await mcpOperation({ serverPath, cwd: sandbox.repo, env: sandbox.env, deadlineMs }, { method: "tools/call", params: { name: tool, arguments: args } });
+      const r = await mcpOperation({ serverPath, cwd: sandbox.repo, env: sandbox.env, deadlineMs, signal: live() }, { method: "tools/call", params: { name: tool, arguments: args } });
       sample(`mcp.${tool}`, r.ms);
       surface += utf8(r.text);
       let json: unknown = null;
@@ -106,18 +126,18 @@ export async function runJourney(journey: Journey, opts: RunOptions = {}): Promi
       return { text: r.text, isError: r.isError, json };
     },
     async mcpTools() {
-      const r = await mcpOperation({ serverPath, cwd: sandbox.repo, env: sandbox.env, deadlineMs }, { method: "tools/list" });
+      const r = await mcpOperation({ serverPath, cwd: sandbox.repo, env: sandbox.env, deadlineMs, signal: live() }, { method: "tools/list" });
       sample("mcp.tools_list", r.ms);
       return ((r.result as { tools?: { name: string }[] }).tools ?? []).map((t) => t.name);
     },
     async runHook(name, command, args, stdin) {
-      const r = await runProcess(command, args, { cwd: sandbox.repo, env: sandbox.env, deadlineMs, ...(stdin !== undefined ? { stdin } : {}) });
+      const r = await runProcess(command, args, { cwd: sandbox.repo, env: sandbox.env, deadlineMs, signal: live(), ...(stdin !== undefined ? { stdin } : {}) });
       sample(`hook.${name}`, r.ms);
       surface += utf8(r.stdout);
       return r;
     },
     async runCli(name, command, args, o = {}) {
-      const r = await runProcess(command, args, { cwd: sandbox.repo, env: o.env ?? sandbox.env, deadlineMs, ...(o.stdin !== undefined ? { stdin: o.stdin } : {}) });
+      const r = await runProcess(command, args, { cwd: sandbox.repo, env: o.env ?? sandbox.env, deadlineMs, signal: live(), ...(o.stdin !== undefined ? { stdin: o.stdin } : {}) });
       sample(`cli.${name}`, r.ms);
       surface += utf8(r.stdout) + utf8(r.stderr);
       return r;
@@ -127,6 +147,7 @@ export async function runJourney(journey: Journey, opts: RunOptions = {}): Promi
   let prompts = 0, manualBytes = 0, commands = 0, recoveries = 0, extraModelRuns = 0, extraGit = 0;
   const blocks = emptyBlocks();
   const observed: Projection = {};
+  const notComparable: string[] = [];
   let failure: string | undefined;
   let unsupported: string | undefined;
   let timer: NodeJS.Timeout | undefined;
@@ -138,8 +159,10 @@ export async function runJourney(journey: Journey, opts: RunOptions = {}): Promi
     const body = (async () => {
       let previousBlocked = false;
       for (const step of journey.steps) {
+        if (cancel.signal.aborted) return;
         if (step.actor === "human") { prompts += 1; manualBytes += utf8(step.humanText ?? ""); } else if (step.actor === "agent") commands += 1;
         const out = await step.run(env);
+        if (cancel.signal.aborted) return;
         const stepBlocks: BlockClass[] = out.block ? [out.block] : [];
         for (const ev of out.events ?? []) {
           if (ev.kind === "human_prompt") { prompts += 1; manualBytes += utf8(ev.text); }
@@ -149,14 +172,18 @@ export async function runJourney(journey: Journey, opts: RunOptions = {}): Promi
           else if (ev.kind === "model_run") extraModelRuns += 1;
           else if (ev.kind === "git_subprocess") extraGit += 1;
           else if (ev.kind === "surface") surface += ev.bytes;
+          else if (ev.kind === "not_comparable") { if (!notComparable.includes(ev.reason)) notComparable.push(ev.reason); }
           else sample(ev.op, ev.ms);
         }
         for (const cls of stepBlocks) addBlock(blocks, cls);
+        if (!out.ok && stepBlocks.length === 0) throw new Error(`step "${step.name}" reported ok:false without a block class`);
         if (previousBlocked && out.ok && stepBlocks.length === 0) recoveries += 1;
         previousBlocked = stepBlocks.length > 0;
         Object.assign(observed, out.observed);
       }
     })();
+    // The deadline may win the race; the body then finishes (or fails) on its own after cancellation, and that must neither crash nor count.
+    body.catch(() => {});
     const deadline = new Promise<never>((_, rej) => { timer = setTimeout(() => rej(new Error(`journey deadline exceeded after ${deadlineMs}ms`)), deadlineMs); });
     await Promise.race([body, deadline]);
   } catch (e) {
@@ -164,12 +191,13 @@ export async function runJourney(journey: Journey, opts: RunOptions = {}): Promi
     else failure = e instanceof Error ? e.message : String(e);
   } finally {
     clearTimeout(timer);
+    cancel.abort();
   }
   const metrics: MetricSet = emptyMetricSet();
   metrics.human_prompts = measured(prompts);
   metrics.manual_tokens = proxy(Math.ceil(manualBytes / 4), "ceil(bytes/4) of human step text");
   metrics.commands_to_completion = measured(commands);
-  metrics.blocks = { value: blocks, derivation: "measured" };
+  metrics.blocks = { value: { ...blocks }, derivation: "measured" };
   metrics.recovery_round_trips = measured(recoveries);
   metrics.model_runs = measured(sandbox.countModelRuns() + extraModelRuns);
   metrics.human_surface_bytes = measured(surface);
@@ -178,9 +206,9 @@ export async function runJourney(journey: Journey, opts: RunOptions = {}): Promi
   const root = sandbox.root;
   sandbox.cleanup();
   if (existsSync(root)) failure ??= "sandbox cleanup failed";
-  if (unsupported !== undefined && failure === undefined) return { id: journey.id, ...(journey.refId !== undefined ? { ref_id: journey.refId } : {}), status: "unsupported", outcome: null, metrics: null, reason: unsupported };
+  if (unsupported !== undefined && failure === undefined) return { id: journey.id, ...trace, status: "unsupported", outcome: null, metrics: null, reason: unsupported };
   if (failure === undefined && !sameJson(observed, journey.expected)) failure = `outcome projection differs from expected: ${JSON.stringify(observed)}`;
-  return { id: journey.id, ...(journey.refId !== undefined ? { ref_id: journey.refId } : {}), status: failure === undefined ? "passed" : "failed", outcome: observed, metrics, ...(failure !== undefined ? { reason: failure } : {}) };
+  return { id: journey.id, ...trace, status: failure === undefined ? "passed" : "failed", outcome: { ...observed }, metrics, ...(failure !== undefined ? { reason: failure } : {}), ...(notComparable.length > 0 ? { not_comparable: [...notComparable] } : {}) };
 }
 
 // ---------------------------------------------------------------------------------------------------------------------------
