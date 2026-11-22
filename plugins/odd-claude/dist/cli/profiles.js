@@ -44,11 +44,11 @@ export function profilesCli(argv, env = process.env) {
     try {
         if (cmd === "use") {
             const p = useProfile(rest[0], opts);
-            return ok(`profile set to: ${p.active}\n${renderProfiles(p)}\nApplies from the next session start (or /clear) for the orchestrator; the optional mod routes spawns immediately.`);
+            return ok(`profile set to: ${p.active}\n${renderProfiles(p)}\nApplies from the next session start (or /clear) for the orchestrator (the SessionStart context line carries the profile).`);
         }
         if (cmd === "set") {
             const p = setRole(rest[0], rest[1], rest[2], opts);
-            return ok(`role updated\n${renderProfiles(p)}\nApplies from the next session start (or /clear) for the orchestrator; the optional mod routes spawns immediately.`);
+            return ok(`role updated\n${renderProfiles(p)}\nApplies from the next session start (or /clear) for the orchestrator (the SessionStart context line carries the profile).`);
         }
         clearProfile(opts);
         return ok(`profile cleared: back to the default profile\n${renderProfiles(readProfile(opts))}`);

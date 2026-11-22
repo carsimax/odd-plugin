@@ -7,7 +7,7 @@ Status: **v2.0.0 reached** for native RDD (faithful core; Phases 1–5, 7 and th
 ## Guiding principles
 
 1. **Critical behaviour works with classic hooks.** The ODD prompt and every guard rely on SessionStart / UserPromptSubmit `additionalContext` and PreToolUse / Stop hooks, never on mods.
-2. **Mods are an optional enhancement layer.** The plugin is fully functional if `modules` is not loaded (flag-gated; per spike Q1 it loads interactively and in `-p` on v2.1.326, and panes, commands and tools work, but `prompt.compose/section/context` are blocked for third-party mods by `cc-plugin-sec-default`, so no behaviour may rely on mod prompt injection). Each mod feature has a documented non-mod fallback.
+2. **Mods were an optional enhancement layer (removed in the simplification pass, `odd/tasks/simplify.md`: the `hooks/register.ts` mod, `agent.spawn` routing and the `agents`, `changes` and `quiet` commands no longer exist; history below is kept as it was).** The plugin is fully functional if `modules` is not loaded (flag-gated; per spike Q1 it loads interactively and in `-p` on v2.1.326, and panes, commands and tools work, but `prompt.compose/section/context` are blocked for third-party mods by `cc-plugin-sec-default`, so no behaviour may rely on mod prompt injection). Each mod feature has a documented non-mod fallback.
 3. **Settings-only items go through an opt-in `/odd-claude:setup`** (status line, `defaultMode`, output-style selection, env): it shows the proposed change and writes only with consent. Plugins cannot write settings.
 4. **Naming is `odd`** everywhere (plugin `odd-claude`, `odd_*` tools, `ODD_*` env, `<odd-…>` tags). Never `gentle-`.
 5. **No telemetry** of any kind (R37, A49 excluded by decision).
@@ -91,7 +91,7 @@ Originally "Guards" (enforcement through deny/ask hooks). Superseded by user dec
 
 ### Phase 5: Mods UX (optional)
 
-- **Status:** done (v1.1, branch feat/v1.1-mods). R42 (tokens/s) and R44 (statusLine) shipped through `/odd-claude:setup statusline on`; the `$.ui.status` mod variant is not shipped. Interactive checks (panes, quiet rendering, banner visibility, statusLine live payload) are pending.
+- **Status:** done (v1.1, branch feat/v1.1-mods); **the mod, `agent.spawn` routing and the `/odd-claude:agents`, `/odd-claude:changes` and `/odd-claude:quiet` commands were later removed in the simplification pass (`odd/tasks/simplify.md`)**. R42 (tokens/s) and R44 (statusLine) shipped through `/odd-claude:setup statusline on`; the `$.ui.status` mod variant is not shipped. Interactive checks (panes, quiet rendering, banner visibility, statusLine live payload) are pending.
 - **Goal:** richer UI where mods are available, with the non-mod fallback already shipped in earlier phases.
 - **Matrix IDs:** R09, R36, R39, R40, R42, R44, R45, R46, R51
 - **Deliverables:** `/odd-claude:agents` (R09, text fallback first, pane via mod), `/odd-claude:stats` (R36, local only), `/odd-claude:profiles` (R39), dynamic per-spawn model routing via `agent.spawn` with static frontmatter `model`/`effort` as base (R40), statusLine script `odd-status` (R44, R42 TPS segment), startup banner (R45), `/odd-claude:changes` (R46), tool-render tweaks (R51).
@@ -151,7 +151,7 @@ Originally "Guards" (enforcement through deny/ask hooks). Superseded by user dec
 | v0.5 | ODD core + coordinator mode (prompt) + advisory budget + permission-mode mapping | 2 + 3 | no deny hooks by user decision (S6); makes no safety claims, protection relies on Claude Code native permissions; independent verification of the delivered units |
 | v0.8 | Advisory review: four lenses + Judgment Day as agents and skills | 4 | per Q4; no native RDD, no external binary |
 | v1.0 | Parity target (below) | 1–4 + 7 | reached (branch feat/v1.0-polish); R57 and R63 dropped by user decision 2026-11-18 |
-| v1.1 | Mods UX | 5 | reached (branch feat/v1.1-mods); R42 and R44 shipped via setup; interactive checks pending |
+| v1.1 | Mods UX | 5 | reached (branch feat/v1.1-mods); R42 and R44 shipped via setup; mod and agents/changes/quiet later removed (simplification) |
 | v2 | Native RDD + peer orchestrators: R03, R07, R29, R30, R31, R32, R33, R74, A39, A40, A47, A48 | 8 | native RDD **shipped as 2.0.0** (faithful core, TypeScript, "camino B"); R07 peers **shipped in 2.1.0** (file mailbox + hooks; `$.store` superseded) |
 
 **What "parity" means for v1.0.** Every matrix item with a 🟡 or ✅ verdict in Phases 1–4 and 7 is delivered or has a documented native equivalent, so that an ODD session (prompt, delegation, writer/verifier rules, guards, Judgment Day, advisory four-lens review) behaves as in gentle-shell for the same user task. Parity is **not** pixel/TUI parity: the 29 ❌ matrix rows and the extra out-of-scope entries below (Pi-host rendering, launcher/installer, providers, keybindings, desktop/herdr, voice/music, telemetry) are excluded, Pi-specific pieces are replaced by native Claude Code tools, and cross-provider model fallback is impossible. Mod-only UX (Phase 5) is extended parity shipped after 1.0; web tools (Phase 6) were dropped on 2026-11-19. Per the Q4 decision, v1.0 parity covers the **advisory** agent-based review only: native RDD (`odd_review*` tools, contract mirror, candidate views, review-approval publication gate, lineage/consent/capture) and inter-session peers (R07) are **v2 scope** (Phase 8: R03, R07, R29, R30, R31, R32, R33, R74, A39, A40, A47, A48) and excluded from the v1 parity claim; the release notes say so.
@@ -222,7 +222,7 @@ Excluded rows (every other matrix ID is in a phase above, v2 included). Out-of-s
 | 2 | Core declarative layer | Phase 1; Q2, Q3, Q6 | v0.2 | done (v0.2, branch feat/v0.2-core) |
 | 3 | Coordinator, advisory budget, permission modes (no deny hooks) | Phase 2; Q3 | v0.5 | done (v0.5, branch feat/v0.5-guards) |
 | 4 | Advisory review (agents) | Phases 1–3 | v0.8 | done (v0.8, branch feat/v0.8-review) |
-| 5 | Mods UX (optional) | Phase 2; Q1, Q7 | v1.1 | done (v1.1, branch feat/v1.1-mods); R42 TPS and R44 statusLine shipped via setup; interactive checks pending |
+| 5 | Mods UX (optional) | Phase 2; Q1, Q7 | v1.1 | done (v1.1, branch feat/v1.1-mods); R42 TPS and R44 statusLine shipped via setup; mod and agents/changes/quiet later removed (simplification) |
 | 6 | Web tools | – | – | dropped by user decision 2026-11-19 (Claude Code's own Artifact tool and built-in design/chart features cover the need; Tower not wanted); v1.2 not released |
 | 7 | Cosmetic and small | Phase 1 | v1.0 | done (v1.0, branch feat/v1.0-polish); R57, R63 dropped by user decision 2026-11-18 |
 | 8 | v2: native RDD + peer orchestrators | v1 shipped | v2 | RDD done (v2.0.0, branch feat/v2-rdd, faithful core); peers (R07) shipped in 2.1.0; production readiness shipped in 2.2.0 (Node >= 22, branch release/2.2.0); balanced default profile, per-role RDD reviewer models, parallel haiku explorers and a single neutral persona shipped in 2.3.0 (branch feat/balanced-profile) |

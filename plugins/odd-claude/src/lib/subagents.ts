@@ -1,10 +1,9 @@
 // Subagent log (R09): SubagentStart/SubagentStop hook events are recorded in the session state under
-// `subagents` (advisory, no output) so `/odd-claude:agents` and the optional mod pane can list them.
+// `subagents` (advisory, no output) so `/odd-claude:stats` can count them.
 // Claude Code gives the plugin no runner, so this event log is the only source of truth.
 import { logError, readSessionState, updateSessionState, type StateOptions } from "./state.js";
 
 export const MAX_SUBAGENTS = 50;
-export const AGENTS_SCHEMA = "odd-claude.agents/v1";
 
 export interface SubagentRecord {
   id: string;
@@ -64,21 +63,4 @@ export function formatDuration(ms: number): string {
   if (h > 0) return `${h}h${p(m)}m${p(sec)}s`;
   if (m > 0) return `${m}m${p(sec)}s`;
   return `${sec}s`;
-}
-
-/** Table, newest first: agent_type, started (UTC), status, duration. Mirrored by hooks/register.ts (same fixtures in both tests). */
-export function renderSubagents(records: readonly SubagentRecord[], now: number = Date.now()): string {
-  if (records.length === 0) return "No subagents recorded for this session.";
-  const sorted = [...records].sort((a, b) => (b.startedAt ?? b.endedAt ?? 0) - (a.startedAt ?? a.endedAt ?? 0));
-  const rows = sorted.map((r) => [
-    r.type,
-    r.startedAt === undefined ? "-" : new Date(r.startedAt).toISOString().slice(11, 19),
-    r.endedAt === undefined ? "running" : "done",
-    r.startedAt === undefined ? "-" : formatDuration((r.endedAt ?? now) - r.startedAt),
-  ]);
-  const table = [["AGENT_TYPE", "STARTED (UTC)", "STATUS", "DURATION"], ...rows];
-  const widths = [0, 1, 2].map((i) => Math.max(...table.map((r) => r[i]!.length)) + 2);
-  const lines = table.map((r) => [0, 1, 2].map((i) => r[i]!.padEnd(widths[i]!)).join("") + r[3]);
-  const running = records.filter((r) => r.endedAt === undefined).length;
-  return [...lines, `${records.length} subagent${records.length === 1 ? "" : "s"} (${running} running)`].join("\n");
 }

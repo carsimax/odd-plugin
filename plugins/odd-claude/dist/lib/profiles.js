@@ -1,9 +1,8 @@
 // R39/R40 model profiles. Upstream (lib/profiles-orchestrator.ts, agent-model-resolution.ts, model-routing-authority.ts)
 // rewrites the agents' routing config and Pi's global settings. In Claude Code the plugin's agent files live in the
 // plugin cache (overwritten on every update), so they are never rewritten: the profile is plugin state mapping each
-// odd-claude agent to { model, effort }, and the static frontmatter stays the base. It is applied per spawn, either
-// by the orchestrator (the SessionStart context line asks it to pass `model` to the Agent tool) or by the optional
-// mod's `agent.spawn` hook (hooks/register.ts reads the same `routing` map). `balanced` is the default: with no chosen
+// odd-claude agent to { model, effort }, and the static frontmatter stays the base. It is applied per spawn by the
+// orchestrator (the SessionStart context line asks it to pass `model` to the Agent tool). `balanced` is the default: with no chosen
 // (or no readable) profile it applies; `clear` returns to it. An explicitly chosen economy/max/custom wins.
 import { readPluginState, writePluginState } from "./state.js";
 /** Agents the profile routes, i.e. every agent file shipped in agents/. */
@@ -19,7 +18,7 @@ export const PROFILE_ROLES = [
     "odd-review-resilience",
     "odd-review-risk",
 ];
-/** Aliases the Agent tool's `model` parameter and `agent.spawn` accept. */
+/** Aliases the Agent tool's `model` parameter accepts. */
 export const PROFILE_MODELS = ["haiku", "sonnet", "opus"];
 export const PROFILE_EFFORTS = ["low", "medium", "high", "xhigh", "max"];
 /** Routable roles that are not agent files: the RDD native review's refuter and targeted validator. */
@@ -126,7 +125,7 @@ export function setRole(role, model, effort, opts = {}) {
 export function clearProfile(opts = {}) {
     writePluginState("profiles", {}, opts);
 }
-/** SessionStart context line (non-mod routing); always present (balanced by default), agent-file roles only. Never throws. */
+/** SessionStart context line (the only routing); always present (balanced by default), agent-file roles only. Never throws. */
 export function profileContextLine(opts = {}) {
     const p = readProfile(opts);
     const entries = PROFILE_ROLES.filter((role) => p.routing[role] !== undefined).map((role) => `odd-claude:${role}=${p.routing[role].model}`);

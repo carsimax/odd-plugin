@@ -29,4 +29,4 @@ Steps:
    If anything else (other words, spaces, quotes, `;`, `$`, backticks, paths), do NOT run any command: say it is not valid, list the valid forms, and ask what they want.
 4. Run with the Bash tool, putting only the validated literal words in the command (never anything else the user typed):
    `node "${CLAUDE_PLUGIN_ROOT}/dist/cli/profiles.js" <validated words> --data-dir "${CLAUDE_PLUGIN_DATA}"`
-5. Show its output. The orchestrator picks the profile up from the next session start (or `/clear`); with the optional mod enabled, spawns are routed immediately.
+5. Show its output. The orchestrator picks the profile up from the next session start (or `/clear`); it travels in the SessionStart context line.

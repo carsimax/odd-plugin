@@ -99,8 +99,5 @@
         ]
       }
     ]
-  },
-  "modules": [
-    "./register.ts"
-  ]
+  }
 }
