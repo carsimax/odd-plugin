@@ -81,7 +81,7 @@ test("CLI: SessionStart fixture records session start in state and emits context
     assert.equal(r.status, 0);
     const out = JSON.parse(r.stdout);
     assert.equal(out.hookSpecificOutput.hookEventName, "SessionStart");
-    assert.match(out.hookSpecificOutput.additionalContext, /Persona mode: mentor/);
+    assert.match(out.hookSpecificOutput.additionalContext, /Persona mode: neutral/);
     const state = readSessionState("sess-1", { dataDir: dir });
     assert.equal(typeof state.startedAt, "string");
     assert.equal(state.source, "startup");
@@ -99,7 +99,7 @@ test("CLI: unknown event and missing data dir exit 0", () => {
   const b = spawnSync(process.execPath, [runJs, "SessionStart"], { input: '{"session_id":"x"}', env, encoding: "utf8" });
   assert.equal(b.status, 0);
   // no data dir: state is skipped, the context still goes out with the default persona
-  assert.match(JSON.parse(b.stdout).hookSpecificOutput.additionalContext, /Persona mode: mentor/);
+  assert.match(JSON.parse(b.stdout).hookSpecificOutput.additionalContext, /Persona mode: neutral/);
 });
 
 test("SessionStart context follows the stored persona and covers every source", () => {

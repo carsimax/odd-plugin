@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { personaCli } from "./persona.js";
@@ -15,8 +15,8 @@ test("no argument prints the current persona and the modes, writes nothing", () 
   try {
     const r = personaCli(["--data-dir", dir], {});
     assert.equal(r.exitCode, 0);
-    assert.match(r.stdout, /persona: mentor/);
-    assert.match(r.stdout, /available modes: mentor, neutral/);
+    assert.match(r.stdout, /persona: neutral/);
+    assert.match(r.stdout, /available modes: neutral$/);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
@@ -29,8 +29,22 @@ test("--mode sets the persona (via --data-dir or CLAUDE_PLUGIN_DATA)", () => {
     assert.equal(r.exitCode, 0);
     assert.match(r.stdout, /persona set to: neutral/);
     assert.equal(readPersona({ dataDir: dir }), "neutral");
-    assert.equal(personaCli(["--mode", "mentor"], { CLAUDE_PLUGIN_DATA: dir }).exitCode, 0);
-    assert.equal(readPersona({ dataDir: dir }), "mentor");
+    assert.equal(personaCli(["--mode", "neutral"], { CLAUDE_PLUGIN_DATA: dir }).exitCode, 0);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("--mode mentor is refused: exit 1, clear message, state unchanged", () => {
+  const dir = tmp();
+  try {
+    const r = personaCli(["--mode", "mentor", "--data-dir", dir], {});
+    assert.notEqual(r.exitCode, 0);
+    assert.equal(r.exitCode, 1);
+    assert.equal(r.stdout, "");
+    assert.equal(r.stderr, 'error: invalid persona "mentor"; available modes: neutral');
+    assert.equal(existsSync(join(dir, "persona.json")), false);
+    assert.equal(readPersona({ dataDir: dir }), "neutral");
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

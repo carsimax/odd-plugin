@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync, writeFileSync, mkdirSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync, mkdirSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DEFAULT_PERSONA, PERSONA_MODES, isPersonaMode, personaText, readPersona, writePersona } from "./persona.js";
@@ -58,10 +58,28 @@ test("corrupt or unknown stored mode falls back to the default", () => {
   }
 });
 
-test("each persona text names its mode and the Spanish register", () => {
-  for (const mode of PERSONA_MODES) {
-    assert.match(personaText(mode), /Do NOT use voseo/);
-    assert.doesNotMatch(personaText(mode), /Rioplatense/i);
+test("neutral is the only persona and the default", () => {
+  assert.deepEqual([...PERSONA_MODES], ["neutral"]);
+  assert.equal(DEFAULT_PERSONA, "neutral");
+  assert.equal(isPersonaMode("mentor"), false);
+});
+
+test("stored mentor reads as neutral; writing mentor throws and leaves state untouched", () => {
+  const dir = tmp();
+  try {
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, "persona.json"), JSON.stringify({ version: 1, sessionId: "persona", data: { mode: "mentor" } }));
+    assert.equal(readPersona({ dataDir: dir }), "neutral");
+    const before = readFileSync(join(dir, "persona.json"), "utf8");
+    assert.throws(() => writePersona("mentor", { dataDir: dir }), /invalid persona "mentor"; available modes: neutral$/);
+    assert.equal(readFileSync(join(dir, "persona.json"), "utf8"), before);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
   }
-  assert.notEqual(personaText("mentor"), personaText("neutral"));
+});
+
+test("persona text is neutral Spanish and mentions no mentor mode", () => {
+  const text = personaText("neutral");
+  assert.match(text, /Do NOT use voseo/);
+  assert.doesNotMatch(text, /Rioplatense|mentor/i);
 });

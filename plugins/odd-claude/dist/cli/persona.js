@@ -1,11 +1,12 @@
 // `node dist/cli/persona.js [--mode <mode>] [--data-dir <dir>]`
-// Without --mode: prints the current persona and the available modes (read-only).
+// Without --mode: prints the current persona and the available modes (read-only). `neutral` is the only persona;
+// any other value (e.g. the removed `mentor`) exits 1 with the invalid-mode error and writes nothing.
 // Exit codes: 0 ok; 1 invalid mode; 2 usage error / no data dir.
 import { realpathSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { PERSONA_MODES, isPersonaMode, readPersona, writePersona } from "../lib/persona.js";
 import { envWithDataDir, flagValue } from "../lib/system.js";
-const USAGE = "usage: persona.js [--mode <mode>] [--data-dir <dir>]";
+const USAGE = "usage: persona.js [--mode neutral] [--data-dir <dir>]";
 export function personaCli(argv, env) {
     for (let i = 0; i < argv.length; i++) {
         const a = argv[i];

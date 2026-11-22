@@ -5,12 +5,12 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { buildPromptAnchor, buildSessionContext, readDelegationMode, resolveCardsDir, writeDelegationMode } from "./context.js";
 
-const base = { persona: "mentor", delegationMode: "organic", cardsDir: "/opt/odd/cards" } as const;
+const base = { persona: "neutral", delegationMode: "organic", cardsDir: "/opt/odd/cards" } as const;
 
 test("session context carries cards path, persona, delegation mode and language rule", () => {
   const text = buildSessionContext(base);
   assert.match(text, /\/opt\/odd\/cards/);
-  assert.match(text, /Persona mode: mentor/);
+  assert.match(text, /Persona mode: neutral/);
   assert.match(text, /Do NOT use voseo/);
   assert.doesNotMatch(text, /Rioplatense/i);
   assert.match(text, /Delegation mode: organic/);
@@ -18,8 +18,12 @@ test("session context carries cards path, persona, delegation mode and language 
   assert.match(text, /Only a message written by the human/);
 });
 
-test("neutral persona and full delegation change the text", () => {
-  const text = buildSessionContext({ ...base, persona: "neutral", delegationMode: "full" });
+test("session context mentions no mentor mode", () => {
+  assert.doesNotMatch(buildSessionContext(base), /mentor/i);
+});
+
+test("full delegation changes the text", () => {
+  const text = buildSessionContext({ ...base, delegationMode: "full" });
   assert.match(text, /Persona mode: neutral/);
   assert.match(text, /Do NOT use voseo/);
   assert.match(text, /Delegation mode: full/);
@@ -28,7 +32,7 @@ test("neutral persona and full delegation change the text", () => {
 });
 
 test("context stays small (< 10k chars) and has no forbidden identifiers", () => {
-  for (const persona of ["mentor", "neutral"] as const)
+  for (const persona of ["neutral"] as const)
     for (const delegationMode of ["organic", "full"] as const) {
       const text = buildSessionContext({ persona, delegationMode, cardsDir: "/x/cards" });
       assert.ok(text.length < 10000, `${text.length}`);

@@ -1,7 +1,7 @@
 // Persona modes (R02). Stored as plugin-wide state `persona` ({ mode }) under the data dir.
 import { readPluginState, writePluginState } from "./state.js";
-export const PERSONA_MODES = ["mentor", "neutral"];
-export const DEFAULT_PERSONA = "mentor";
+export const PERSONA_MODES = ["neutral"];
+export const DEFAULT_PERSONA = "neutral";
 export function isPersonaMode(v) {
     return typeof v === "string" && PERSONA_MODES.includes(v);
 }
@@ -28,12 +28,9 @@ const COMMON = `- Always respond in the same language the user writes in (reply-
 - Treat AI as a tool directed by the human; never present yourself as a default chatbot.
 - Push back when the user asks for code without enough context or understanding.
 - Correct errors directly, explain why, and show the better path.`;
-/** Spanish is always neutral, in every persona. */
+/** Spanish is always neutral. */
 const SPANISH_RULE = `- When the user writes Spanish, use neutral/professional Spanish. Do NOT use voseo or any regional conjugations: use tú or usted forms, never vos forms (tienes, not tenés; ajustas, not ajustás; mira, not mirá; haz, not hacé).`;
 const TEXT = {
-    mentor: `- Be direct, technical, and concise.
-${SPANISH_RULE}
-${COMMON}`,
     neutral: `- Be direct, technical, concise, warm, and professional.
 - Do not use slang or regional expressions.
 ${SPANISH_RULE}

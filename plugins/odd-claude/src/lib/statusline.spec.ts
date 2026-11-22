@@ -14,8 +14,8 @@ const strip = (s: string): string => s.replace(/\u001b\[[0-9;]*m/g, "");
 const PLAIN = { color: false, cols: 200 };
 
 test("renders every segment in order on one line", () => {
-  const line = renderStatusline(PAYLOAD, { ...PLAIN, coordinator: true, persona: "mentor", branch: "main", tps: 50 });
-  assert.equal(line, "Opus 4.1 · ctx 42% · coord ON · mentor · 5h 12% 7d 40% · main · 50 tok/s");
+  const line = renderStatusline(PAYLOAD, { ...PLAIN, coordinator: true, persona: "neutral", branch: "main", tps: 50 });
+  assert.equal(line, "Opus 4.1 · ctx 42% · coord ON · neutral · 5h 12% 7d 40% · main · 50 tok/s");
   assert.ok(!line.includes("\n"));
 });
 
@@ -51,7 +51,7 @@ test("color adds ANSI; plain output has none; tone changes at 80/95 percent", ()
 });
 
 test("narrow width drops low-priority segments from the right and never overflows", () => {
-  const extras = { ...PLAIN, coordinator: true, persona: "mentor", branch: "main", tps: 50 };
+  const extras = { ...PLAIN, coordinator: true, persona: "neutral", branch: "main", tps: 50 };
   for (const cols of [60, 30, 20, 10, 5, 1]) {
     const line = renderStatusline(PAYLOAD, { ...extras, cols });
     assert.ok(strip(line).length <= cols, `${cols}: ${line}`);
