@@ -25,8 +25,8 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest]
-        # 20 = the plugin's `engines.node` floor (>=20); 26 = the version used for development.
-        node: ["20", "26"]
+        # 22 = the plugin's `engines.node` floor (>=22; Node 20 is EOL and its test runner does not expand globs); 26 = the version used for development.
+        node: ["22", "26"]
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:

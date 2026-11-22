@@ -16,11 +16,11 @@ function deps(over: Partial<DoctorDeps> & { present?: Record<string, string> } =
   };
 }
 
-test("parseVersion extracts the first semver and nodeSatisfies enforces >=20", () => {
+test("parseVersion extracts the first semver and nodeSatisfies enforces >=22", () => {
   assert.equal(parseVersion("git version 2.40.1 (Apple)"), "2.40.1");
   assert.equal(parseVersion("no digits"), undefined);
-  assert.equal(nodeSatisfies("v20.0.0"), true);
-  assert.equal(nodeSatisfies("v19.9.9"), false);
+  assert.equal(nodeSatisfies("v22.0.0"), true);
+  assert.equal(nodeSatisfies("v21.9.9"), false);
   assert.equal(nodeSatisfies("garbage"), false);
 });
 

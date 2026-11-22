@@ -2,7 +2,7 @@
 // Pure: every side effect (exec, env, filesystem) is injected so tests use fakes.
 // Upstream treats Engram as a warning, not a failure; here node and git are required,
 // engram, codegraph, plugin and data-dir are optional.
-export const MIN_NODE_MAJOR = 20;
+export const MIN_NODE_MAJOR = 22;
 export function parseVersion(text) {
     return /\d+\.\d+\.\d+/.exec(text)?.[0];
 }

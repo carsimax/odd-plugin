@@ -288,14 +288,24 @@ async function withPrivateTmp<T>(fn: () => Promise<T>): Promise<{ result: T; lef
   }
 }
 
-test("F1: an executable that cannot be exec'd is a typed claude_unavailable, never a rejection, and leaves no scratch dir", async () => {
+test("F1: a claude path that cannot be exec'd (a directory: EACCES on every OS) is a typed claude_unavailable, never a rejection, and leaves no scratch dir", async () => {
   const dir = track(mkdtempSync(join(tmpdir(), "odd-enoexec-")));
+  const bogus = join(dir, "claude");
+  mkdirSync(bogus);
+  const { result, leftovers } = await withPrivateTmp(() => runReviewer("p", { claudePath: bogus, env: { PATH: "/usr/bin" } }));
+  assert.equal(result.ok, false);
+  assert.equal(!result.ok && result.code, "claude_unavailable");
+  assert.deepEqual(leftovers, []);
+});
+
+test("F1b: an executable with an invalid format is a typed failure on every OS and leaves no scratch dir (macOS: spawn error; Linux: the libc /bin/sh fallback runs it and it exits non-zero)", async () => {
+  const dir = track(mkdtempSync(join(tmpdir(), "odd-badformat-")));
   const bogus = join(dir, "claude");
   writeFileSync(bogus, "\x7fELFgarbage");
   chmodSync(bogus, 0o755);
   const { result, leftovers } = await withPrivateTmp(() => runReviewer("p", { claudePath: bogus, env: { PATH: "/usr/bin" } }));
   assert.equal(result.ok, false);
-  assert.equal(!result.ok && result.code, "claude_unavailable");
+  assert.equal(!result.ok && result.code, process.platform === "darwin" ? "claude_unavailable" : "nonzero_exit");
   assert.deepEqual(leftovers, []);
 });
 

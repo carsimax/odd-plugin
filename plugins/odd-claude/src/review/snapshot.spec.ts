@@ -856,7 +856,7 @@ test("R1: after the tree is built, a file swapped for a hardlink or changed cont
 test("R2: with core.precomposeunicode, an NFD name on disk is frozen under its NFC path", () => {
   const f = makeRepo();
   try {
-    if (git(f.repo, "config", "--type=bool", "--get-all", "core.precomposeunicode").trim() !== "true") return; // not a precomposing platform
+    git(f.repo, "config", "core.precomposeunicode", "true"); // explicit: the default differs per platform (macOS sets it, Linux leaves it unset)
     const nfd = "cafe\u0301.txt";
     const nfc = "caf\u00e9.txt";
     writeFileSync(join(f.repo, nfd), "c\n");
@@ -865,6 +865,20 @@ test("R2: with core.precomposeunicode, an NFD name on disk is frozen under its N
     assert.deepEqual(s.paths, [nfc]);
     assert.deepEqual(s.intendedUntracked, [nfc]);
     expectCode(() => freezeSnapshot(f.repo, { kind: "current-changes", intendedUntracked: [nfd] }), "invalid_path");
+  } finally {
+    f.cleanup();
+  }
+});
+
+test("R2b: with core.precomposeunicode unset (git exits 1 for an absent key), the snapshot still freezes on every OS", () => {
+  const f = makeRepo();
+  try {
+    spawnSync("git", ["-C", f.repo, "config", "--unset-all", "core.precomposeunicode"], { env: CLEAN_ENV }); // exit 5 when already absent: fine
+    const absent = spawnSync("git", ["-C", f.repo, "config", "--type=bool", "--get", "core.precomposeunicode"], { env: CLEAN_ENV, encoding: "utf8" });
+    assert.equal(absent.status, 1);
+    writeFileSync(join(f.repo, "new.txt"), "n\n");
+    const s = frozen(freezeSnapshot(f.repo, { kind: "current-changes", intendedUntracked: ["new.txt"] }));
+    assert.deepEqual(s.intendedUntracked, ["new.txt"]);
   } finally {
     f.cleanup();
   }

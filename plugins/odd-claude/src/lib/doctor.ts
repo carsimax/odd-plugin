@@ -32,7 +32,7 @@ export interface DoctorReport {
   ok: boolean;
 }
 
-export const MIN_NODE_MAJOR = 20;
+export const MIN_NODE_MAJOR = 22;
 
 export function parseVersion(text: string): string | undefined {
   return /\d+\.\d+\.\d+/.exec(text)?.[0];
