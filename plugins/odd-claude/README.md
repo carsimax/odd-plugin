@@ -2,11 +2,14 @@
 
 A Claude Code plugin that ports the ODD harness of gentle-shell (MIT) <!-- odd-check: allow --> to Claude Code. **v2.0** adds native receipt-driven review (RDD) on top of **v1.0** (the parity release): the ODD persona, orchestrator cards, agents, skills, native integrations, advisory review and lifecycle hooks. Apart from the RDD delivery gate and Stop settle reminder, which can block only when you turn RDD on (it is off by default), the plugin ships **no deny/ask/block hook** (user decision, v0.5, amended for v2): its hooks only add context. Coordinator mode and the admission rules are prompt text, not enforcement; otherwise the only enforcement is Claude Code's native permission system (see [Permission modes](#permission-modes)). The plugin collects no data and sends nothing anywhere.
 
-## What's new (next release)
+## What's new in 3.0.0
 
-The startup banner, the themes, the visual mods, the statusline and the `agents`, `changes` and `quiet` commands were removed (`odd/tasks/simplify.md`); the `odd` output style stays.
+Simplification: removes the hooks module and the visual extras.
 
-Upgrade notes (next release):
+- **Removed:** the startup banner, the themes (`odd`, `odd cute`, `odd bold`), the visual mods (the hooks module and per-spawn agent routing), the statusline (the setup subcommand and its shim) and the `agents`, `changes` and `quiet` commands (`odd/tasks/simplify.md`).
+- **Stays:** the `odd` output style, model profiles (they apply through the SessionStart context line, no mod needed) and `/odd-claude:stats` (subagent recording is kept).
+
+Upgrade notes for 3.0.0:
 
 - If you picked one of the `odd`, `odd cute` or `odd bold` themes with `/theme`, pick another one: they no longer ship.
 - If you enabled the statusline, your `~/.claude/settings.json` may still have a `statusLine` entry pointing at the old shim (`node '<data dir>/statusline.mjs'`). Remove that `statusLine` key by hand (or run `/odd-claude:setup restore` to go back to a backup taken before it); the plugin no longer writes or reads it, and nothing else in your settings is touched. The shim file in the plugin data dir is inert and can be deleted.
@@ -38,7 +41,7 @@ Upgrade notes:
 
 ## What's new in 2.1.0
 
-**Peer orchestrators (R07).** One Claude Code session on this machine can send a short message to another live session, with the recipient's human consent See [Peer orchestrators](#peer-orchestrators-r07).
+**Peer orchestrators (R07).** One Claude Code session on this machine can send a short message to another live session, with the recipient's human consent. See [Peer orchestrators](#peer-orchestrators-r07).
 
 - Consent is closed by default: a session accepts mail from another only after *you* type `/odd-claude:peers allow <sender session id>` in the recipient session. Grants are recorded only by the `UserPromptSubmit` hook from your own prompt; the model cannot grant itself.
 - Three MCP tools in the new `peers` server: `odd_orchestrator_session_id`, `odd_orchestrator_list`, `odd_orchestrator_send_message` (accepted into the mailbox, not a read receipt).
@@ -165,7 +168,7 @@ Statistics and profiles (Phase 5), unchanged in 2.0. The visual mods, the banner
 | profiles / routing | session context lists the profile and the orchestrator passes `model`; applies from the next session start or `/clear` |
 
 
-**Interactive checks (2026-11-21, Claude Code 2.1.330, `--plugin-dir`, driven through a pseudo-terminal).** Observed: Clean install (2026-11-21, Claude Code 2.1.330, isolated `CLAUDE_CONFIG_DIR`): without the engram marketplace the install warns as above; with the three `claude plugin …` commands in the order above, both plugins were enabled and a session loaded odd-claude with its `SessionStart` context and the `codegraph`, `review` and `peers` MCP servers connected.
+**Interactive checks (2026-11-21, Claude Code 2.1.330, `--plugin-dir`, driven through a pseudo-terminal).** Observed on a clean install (isolated `CLAUDE_CONFIG_DIR`): without the engram marketplace the install warns as above; with the three `claude plugin …` commands in the order above, both plugins were enabled and a session loaded odd-claude with its `SessionStart` context and the `codegraph`, `review` and `peers` MCP servers connected.
 
 ## What's in v1.0
 
