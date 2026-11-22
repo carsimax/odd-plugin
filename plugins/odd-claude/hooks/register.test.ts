@@ -120,12 +120,16 @@ test('agent.spawn leaves other agents, unknown roles, bad models and a missing p
   expect(seen.map((e: any) => e.model)).toEqual(['opus', 'opus', 'opus', 'opus']);
 });
 
-test('agent.spawn with no profile file or unreadable state passes the spawn through', async ($: any, on: any) => {
+test('agent.spawn with no profile file or unreadable state defaults to the balanced model for our agents, and leaves others untouched', async ($: any, on: any) => {
   const seen = spawnSetup($, on, undefined);
-  const r = await $.agent.spawn({ prompt: 'x', subagentType: 'odd-claude:odd-worker' } as any);
-  expect(seen.length).toBe(1);
-  expect(seen[0].model).toBe(undefined);
-  expect(r.deny).toBe(undefined);
+  const r1 = await $.agent.spawn({ prompt: 'x', subagentType: 'odd-claude:odd-worker' } as any);
+  const r2 = await $.agent.spawn({ prompt: 'x', subagentType: 'odd-claude:odd-explore', model: 'opus' } as any);
+  const r3 = await $.agent.spawn({ prompt: 'x', subagentType: 'general-purpose' } as any);
+  expect(seen.length).toBe(3);
+  expect(seen[0].model).toBe('sonnet');
+  expect(seen[1].model).toBe('haiku');
+  expect(seen[2].model).toBe(undefined);
+  for (const r of [r1, r2, r3]) expect(r.deny).toBe(undefined);
 });
 
 // R51 quiet tool rendering: OFF by default, render-only, errors and small outputs untouched.

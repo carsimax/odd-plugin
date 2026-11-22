@@ -2,7 +2,7 @@
 // the plugin works without it (mods off, `-p`, safe mode) and `/odd-claude:agents` prints the same table.
 // Rules: the mod never touches the prompt or tool calls, only answers its own commands and panes, and any
 // missing API degrades silently. The one routing hook is the spawn hook of R40: it only ever rewrites `model`
-// of an odd-claude agent from the active profile and always continues with next(...); it never refuses a spawn. The table format mirrors src/lib/subagents.ts renderSubagents.
+// of an odd-claude agent from the stored profile (balanced when none is readable) and always continues with next(...); it never refuses a spawn. The table format mirrors src/lib/subagents.ts renderSubagents.
 // Only static relative imports are allowed in a mod, so the formatters are repeated below.
 // R51 quiet tool rendering: `ui.render` on ToolResult draws long, successful Bash/Read/Grep/Glob results as one summary
 // line, only when `<data>/quiet.json` says enabled (OFF by default, `/odd-claude:quiet`). Render-only (the model sees
@@ -20,6 +20,23 @@ const CHANGES_PANE = 'odd-changes';
 const ROLE_PREFIX = 'odd-claude:';
 const ROLES = ['odd-explore', 'odd-verify', 'odd-worker', 'odd-jd-fix', 'odd-jd-judge-a', 'odd-jd-judge-b', 'odd-review-readability', 'odd-review-reliability', 'odd-review-resilience', 'odd-review-risk'];
 const MODELS = ['haiku', 'sonnet', 'opus'];
+const PROFILE_NAMES = ['balanced', 'economy', 'max', 'custom'];
+// Copy of the balanced preset of src/lib/profiles.ts (mods allow only static relative imports): the default when no profile
+// was chosen or the stored one is unreadable. src/hooks/register.spec.ts pins it equal to PRESETS.balanced.
+const BALANCED_MODELS: Record<string, string> = {
+  'odd-explore': 'haiku',
+  'odd-verify': 'opus',
+  'odd-worker': 'sonnet',
+  'odd-jd-fix': 'sonnet',
+  'odd-jd-judge-a': 'opus',
+  'odd-jd-judge-b': 'sonnet',
+  'odd-review-readability': 'sonnet',
+  'odd-review-reliability': 'sonnet',
+  'odd-review-resilience': 'sonnet',
+  'odd-review-risk': 'opus',
+  'review-refuter': 'opus',
+  'review-validator': 'opus',
+};
 const QUIET_MIN_LINES = 10;
 const QUIET_SCAN_CAP = 1_000_000;
 const NOT_A_REPO = 'Not a git repository; no changes to summarize.';
@@ -208,22 +225,26 @@ async function load($: any): Promise<Rec[]> {
   }
 }
 
-// R40: model of an odd-claude agent from <data>/profiles.json (written by /odd-claude:profiles, same whitelist
-// as src/lib/profiles.ts); undefined = no profile, not ours or anything unreadable, i.e. leave the spawn alone.
+// R40: model of an odd-claude agent from <data>/profiles.json (written by /odd-claude:profiles, same whitelist as
+// src/lib/profiles.ts). A chosen, valid entry wins; otherwise (no file, unreadable, unknown profile, invalid entry) the balanced
+// table applies. undefined only for a spawn that is not one of our agents, i.e. leave it alone.
 export async function routedModel($: any, subagentType: unknown): Promise<string | undefined> {
+  if (typeof subagentType !== 'string' || !subagentType.startsWith(ROLE_PREFIX)) return undefined;
+  const role = subagentType.slice(ROLE_PREFIX.length);
+  if (!ROLES.includes(role)) return undefined;
   try {
-    if (typeof subagentType !== 'string' || !subagentType.startsWith(ROLE_PREFIX)) return undefined;
-    const role = subagentType.slice(ROLE_PREFIX.length);
-    if (!ROLES.includes(role)) return undefined;
     const env = await $.process.hookEnv();
     const dir = env?.CLAUDE_PLUGIN_DATA;
-    if (typeof dir !== 'string' || dir === '') return undefined;
-    const raw = JSON.parse(await $.fs.read(`${dir}/profiles.json`));
-    const model = raw?.version === 1 ? raw?.data?.routing?.[role]?.model : undefined;
-    return typeof model === 'string' && MODELS.includes(model) ? model : undefined;
+    if (typeof dir === 'string' && dir !== '') {
+      const raw = JSON.parse(await $.fs.read(`${dir}/profiles.json`));
+      const data = raw?.version === 1 ? raw?.data : undefined;
+      const model = PROFILE_NAMES.includes(data?.active) ? data?.routing?.[role]?.model : undefined;
+      if (typeof model === 'string' && MODELS.includes(model)) return model;
+    }
   } catch {
-    return undefined;
+    // fall through to the default
   }
+  return BALANCED_MODELS[role];
 }
 
 export function register(on: any) {

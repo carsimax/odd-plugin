@@ -2,7 +2,7 @@
 // Every argument is validated against a whitelist (lib/profiles.ts). Exit codes: 0 ok; 1 invalid value; 2 usage / no data dir.
 import { realpathSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { clearProfile, readProfile, renderPresetList, renderProfiles, setRole, useProfile } from "../lib/profiles.js";
+import { clearProfile, defaultProfile, readProfile, renderPresetList, renderProfiles, setRole, useProfile } from "../lib/profiles.js";
 import { envWithDataDir } from "../lib/system.js";
 
 export interface CliResult {
@@ -31,7 +31,7 @@ export function profilesCli(argv: string[], env: Record<string, string | undefin
   const ok = (stdout: string): CliResult => ({ exitCode: 0, stdout, stderr: "" });
   if (cmd === "list" || cmd === "show") {
     if (rest.length > 0) return usage(`${cmd} takes no arguments`);
-    const p = hasDir ? readProfile(opts) : { active: undefined, routing: {} };
+    const p = hasDir ? readProfile(opts) : defaultProfile();
     return ok(cmd === "list" ? renderPresetList(p.active) : renderProfiles(p));
   }
   if (cmd !== "use" && cmd !== "set" && cmd !== "clear") return usage(`unknown command ${JSON.stringify(cmd).slice(0, 40)}`);
@@ -49,7 +49,7 @@ export function profilesCli(argv: string[], env: Record<string, string | undefin
       return ok(`role updated\n${renderProfiles(p)}\nApplies from the next session start (or /clear) for the orchestrator; the optional mod routes spawns immediately.`);
     }
     clearProfile(opts);
-    return ok("profile cleared: agents use their own frontmatter models");
+    return ok(`profile cleared: back to the default profile\n${renderProfiles(readProfile(opts))}`);
   } catch (err) {
     return { exitCode: 1, stdout: "", stderr: `error: ${err instanceof Error ? err.message : String(err)}` };
   }

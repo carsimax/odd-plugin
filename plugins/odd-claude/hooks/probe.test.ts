@@ -49,11 +49,11 @@ test('PROBE spawn: forks and non-matching types ignored even with a valid profil
   expect(rok.deny).toBe(undefined);
 });
 
-test('PROBE spawn: hookEnv throwing, null env, fs.read throwing -> pass through', async ($: any, on: any) => {
+test('PROBE spawn: hookEnv throwing, null env, fs.read throwing -> balanced default, never a refusal', async ($: any, on: any) => {
   const seen = spawnSetup(on, () => { throw new Error('EACCES'); }, () => { throw new Error('no env'); });
   const r = await $.agent.spawn({ prompt: 'x', subagentType: 'odd-claude:odd-worker', model: 'haiku' } as any);
   expect(r.deny).toBe(undefined);
-  expect(seen[0].model).toBe('haiku');
+  expect(seen[0].model).toBe('sonnet');
 });
 
 let n = 0;
