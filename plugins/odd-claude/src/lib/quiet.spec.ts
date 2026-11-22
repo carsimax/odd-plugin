@@ -31,11 +31,13 @@ test("quiet CLI: status, on, off, invalid action, usage errors", () => {
     const st = quietCli(["--data-dir", dir], {});
     assert.equal(st.exitCode, 0);
     assert.match(st.stdout, /quiet: off/);
-    assert.match(st.stdout, /needs mods/i);
+    assert.match(st.stdout, /drawn by the ui\.render mod/);
+    assert.doesNotMatch(st.stdout, /needs mods/i);
     const on = quietCli(["--action", "on", "--data-dir", dir], {});
     assert.equal(on.exitCode, 0);
     assert.match(on.stdout, /quiet set to: on/);
-    assert.match(on.stdout, /needs mods/i);
+    assert.match(on.stdout, /drawn by the ui\.render mod/);
+    assert.doesNotMatch(on.stdout, /needs mods/i);
     assert.match(quietCli(["--data-dir", dir], {}).stdout, /quiet: on/);
     assert.match(quietCli(["--action", "off", "--data-dir", dir], {}).stdout, /quiet set to: off/);
     assert.match(quietCli(["--action", "status", "--data-dir", dir], {}).stdout, /quiet: off/);

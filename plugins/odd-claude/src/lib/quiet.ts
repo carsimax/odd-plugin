@@ -2,7 +2,7 @@
 // tool renderers with compact ones, behind an on/off config. Here it is an optional mod feature (hooks/register.ts,
 // `ui.render` on ToolResult): when ON, long Bash/Read/Grep/Glob results draw as one summary line. Render-only: what the
 // model sees never changes. OFF by default (upstream's rows stay as they are until the user opts in); the flag is plugin
-// state `quiet.json` which the mod reads through $.fs. Without mods the flag has no effect.
+// state `quiet.json` which the mod reads through $.fs. With mods off the flag is stored and has no visible effect.
 import { readPluginState, writePluginState, type StateOptions } from "./state.js";
 
 export function quietEnabled(opts: StateOptions = {}): boolean {
@@ -17,4 +17,4 @@ export function setQuietEnabled(enabled: boolean, opts: StateOptions = {}): void
   writePluginState("quiet", { enabled }, opts);
 }
 
-export const QUIET_MODS_NOTE = "Quiet rendering needs mods (ui.render): with mods off, in -p or in safe mode the setting is stored but has no effect.";
+export const QUIET_MODS_NOTE = "Quiet rendering is drawn by the ui.render mod; when mods are off (or in -p / safe mode) the setting is stored and has no visible effect.";

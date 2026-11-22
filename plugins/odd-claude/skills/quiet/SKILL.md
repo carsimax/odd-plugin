@@ -6,7 +6,7 @@ user-invocable: true
 argument-hint: "[on|off|status]"
 ---
 
-You manage odd-claude quiet tool rendering. It only changes how long results of built-in tools are DRAWN in the transcript (never what the model sees; errors are never collapsed; ctrl+o shows everything). It needs the optional mod (`ui.render`); without mods the flag is stored but does nothing. State lives in the plugin data dir only.
+You manage odd-claude quiet tool rendering. It only changes how long results of built-in tools are DRAWN in the transcript (never what the model sees; errors are never collapsed; ctrl+o shows everything). It is drawn by the optional `ui.render` mod; when mods are off (or in -p / safe mode) the flag is stored and has no visible effect. The command output cannot tell whether mods are active, so do not claim either way. State lives in the plugin data dir only.
 
 Current state (read-only; the user's argument text is deliberately NOT part of this command):
 
