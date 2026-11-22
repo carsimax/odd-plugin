@@ -7,9 +7,6 @@ import { readPersona } from "../lib/persona.js";
 import { recordAgentStatus } from "../lib/agent-status.js";
 import { createSessionScratch, sweepStaleTombstones } from "../lib/scratch.js";
 import { titleSequence } from "../lib/terminal.js";
-import { refreshStatuslineShim } from "../lib/setup-fs.js";
-import { bannerEnabled, bannerText } from "../lib/banner.js";
-import { pluginVersion } from "../lib/version.js";
 import { profileContextLine } from "../lib/profiles.js";
 import { revokeAll } from "../lib/peer-grants.js";
 import { isValidSessionId } from "../lib/peers.js";
@@ -54,10 +51,6 @@ export function sessionStart(input, opts = {}) {
         }
     }
     const env = opts.env ?? process.env;
-    // After a plugin update the root moves: keep an existing statusLine shim (see /odd-claude:setup) pointing at it.
-    const shimData = opts.dataDir ?? env.CLAUDE_PLUGIN_DATA;
-    if (shimData && env.CLAUDE_PLUGIN_ROOT)
-        refreshStatuslineShim(shimData, env.CLAUDE_PLUGIN_ROOT);
     const scratchLines = [];
     if (typeof input.session_id === "string" && input.session_id !== "") {
         sweepStaleTombstones(opts);
@@ -81,15 +74,5 @@ export function sessionStart(input, opts = {}) {
         backgroundSubagents: readBackgroundSubagents(opts),
         extraLines: [...scratchLines, ...extraLines, ...[profileContextLine(opts)].filter((l) => l !== undefined)],
     });
-    const out = { hookSpecificOutput: { hookEventName: "SessionStart", additionalContext }, terminalSequence: titleSequence(typeof input.cwd === "string" ? input.cwd : undefined) };
-    // R45: the banner is a user-facing systemMessage (never model context), only on a fresh startup, opt-out via env or state.
-    if (input.source === "startup" && bannerEnabled(opts)) {
-        try {
-            out.systemMessage = bannerText(pluginVersion());
-        }
-        catch {
-            // no version: no banner
-        }
-    }
-    return out;
+    return { hookSpecificOutput: { hookEventName: "SessionStart", additionalContext }, terminalSequence: titleSequence(typeof input.cwd === "string" ? input.cwd : undefined) };
 }

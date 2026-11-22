@@ -1,9 +1,9 @@
 // Write path of /odd-claude:setup. Real filesystem; callers (tests/CLI) pick the paths.
 // Order on apply: validate/plan -> backup original (atomic) -> record state -> atomic write.
 import { accessSync, constants, existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, realpathSync, statSync } from "node:fs";
-import { isAbsolute, join } from "node:path";
+import { join } from "node:path";
 import { atomicWriteFile, readPluginState, writePluginState } from "./state.js";
-import { BACKUP_NAME_RE, NO_CHANGES, SHIM_NAME, backupFileName, planModeChange, planStatusLineChange, shimSource, statusLineCommand, unifiedDiff, } from "./setup.js";
+import { BACKUP_NAME_RE, NO_CHANGES, backupFileName, planModeChange, unifiedDiff, } from "./setup.js";
 function readCurrent(path) {
     return existsSync(path) ? readFileSync(path) : null;
 }
@@ -105,91 +105,6 @@ export function applyMode(opts) {
     if (nw)
         return { status: "error", diff: plan.diff, error: nw };
     return commit(opts, t.path, plan.after, plan.diff, "write");
-}
-export function shimPath(dataDir) {
-    return join(dataDir, SHIM_NAME);
-}
-/** Existing shim rewritten when the plugin root moved (plugin update). Never creates it. */
-export function refreshStatuslineShim(dataDir, pluginRoot) {
-    try {
-        if (!isAbsolute(pluginRoot))
-            return false;
-        const p = shimPath(dataDir);
-        const want = shimSource(pluginRoot);
-        if (!existsSync(p) || readFileSync(p, "utf8") === want)
-            return false;
-        atomicWriteFile(p, want, 0o644);
-        return true;
-    }
-    catch {
-        return false;
-    }
-}
-function previousStatusLine(dataDir) {
-    try {
-        return readPluginState("setup", { dataDir }).statusLinePrevious;
-    }
-    catch {
-        return undefined;
-    }
-}
-/** Read-only plan (dry run): the same computation apply uses. */
-export function planStatusLine(opts) {
-    const t = resolveTarget(opts.settingsPath);
-    if (!t.ok)
-        return { ok: false, error: t.error };
-    if (lstatDangling(opts.settingsPath, t.path))
-        return { ok: false, error: `${opts.settingsPath} is a dangling symlink` };
-    let cur;
-    try {
-        cur = readCurrent(t.path);
-    }
-    catch (err) {
-        return { ok: false, error: `cannot read ${t.path}: ${err.message}` };
-    }
-    return planStatusLineChange(cur === null ? null : cur.toString("utf8"), opts.action, { command: statusLineCommand(shimPath(opts.dataDir)), previous: previousStatusLine(opts.dataDir) }, opts.settingsPath);
-}
-export function applyStatusLine(opts) {
-    const plan = planStatusLine(opts);
-    if (!plan.ok)
-        return { status: "error", diff: NO_CHANGES, error: plan.error };
-    if (!plan.changed)
-        return { status: "unchanged", diff: plan.diff };
-    if (plan.foreign && !opts.replaceForeign) {
-        return { status: "error", diff: plan.diff, error: "settings already has a statusLine that odd-claude did not write; nothing was written. Re-run with --replace-statusline to replace it (the original stays in the backup)" };
-    }
-    const t = resolveTarget(opts.settingsPath);
-    if (!t.ok)
-        return { status: "error", diff: plan.diff, error: t.error };
-    const nw = notWritable(t.path);
-    if (nw)
-        return { status: "error", diff: plan.diff, error: nw };
-    if (opts.action === "on") {
-        try {
-            atomicWriteFile(shimPath(opts.dataDir), shimSource(opts.pluginRoot), 0o644);
-        }
-        catch (err) {
-            return { status: "error", diff: plan.diff, error: `cannot write the statusLine shim: ${err.message}; settings left as they were` };
-        }
-    }
-    const replaced = plan.before === null ? undefined : JSON.parse(plan.before).statusLine;
-    const res = commit(opts, t.path, plan.after, plan.diff, "write");
-    if (res.status !== "applied")
-        return res;
-    try {
-        const prev = readPluginState("setup", { dataDir: opts.dataDir });
-        if (opts.action === "on" && plan.foreign)
-            writePluginState("setup", { ...prev, statusLinePrevious: replaced }, { dataDir: opts.dataDir });
-        else if ((opts.action === "off" || replaced === undefined) && "statusLinePrevious" in prev) {
-            // off consumed it; `on` over an absent statusLine means the user removed theirs, so the saved one is stale
-            const { statusLinePrevious: _gone, ...rest } = prev;
-            writePluginState("setup", rest, { dataDir: opts.dataDir });
-        }
-    }
-    catch {
-        // the settings write succeeded; only the "previous value" bookkeeping is lost (the backup still has it)
-    }
-    return res;
 }
 /** A symlink whose target does not exist: realpath would have thrown, so the path is unchanged. */
 function lstatDangling(path, resolved) {

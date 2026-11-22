@@ -110,13 +110,13 @@ test("admission cards and the Judgment Day skill state their rules without claim
   }
 });
 
-test("SessionStart with the banner on carries only a systemMessage on top of the context: no decision, block or continue:false",  () => {
-  const dir = mkdtempSync(join(tmpdir(), "odd-nodeny-banner-"));
+test("SessionStart carries only the context and the title sequence: no systemMessage, decision, block or continue:false",  () => {
+  const dir = mkdtempSync(join(tmpdir(), "odd-nodeny-start-"));
   try {
     const r = runHook("SessionStart", JSON.stringify({ session_id: "s", source: "startup", cwd: "/w/p" }), { dataDir: dir, env: {} });
     assert.equal(r.exitCode, 0);
     const out = JSON.parse(r.stdout) as Record<string, unknown>;
-    assert.deepEqual(Object.keys(out).sort(), ["hookSpecificOutput", "systemMessage", "terminalSequence"]);
+    assert.deepEqual(Object.keys(out).sort(), ["hookSpecificOutput", "terminalSequence"]);
     assert.doesNotMatch(r.stdout, FORBIDDEN);
     for (const k of ["decision", "continue", "stopReason", "permissionDecision", "reason"]) assert.equal(Object.hasOwn(out, k), false, k);
   } finally {

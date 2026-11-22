@@ -2,7 +2,7 @@
 
 **odd-claude** ports [gentle-shell](../upstream/gentle-shell) (a Pi-harness distribution, cloned read-only and gitignored under `upstream/gentle-shell`) to Claude Code as a plugin. The upstream repo is the single source of truth for behaviour; these docs capture what Claude Code can host and what is still unknown, as the base for a roadmap.
 
-**Current status:** v2.3.0 is the current release: native receipt-driven review (RDD, off by default) on top of v1.1 (the mods UX of v1.1, its mod and the agents/changes/quiet commands were removed in the simplification pass). v1.2 web tools was dropped by user decision 2026-11-19. Next: peer orchestrators (R07). See [roadmap.md](roadmap.md) and the [RDD section of the plugin README](../plugins/odd-claude/README.md#receipt-driven-review-rdd).
+**Current status:** v2.3.0 is the current release: native receipt-driven review (RDD, off by default) on top of v1.1 (the mods UX of v1.1, its mod, the banner, the themes, the statusline and the agents/changes/quiet commands were removed in the simplification pass). v1.2 web tools was dropped by user decision 2026-11-19. Next: peer orchestrators (R07). See [roadmap.md](roadmap.md) and the [RDD section of the plugin README](../plugins/odd-claude/README.md#receipt-driven-review-rdd).
 
 ## Decisions
 

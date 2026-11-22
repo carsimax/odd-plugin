@@ -1,6 +1,16 @@
 # odd-claude
 
-A Claude Code plugin that ports the ODD harness of gentle-shell (MIT) <!-- odd-check: allow --> to Claude Code. **v2.0** adds native receipt-driven review (RDD) on top of **v1.0** (the parity release): the ODD persona, orchestrator cards, agents, skills, native integrations, advisory review, themes and lifecycle hooks. Apart from the RDD delivery gate and Stop settle reminder, which can block only when you turn RDD on (it is off by default), the plugin ships **no deny/ask/block hook** (user decision, v0.5, amended for v2): its hooks only add context. Coordinator mode and the admission rules are prompt text, not enforcement; otherwise the only enforcement is Claude Code's native permission system (see [Permission modes](#permission-modes)). The plugin collects no data and sends nothing anywhere.
+A Claude Code plugin that ports the ODD harness of gentle-shell (MIT) <!-- odd-check: allow --> to Claude Code. **v2.0** adds native receipt-driven review (RDD) on top of **v1.0** (the parity release): the ODD persona, orchestrator cards, agents, skills, native integrations, advisory review and lifecycle hooks. Apart from the RDD delivery gate and Stop settle reminder, which can block only when you turn RDD on (it is off by default), the plugin ships **no deny/ask/block hook** (user decision, v0.5, amended for v2): its hooks only add context. Coordinator mode and the admission rules are prompt text, not enforcement; otherwise the only enforcement is Claude Code's native permission system (see [Permission modes](#permission-modes)). The plugin collects no data and sends nothing anywhere.
+
+## What's new (next release)
+
+The startup banner, the themes, the visual mods, the statusline and the `agents`, `changes` and `quiet` commands were removed (`odd/tasks/simplify.md`); the `odd` output style stays.
+
+Upgrade notes (next release):
+
+- If you picked one of the `odd`, `odd cute` or `odd bold` themes with `/theme`, pick another one: they no longer ship.
+- If you enabled the statusline, your `~/.claude/settings.json` may still have a `statusLine` entry pointing at the old shim (`node '<data dir>/statusline.mjs'`). Remove that `statusLine` key by hand (or run `/odd-claude:setup restore` to go back to a backup taken before it); the plugin no longer writes or reads it, and nothing else in your settings is touched. The shim file in the plugin data dir is inert and can be deleted.
+- The banner command and the statusline subcommand of setup are gone; setup still handles `permissions.defaultMode` and `restore`.
 
 ## What's new in 2.3.0
 
@@ -144,35 +154,27 @@ Reviewers run as isolated `claude -p` children: `--print --output-format text --
 
 ## What's in v1.1
 
-Statistics, profiles and the statusline (Phase 5), unchanged in 2.0. The visual mods and the `agents`, `changes` and `quiet` commands were removed in the simplification pass (`odd/tasks/simplify.md`).
+Statistics and profiles (Phase 5), unchanged in 2.0. The visual mods, the banner, the statusline and the `agents`, `changes` and `quiet` commands were removed in the simplification pass (`odd/tasks/simplify.md`).
 
 - `/odd-claude:stats` (R36): local session stats from the transcript.
 - `/odd-claude:profiles` (R39/R40): model profiles and per-spawn routing.
-- `/odd-claude:banner` (R45): startup banner.
-- statusLine `odd-status` via `/odd-claude:setup statusline on` (R44, with the R42 tokens/s segment).
 
 | Feature | How it works |
 |---|---|
 | stats | `/odd-claude:stats` text |
 | profiles / routing | session context lists the profile and the orchestrator passes `model`; applies from the next session start or `/clear` |
-| banner | `SessionStart` `systemMessage` |
-| statusline | `setup statusline on` (a statusLine setting) |
 
 
-**Interactive checks (2026-11-21, Claude Code 2.1.330, `--plugin-dir`, driven through a pseudo-terminal).** Observed: the startup banner is visible as the `SessionStart` `systemMessage` ("odd-claude v2.1.0 · ODD harness for Claude Code …"); the `odd-status` statusLine rendered against a live payload (model, branch, tokens/s) with an empty stderr. Clean install (2026-11-21, Claude Code 2.1.330, isolated `CLAUDE_CONFIG_DIR`): without the engram marketplace the install warns as above; with the three `claude plugin …` commands in the order above, both plugins were enabled and a session loaded odd-claude with its `SessionStart` context and the `codegraph`, `review` and `peers` MCP servers connected.
+**Interactive checks (2026-11-21, Claude Code 2.1.330, `--plugin-dir`, driven through a pseudo-terminal).** Observed: Clean install (2026-11-21, Claude Code 2.1.330, isolated `CLAUDE_CONFIG_DIR`): without the engram marketplace the install warns as above; with the three `claude plugin …` commands in the order above, both plugins were enabled and a session loaded odd-claude with its `SessionStart` context and the `codegraph`, `review` and `peers` MCP servers connected.
 
 ## What's in v1.0
 
-- **Commands / skills** (`/odd-claude:<name>`): `odd`, `doctor`, `status`, `setup`, `persona`, `coordinator`, `background-subagents`, `scratch`, `stats`, `profiles`, `banner`, `skill-registry`, `skill-creation`, `skill-creator`, `skill-improver`, `4r-review`, `judgment-day`, `branch-pr`, `chained-pr`, `work-unit-commits`, `issue-creation`, `comment-writer`, `cognitive-doc-design`, `tui-design`, `ui-design`.
+- **Commands / skills** (`/odd-claude:<name>`): `odd`, `doctor`, `status`, `setup`, `persona`, `coordinator`, `background-subagents`, `scratch`, `stats`, `profiles`, `skill-registry`, `skill-creation`, `skill-creator`, `skill-improver`, `4r-review`, `judgment-day`, `branch-pr`, `chained-pr`, `work-unit-commits`, `issue-creation`, `comment-writer`, `cognitive-doc-design`, `tui-design`, `ui-design`.
 - **Agents** (`odd-claude:<agent>`): `odd-explore`, `odd-verify`, `odd-worker`, `odd-jd-fix`, `odd-jd-judge-a`, `odd-jd-judge-b`, `odd-review-risk`, `odd-review-resilience`, `odd-review-readability`, `odd-review-reliability`.
 - **Hooks** (advisory; only the RDD-gated ones below can block): `SessionStart` (context, scratch dir, title, status file, skill registry, optional codegraph warm-up), `UserPromptSubmit` (context, quota advisory), `PostToolUse` (exploration budget, context backstop), `StopFailure` (quota advisory), `Stop` (status file; empty output unless RDD is on, see [RDD](#receipt-driven-review-rdd)), `PreToolUse` on `Bash` (RDD delivery gate; silent unless RDD is on), `SubagentStart`/`SubagentStop` (record the subagent in session state; silent), `SessionEnd` (scratch cleanup, resume hint, status file).
-- **Themes**: `odd`, `odd cute`, `odd bold`. **Output style**: `odd`. **Cards**, **support docs** and **sounds assets** (see below).
+- **Output style**: `odd`. **Cards**, **support docs** and **sounds assets** (see below).
 - **Not implemented, by user decision (2026-11-18):** R57 (notification sounds; the `assets/sounds/` files are only shipped assets) and R63 (GitHub star prompt). Native RDD shipped in 2.0.0; inter-session peers (R07) shipped in 2.1.0, see [Peer orchestrators](#peer-orchestrators-r07).
 - **No deny, with one scoped exception:** the only blocks the plugin can emit are the Stop settle reminder and the delivery gate (PreToolUse on `git push` / `gh pr`) of [RDD](#receipt-driven-review-rdd), both off by default (see [Permission modes](#permission-modes)).
-
-## Themes
-
-Three custom themes ship in `themes/`: `odd`, `odd cute` and `odd bold`. Pick one with `/theme`. Each declares a base preset and overrides colors; the diff word colors fall back to the `dark` base.
 
 ## Lifecycle hooks (v1.0)
 
@@ -311,11 +313,10 @@ claude --plugin-dir plugins/odd-claude
 - `/odd-claude:doctor`: checks node, git, engram, codegraph, plugin version and data dir; lists what is missing.
 - `/odd-claude:stats`: local stats for the current session: turns, tokens in/out/cache and per-model split (from the transcript tail, at most the last 8 MiB, garbage lines skipped), subagent count and finished time (from the R09 state) and the exploration counters. The transcript path (`transcript_path` of the hook input) is saved in session state at `SessionStart`/`UserPromptSubmit`; the skill only passes `${CLAUDE_SESSION_ID}`. No cost lookup, no quota endpoint, no network, nothing leaves the machine.
 - `/odd-claude:profiles [list|show|use <balanced|economy|max>|set <role> <model> [effort]|clear]` (R39/R40): a model profile maps each odd-claude agent (`odd-explore`, `odd-verify`, `odd-worker`, `odd-jd-*`, `odd-review-*`) plus the RDD native roles `review-refuter` and `review-validator` to `{model, effort}` in plugin state (`profiles.json`). The agent files in the plugin cache are never rewritten and their frontmatter `model` stays the default. **`balanced` is the default profile**: it applies whenever no profile was chosen (no state, unreadable or unknown state), `clear` returns to it, and an explicitly chosen `economy`, `max` or `custom` still wins. `balanced` (all effort `medium`): `odd-explore` haiku; `odd-worker` sonnet; `odd-verify` opus; `odd-jd-fix` sonnet; `odd-jd-judge-a` opus; `odd-jd-judge-b` sonnet; `odd-review-readability`/`reliability`/`resilience` sonnet; `odd-review-risk` opus; `review-refuter` opus; `review-validator` opus. `odd-explore` is `haiku` in every preset (balanced and max medium effort, economy low); a `set odd-explore <model>` override is still possible. Explorers are cheap, so whenever exploration is warranted the orchestrator launches several `odd-claude:odd-explore` agents in parallel in one message, each on a distinct front (subsystem, layer, or question: callers, implementation, tests, docs/history), each returning a handoff of at most ~2k tokens with `path:line` evidence that the parent merges (one explorer only for a single narrow front). `economy` and `max` give `review-refuter`/`review-validator` the same model as their judges (sonnet/medium and opus/xhigh). Arguments are validated against whitelists (models `haiku`/`sonnet`/`opus`, efforts `low`..`max`). Routing: the session context lists the active profile so the orchestrator passes `model` in the `Agent` tool call (applies from the next session start or `/clear`). The Agent tool has no `effort` parameter, so effort is stored and shown but not routed.
-- `/odd-claude:banner [on|off|status]`: startup banner (R45), two plain text lines shown to the user as the `SessionStart` `systemMessage` on a fresh startup (not on resume/clear/compact), so it never enters the model context. ON by default; `ODD_CLAUDE_NO_BANNER=1` or `/odd-claude:banner off` (plugin state `banner.json`) disables it. Visibility of `systemMessage` was not observable in `claude -p` (the hook runs and succeeds there).
 - `/odd-claude:peers [allow <session-id>|revoke <session-id>|revoke --all]` (R07): per-session consent for peer messages, typed by you, closed by default. Everything else about peers (tools, delivery, limits, the shell-access limit) is under [Peer orchestrators](#peer-orchestrators-r07).
 - `/odd-claude:status`: shows the current session state, registered hooks and the roadmap position.
 - `/odd-claude:coordinator [on|off|status]`: shows or switches coordinator mode (see above).
-- `/odd-claude:setup [default|acceptEdits|auto|plan|bypassPermissions|statusline on|statusline off|restore [backup]]`: opt-in writer for `permissions.defaultMode` and `statusLine` in `~/.claude/settings.json` (the only keys it handles). Always a diff, explicit confirmation, a 0600 backup, an atomic write and `restore`.
+- `/odd-claude:setup [default|acceptEdits|auto|plan|bypassPermissions|restore [backup]]`: opt-in writer for `permissions.defaultMode` in `~/.claude/settings.json` (the only key it handles). Always a diff, explicit confirmation, a 0600 backup, an atomic write and `restore`.
   - Always shows a diff first and writes nothing until you explicitly confirm.
   - Before writing, the original file is copied to a backup under the plugin data dir (`backups/`), and only the listed key changes.
   - `restore` shows the diff back to the latest backup (or the named one) and applies it after confirmation. The current file is backed up first, so a restore is itself reversible.
@@ -343,8 +344,6 @@ odd-claude has no permission system of its own: the upstream modes map onto Clau
 - `restore` without a name toggles between the last two states, because it backs up the current file first.
 
 ## Data directory
-
-**Status bar (R44, R42).** `/odd-claude:setup statusline on` sets `statusLine` to `node '<data dir>/statusline.mjs'` (single-quoted for the shell, so odd paths cannot inject commands), a small shim that imports `<plugin root>/dist/cli/statusline.js`. The plugin root changes on each plugin update, so settings point at the stable shim and the SessionStart hook rewrites it when the root moves; no re-run of setup is needed after updates (if the shim is ever stale, re-run `setup statusline on`). One line: model · context % · `coord ON/OFF` · persona · `5h`/`7d` rate limits · git branch · tok/s, honouring `NO_COLOR` and `COLUMNS` (lowest-priority segments, on the right, drop first), never throwing (garbage input prints `odd-claude`), no network and no spawned processes (the branch is read from `.git/HEAD`). Tokens/s is the delta of output tokens over API time between two invocations (state in `${CLAUDE_PLUGIN_DATA}/statusline/`), or the session average on the first one; the segment is omitted when the payload has no token/time data. Verified on Claude Code 2.1.326: `claude -p` never invokes the statusLine, so the payload fields used (`model`, `context_window`, `rate_limits`, `cost.total_api_duration_ms`, `workspace`) come from the public statusLine documentation and fixtures, not a captured payload; absent fields are simply omitted. A statusLine you already have is shown in the diff and replaced only after you confirm (`--replace-statusline`); `statusline off` removes only odd-claude's own value (exactly that command; a statusline.mjs or statusline.js of yours is never treated as ours) or puts your previous one back. The optional mod variant (`$.ui.status`) is not shipped. No ODD phase segment: no phase is stored anywhere yet.
 
 State lives under `${CLAUDE_PLUGIN_DATA}` (for an installed plugin `~/.claude/plugins/data/odd-claude-<marketplace>`; with `--plugin-dir` it is `odd-claude-inline`): `sessions/`, `backups/`, `logs/hooks.log` and `setup.json`.
 

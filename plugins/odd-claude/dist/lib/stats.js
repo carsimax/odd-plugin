@@ -5,7 +5,6 @@
 import { closeSync, fstatSync, openSync, readSync, statSync } from "node:fs";
 import { isAbsolute } from "node:path";
 import { formatDuration } from "./subagents.js";
-import { cleanText } from "./statusline.js";
 import { readSessionState, updateSessionState } from "./state.js";
 /** Only the tail of a transcript is read: a long session never costs more than this. */
 export const STATS_TAIL_BYTES = 8 * 1024 * 1024;
@@ -13,6 +12,19 @@ export const STATS_TAIL_BYTES = 8 * 1024 * 1024;
 export const STATS_MAX_LINE_BYTES = 2 * 1024 * 1024;
 const MAX_MODELS = 8;
 const MAX_PATH = 4096;
+/** Strips escape sequences, control and bidi characters: transcript text is never trusted. */
+function cleanText(s) {
+    if (typeof s !== "string")
+        return "";
+    return (s
+        // eslint-disable-next-line no-control-regex
+        .replace(/\u001b\][^\u0007\u001b]*(?:\u0007|\u001b\\)?/g, "")
+        // eslint-disable-next-line no-control-regex
+        .replace(/\u001b\[[0-?]*[ -/]*[@-~]?/g, "")
+        // eslint-disable-next-line no-control-regex
+        .replace(/[\u0000-\u001f\u007f-\u009f\u200e\u200f\u061c\u2028\u2029\u202a-\u202e\u2066-\u2069]/g, "")
+        .trim());
+}
 const count = (v) => (typeof v === "number" && Number.isFinite(v) && v > 0 ? v : 0);
 function validPath(p) {
     // eslint-disable-next-line no-control-regex
