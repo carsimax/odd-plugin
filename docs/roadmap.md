@@ -2,7 +2,7 @@
 
 **Goal.** odd-claude is [gentle-shell](../upstream/gentle-shell) ported to a Claude Code plugin (`odd-claude`, commands `/odd-claude:<x>`, agents `odd-*`). The upstream repo is the only source of behaviour. Built from [research/portability-matrix.md](research/portability-matrix.md) (132 rows, IDs `R##` runtime / `A##` asset), [research/open-questions.md](research/open-questions.md) and [research/claude-code-extensibility.md](research/claude-code-extensibility.md) §12. Decisions and naming: [README.md](README.md).
 
-Status: **v2.0.0 reached** for native RDD (faithful core; Phases 1–5, 7 and the RDD part of 8 done; Phase 6 dropped by user decision 2026-11-19; peer orchestrators R07 shipped in 2.1.0). Phase contents follow the matrix "Candidate phases" with the adjustments listed under [Deviations](#deviations-from-the-matrix-candidate-phases).
+Status: **v2.0.0 reached** for native RDD (faithful core; Phases 1–5, 7 and the RDD part of 8 done; Phase 6 dropped by user decision 2026-11-19; peer orchestrators R07 shipped in 2.1.0; 2.2.0 is the production-readiness release, Node >= 22). Phase contents follow the matrix "Candidate phases" with the adjustments listed under [Deviations](#deviations-from-the-matrix-candidate-phases).
 
 ## Guiding principles
 
@@ -225,4 +225,4 @@ Excluded rows (every other matrix ID is in a phase above, v2 included). Out-of-s
 | 5 | Mods UX (optional) | Phase 2; Q1, Q7 | v1.1 | done (v1.1, branch feat/v1.1-mods); R42 TPS and R44 statusLine shipped via setup; interactive checks pending |
 | 6 | Web tools | – | – | dropped by user decision 2026-11-19 (Claude Code's own Artifact tool and built-in design/chart features cover the need; Tower not wanted); v1.2 not released |
 | 7 | Cosmetic and small | Phase 1 | v1.0 | done (v1.0, branch feat/v1.0-polish); R57, R63 dropped by user decision 2026-11-18 |
-| 8 | v2: native RDD + peer orchestrators | v1 shipped | v2 | RDD done (v2.0.0, branch feat/v2-rdd, faithful core); peers (R07) shipped in 2.1.0 |
+| 8 | v2: native RDD + peer orchestrators | v1 shipped | v2 | RDD done (v2.0.0, branch feat/v2-rdd, faithful core); peers (R07) shipped in 2.1.0; production readiness shipped in 2.2.0 (Node >= 22, branch release/2.2.0) |

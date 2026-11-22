@@ -2,6 +2,17 @@
 
 A Claude Code plugin that ports the ODD harness of gentle-shell (MIT) <!-- odd-check: allow --> to Claude Code. **v2.0** adds native receipt-driven review (RDD) on top of **v1.1** (the mods UX) and **v1.0** (the parity release): the ODD persona, orchestrator cards, agents, skills, native integrations, advisory review, themes and lifecycle hooks. Apart from the RDD delivery gate and Stop settle reminder, which can block only when you turn RDD on (it is off by default), the plugin ships **no deny/ask/block hook** (user decision, v0.5, amended for v2): its hooks only add context. Coordinator mode and the admission rules are prompt text, not enforcement; otherwise the only enforcement is Claude Code's native permission system (see [Permission modes](#permission-modes)). The plugin collects no data and sends nothing anywhere.
 
+## What's new in 2.2.0
+
+**Production readiness.** A minor bump, but the Node minimum rose, so read the first item.
+
+- **Node 22 is now required.** Node 20 is end of life. Upgrade Node before updating the plugin (`engines.node` is `>=22`).
+- CI runs on Linux and macOS with Node 22 and 26.
+- Store lock: a dead lock owned by this machine is recognized after a hostname change (machine id plus boot / pid-namespace identity). A container sharing the state directory never takes a live lock.
+- Install: the engram marketplace must be added first (`engram@engram` is a required dependency).
+- `/odd-claude:quiet` no longer claims mods are needed: quiet rendering is drawn by the ui.render mod and has no visible effect when mods are off.
+- Bench baseline: 2.1.0.
+
 ## What's new in 2.1.0
 
 **Peer orchestrators (R07).** One Claude Code session on this machine can send a short message to another live session, with the recipient's human consent and no dependency on mods. See [Peer orchestrators](#peer-orchestrators-r07).
@@ -228,7 +239,7 @@ Claude Code removes `AskUserQuestion` from every subagent (verified on 2.1.327).
 ## Requirements
 
 - Claude Code >= 2.1.323 (the `engines.claude-code` value in `.claude-plugin/plugin.json`)
-- Node >= 20
+- Node >= 22
 - git
 - Required: the `engram` plugin (declared in `plugin.json` as `dependencies: ["engram@engram"]`; odd-claude does not load without it) and the `engram` binary its MCP server runs
 - Optional: `codegraph`
@@ -349,7 +360,7 @@ npm run check   # naming / data-collection guard
 
 `claude plugin test plugins/odd-claude` runs the mod tests (`hooks/register.test.ts`); `npm test` is the main node:test suite. Validate the manifests with `claude plugin validate plugins/odd-claude` and `claude plugin validate .`.
 
-**CI** (`.github/workflows/ci.yml`): on every pull request and push to `main`, on Ubuntu and macOS with Node 20 and 26, it runs `npm ci`, `npm run build` (on Ubuntu / Node 26 it also fails if the committed `dist/` differs from `src/`), `npm test`, `npm run check`, the bench unit tests (`npm run test:bench` at the repo root) and `claude plugin validate plugins/odd-claude` (Claude Code CLI pinned to 2.1.330).
+**CI** (`.github/workflows/ci.yml`): on every pull request and push to `main`, on Ubuntu and macOS with Node 22 and 26, it runs `npm ci`, `npm run build` (on Ubuntu / Node 26 it also fails if the committed `dist/` differs from `src/`), `npm test`, `npm run check`, the bench unit tests (`npm run test:bench` at the repo root) and `claude plugin validate plugins/odd-claude` (Claude Code CLI pinned to 2.1.330).
 
 ## License and attribution
 

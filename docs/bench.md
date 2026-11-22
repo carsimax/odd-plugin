@@ -8,7 +8,7 @@ and compares them with the upstream oracle (the `gentle-ai` binary). It lives in
 
 - The plugin built and its dependencies installed: `cd plugins/odd-claude && npm ci` (the bench compiles with the plugin's `tsc` and drives
   `plugins/odd-claude/dist/`; run the plugin build first if `dist/` is stale).
-- Node >= 20 and `git` on `PATH`. `npm run test:bench` passes the spec files to `node --test` as shell globs (`bench/dist/*.spec.js bench/dist/*/*.spec.js`): a quoted glob needs Node 21+, so the spec files must stay at most one directory deep under `bench/src`.
+- Node >= 22 and `git` on `PATH`. `npm run test:bench` passes the spec files to `node --test` as shell globs (`bench/dist/*.spec.js bench/dist/*/*.spec.js`): a quoted glob needs Node 21+, so the spec files must stay at most one directory deep under `bench/src`.
 - For the oracle: the upstream `gentle-ai` binary. The default path is
   `~/.local/share/odd-claude-oracle/gentle-ai-4.6.0/bin/gentle-ai` (under the current user's home, from `os.homedir()`); point
   `ODD_BENCH_ORACLE_BIN` at another binary. The result records the path as `~/...` when it is under home. Without the binary,
