@@ -141,6 +141,6 @@ export function renderProfiles(p) {
 export function renderPresetList(active) {
     return PRESET_NAMES.map((n) => {
         const t = PRESETS[n];
-        return `${n === active ? "*" : " "} ${n.padEnd(9)} explore=${t["odd-explore"].model} worker=${t["odd-worker"].model} verify=${t["odd-verify"].model} judges=${t["odd-jd-judge-a"].model}${n === DEFAULT_PROFILE ? " (default)" : ""}`;
+        return `${n === active ? "*" : " "} ${n.padEnd(9)} explore=${t["odd-explore"].model} worker=${t["odd-worker"].model} verify=${t["odd-verify"].model} judges=${t["odd-jd-judge-a"].model}/${t["odd-jd-judge-b"].model}${n === DEFAULT_PROFILE ? " (default)" : ""}`;
     }).join("\n") + (active === CUSTOM_PROFILE ? "\n* custom" : "");
 }

@@ -183,6 +183,9 @@ export interface ReviewerSlotView {
   role: ReviewerRole;
   lens?: string;
   binding: string;
+  /** The model/effort this slot will actually run under (absent: Claude's own default applies). */
+  model?: string;
+  effort?: string;
 }
 
 export type ReviewRunBody =
@@ -255,7 +258,13 @@ function snapshotTargetOf(input: { target?: StartTarget; projection?: Projection
   return t.committedOnly === true ? { kind: "base-diff", baseRef: t.baseRef } : { kind: "base-workspace-overlay", baseRef: t.baseRef };
 }
 
-const slotView = (s: Slot): ReviewerSlotView => ({ role: s.role, ...(s.lens !== undefined ? { lens: s.lens } : {}), binding: s.binding });
+const slotView = (s: Slot, o: RunReviewerOptions): ReviewerSlotView => ({
+  role: s.role,
+  ...(s.lens !== undefined ? { lens: s.lens } : {}),
+  binding: s.binding,
+  ...(o.model !== undefined ? { model: o.model } : {}),
+  ...(o.effort !== undefined ? { effort: o.effort } : {}),
+});
 
 export type PendingCorrection = { rec: StateRecord } | { unreadable: string };
 
@@ -368,19 +377,25 @@ export async function runReview(input: ReviewRunInput, deps: RunDeps = {}): Prom
       ctx: { lineage: string; revision: string; expectedIdentity: string; forecast: Forecast; recheck: () => { kind: string; reason_code: string } | undefined },
     ): Promise<Batch> => {
       const out = (outcome: ReviewRunOutcome): Batch => ({ done: false, outcome });
-      // model/effort are part of what the user authorized: a forecast for haiku never runs opus/max.
+      // model/effort are part of what the user authorized: a forecast for haiku never runs opus/max. `routes` is what each slot
+      // will actually run under (explicit caller options or the profile read for this run), so a profile change between the
+      // forecast and the acknowledgement is binding-drift.
       const batchBinding = domainHash("run-reviewer-batch", 2, {
         lineage_id: ctx.lineage,
         bindings: slots.map((s) => s.binding),
         model: input.model ?? "",
         effort: input.effort ?? "",
+        routes: slots.map((s) => {
+          const o = optionsFor(s);
+          return `${o.model ?? ""}/${o.effort ?? ""}`;
+        }),
       });
       if (input.reviewerRunAcknowledged !== true || batches > 0) {
         return out(finish({
           outcome: "forecast",
           forecast: ctx.forecast,
           reviewer_run_binding: batchBinding,
-          reviewers: slots.map(slotView),
+          reviewers: slots.map((s) => slotView(s, optionsFor(s))),
           ...(input.model !== undefined ? { model: input.model } : {}),
           ...(input.effort !== undefined ? { effort: input.effort } : {}),
         }));

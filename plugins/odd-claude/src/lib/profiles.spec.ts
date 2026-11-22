@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { mkdtempSync, rmSync, readFileSync, writeFileSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { PRESETS, PRESET_NAMES, PROFILE_ROLES, clearProfile, profileContextLine, readProfile, renderProfiles, setRole, useProfile } from "./profiles.js";
+import { PRESETS, PRESET_NAMES, PROFILE_ROLES, clearProfile, profileContextLine, readProfile, renderPresetList, renderProfiles, setRole, useProfile } from "./profiles.js";
 import { profilesCli } from "../cli/profiles.js";
 import { runHook } from "../hooks/run.js";
 
@@ -250,4 +250,11 @@ test("profilesCli list/show/use/set/clear with strict argument whitelist", () =>
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
+});
+
+test("A3: the preset list shows both judges (judge-a/judge-b)", () => {
+  const lines = renderPresetList("balanced").split("\n");
+  assert.match(lines[0]!, /judges=opus\/sonnet \(default\)/);
+  assert.match(lines[1]!, /judges=sonnet\/sonnet/);
+  assert.match(lines[2]!, /judges=opus\/opus/);
 });

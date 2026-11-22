@@ -1484,6 +1484,47 @@ test("S3 an explicit caller model wins for every role (and keeps the caller's ef
   });
 });
 
+test("S3 a profile change between forecast and acknowledgement is binding-drift, never a different model", async () => {
+  await withProfile((dataDir) => useProfile("economy", { dataDir }), async (profileState) => {
+    await withRepo(async (r) => {
+      const lineage = await grant(r, "high");
+      const { calls, runner } = fakeRunner();
+      const deps: RunDeps = { riskAssessor: assess("high"), runner, profileState };
+      const forecast = is(await runReview(input(r, { lineageId: lineage }), deps), "forecast");
+      useProfile("max", profileState);
+      const out = is(await runReview(input(r, { lineageId: lineage, reviewerRunAcknowledged: true, reviewerRunBinding: forecast.reviewer_run_binding }), deps), "binding-drift");
+      assert.equal(out.field, "forecast");
+      assert.equal(calls.roles.length, 0, "no reviewer ran");
+    });
+  });
+});
+
+test("S3 the same profile acknowledged runs normally, and the forecast slot view shows the resolved model/effort", async () => {
+  await withProfile((dataDir) => useProfile("economy", { dataDir }), async (profileState) => {
+    await withRepo(async (r) => {
+      const lineage = await grant(r, "high");
+      const { calls, runner } = fakeRunner();
+      const { forecast, done } = await forecastThenRun(r, lineage, { riskAssessor: assess("high"), runner, profileState });
+      is(done, "closed");
+      assert.equal(forecast.reviewers.length, 4);
+      for (const v of forecast.reviewers) {
+        assert.equal(v.model, "haiku");
+        assert.equal(v.effort, undefined, "haiku carries no effort");
+      }
+      assert.equal(calls.roles.length, 4);
+    });
+  });
+  await withProfile(undefined, async (profileState) => {
+    await withRepo(async (r) => {
+      const lineage = await grant(r, "high");
+      const { runner } = fakeRunner();
+      const forecast = is(await runReview(input(r, { lineageId: lineage }), { riskAssessor: assess("high"), runner, profileState }), "forecast");
+      const byLens = Object.fromEntries(forecast.reviewers.map((v) => [v.lens, `${v.model}/${v.effort}`]));
+      assert.deepEqual(byLens, { risk: "opus/medium", resilience: "sonnet/medium", readability: "sonnet/medium", reliability: "sonnet/medium" });
+    });
+  });
+});
+
 test("S3 an unreadable profile state never throws: the review runs with the balanced route", async () => {
   await withProfile(undefined, async () => {
     await withRepo(async (r) => {

@@ -157,7 +157,13 @@ function snapshotTargetOf(input) {
         return { kind: "current-changes", projection: input.projection ?? "workspace" };
     return t.committedOnly === true ? { kind: "base-diff", baseRef: t.baseRef } : { kind: "base-workspace-overlay", baseRef: t.baseRef };
 }
-const slotView = (s) => ({ role: s.role, ...(s.lens !== undefined ? { lens: s.lens } : {}), binding: s.binding });
+const slotView = (s, o) => ({
+    role: s.role,
+    ...(s.lens !== undefined ? { lens: s.lens } : {}),
+    binding: s.binding,
+    ...(o.model !== undefined ? { model: o.model } : {}),
+    ...(o.effort !== undefined ? { effort: o.effort } : {}),
+});
 /**
  * Best-effort look at an unreadable state file (read only, same discipline as the store's secure reader: O_NOFOLLOW |
  * O_NONBLOCK, regular single-link file checked on the open fd, size cap). true: the raw record claims a pending
@@ -262,19 +268,25 @@ export async function runReview(input, deps = {}) {
         /** One batch of reviewer slots: forecast gate, prompts, bounded concurrent runs, ordered admission. */
         const runBatch = async (slots, ctx) => {
             const out = (outcome) => ({ done: false, outcome });
-            // model/effort are part of what the user authorized: a forecast for haiku never runs opus/max.
+            // model/effort are part of what the user authorized: a forecast for haiku never runs opus/max. `routes` is what each slot
+            // will actually run under (explicit caller options or the profile read for this run), so a profile change between the
+            // forecast and the acknowledgement is binding-drift.
             const batchBinding = domainHash("run-reviewer-batch", 2, {
                 lineage_id: ctx.lineage,
                 bindings: slots.map((s) => s.binding),
                 model: input.model ?? "",
                 effort: input.effort ?? "",
+                routes: slots.map((s) => {
+                    const o = optionsFor(s);
+                    return `${o.model ?? ""}/${o.effort ?? ""}`;
+                }),
             });
             if (input.reviewerRunAcknowledged !== true || batches > 0) {
                 return out(finish({
                     outcome: "forecast",
                     forecast: ctx.forecast,
                     reviewer_run_binding: batchBinding,
-                    reviewers: slots.map(slotView),
+                    reviewers: slots.map((s) => slotView(s, optionsFor(s))),
                     ...(input.model !== undefined ? { model: input.model } : {}),
                     ...(input.effort !== undefined ? { effort: input.effort } : {}),
                 }));
