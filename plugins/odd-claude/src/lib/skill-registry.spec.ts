@@ -86,9 +86,11 @@ test("refresh writes registry, cache and .atl/.gitignore; second run skips witho
     assert.equal(readFileSync(join(f.cwd, ".atl", ".gitignore"), "utf8"), "*\n");
     const old = new Date(Date.now() - 100000);
     utimesSync(reg, old, old);
+    const before = statSync(reg, { bigint: true });
     const second = refreshRegistry(f.deps);
     assert.deepEqual([second.status, second.reason], ["unchanged", "fingerprint-unchanged"]);
-    assert.equal(statSync(reg).mtimeMs, old.getTime());
+    const after = statSync(reg, { bigint: true });
+    assert.deepEqual([after.mtimeNs, after.ino, after.size], [before.mtimeNs, before.ino, before.size]);
     // a changed skill file triggers a rewrite
     skill(join(f.cwd, "skills"), "alpha", 'name: alpha\ndescription: "changed description"');
     const third = refreshRegistry(f.deps);
@@ -106,11 +108,13 @@ test("a fingerprint change with identical rendered bytes does not rewrite the re
     const reg = join(f.cwd, ".atl", "skill-registry.md");
     const old = new Date(Date.now() - 100000);
     utimesSync(reg, old, old);
+    const before = statSync(reg, { bigint: true });
     const p = join(f.cwd, "skills", "alpha", "SKILL.md");
     utimesSync(p, new Date(), new Date(Date.now() + 5000)); // mtime only
     const r = refreshRegistry(f.deps);
     assert.deepEqual([r.status, r.reason], ["unchanged", "bytes-identical"]);
-    assert.equal(statSync(reg).mtimeMs, old.getTime());
+    const after = statSync(reg, { bigint: true });
+    assert.deepEqual([after.mtimeNs, after.ino, after.size], [before.mtimeNs, before.ino, before.size]);
   } finally {
     f.cleanup();
   }

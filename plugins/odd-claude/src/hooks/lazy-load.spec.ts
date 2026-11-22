@@ -1,4 +1,4 @@
-import { test } from "node:test";
+import { after, test } from "node:test";
 import assert from "node:assert/strict";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -47,7 +47,10 @@ function loaded(event: string, input: object, setup?: (data: string) => void): {
 
 const HANDLERS = ["post-tool-use", "pre-tool-use", "session-end", "session-start", "stop-failure", "stop", "subagents", "user-prompt-submit"].map((n) => `hooks/${n}.js`);
 const ENGINE = ["review/gate.js", "review/risk.js", "review/status.js", "review/start.js", "review/consent.js", "review/ack.js"];
-const base = { session_id: "s1", cwd: tmpdir() };
+// A private project dir: SessionStart writes `<cwd>/.atl/skill-registry.md`, so the shared real tmpdir must not be the cwd.
+const projectDir = mkdtempSync(join(tmpdir(), "odd-lazyload-cwd-"));
+after(() => rmSync(projectDir, { recursive: true, force: true }));
+const base = { session_id: "s1", cwd: projectDir };
 
 const cases: { name: string; event: string; input: object; own: string; reviewFree: boolean }[] = [
   { name: "PreToolUse non-delivery Bash, RDD off", event: "PreToolUse", input: { ...base, tool_name: "Bash", tool_input: { command: "ls -la" } }, own: "hooks/pre-tool-use.js", reviewFree: false },
@@ -72,7 +75,7 @@ for (const c of cases) {
 }
 
 test("PreToolUse and Stop load the gate and the settle engine once the global RDD switch is on", { skip }, () => {
-  const on = (data: string): void => void setReviewMode("enable", "global", tmpdir(), { dataDir: data });
+  const on = (data: string): void => void setReviewMode("enable", "global", projectDir, { dataDir: data });
   const pre = loaded("PreToolUse", { ...base, tool_name: "Bash", tool_input: { command: "git push origin main" } }, on);
   assert.ok(pre.files.includes("review/gate.js"), pre.files.join(", "));
   const stop = loaded("Stop", { ...base, stop_hook_active: false }, on);
@@ -83,7 +86,7 @@ test("PreToolUse and Stop load the gate and the settle engine once the global RD
 const PEER_R = "rrrrrrrr-1111-4111-8111-rrrrrrrrrrrr";
 for (const [event, extra] of [["UserPromptSubmit", { prompt: "hola" }], ["SessionStart", { source: "compact" }]] as const) {
   test(`${event}: peers-delivery loads only when the session has queued mail`, { skip }, () => {
-    const input = { session_id: PEER_R, cwd: tmpdir(), ...extra };
+    const input = { session_id: PEER_R, cwd: projectDir, ...extra };
     const none = loaded(event, input);
     assert.ok(!none.files.includes("lib/peers-delivery.js"), none.files.join(", "));
     assert.ok(!none.stdout.includes("peer-messages"));

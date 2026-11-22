@@ -28,9 +28,10 @@ const logLines = (dataDir: string): string[] => {
   return existsSync(f) ? readFileSync(f, "utf8").split("\n").filter((l) => l !== "").map((l) => l.replace(/^\S+ /, "")) : [];
 };
 
-const cwd = tmpdir();
-const base = { session_id: "s1", cwd };
-const inputs: [string, object][] = [
+/** Hook payloads for one project dir. Callers pass a private mkdtemp dir: SessionStart refreshes `<cwd>/.atl/skill-registry.md`, so the shared real tmpdir must never be a project cwd. */
+const inputsFor = (cwd: string): [string, object][] => {
+  const base = { session_id: "s1", cwd };
+  return [
   ["SessionStart", { ...base, source: "startup" }],
   ["UserPromptSubmit", { ...base, prompt: "hola, qué tal" }],
   ["UserPromptSubmit", { ...base, prompt: "/odd-claude:status" }],
@@ -44,7 +45,8 @@ const inputs: [string, object][] = [
   ["SubagentStart", { ...base, agent_id: "a1", agent_type: "odd-worker" }],
   ["SubagentStop", { ...base, agent_id: "a1" }],
   ["SessionEnd", { ...base }],
-];
+  ];
+};
 
 test("lazy registry registers exactly the events of the eager registry and hooks.json", () => {
   const raw = JSON.parse(readFileSync(new URL("../../hooks/hooks.json", import.meta.url), "utf8")) as { hooks: Record<string, unknown> };
@@ -54,7 +56,9 @@ test("lazy registry registers exactly the events of the eager registry and hooks
 
 for (const global of [false, true]) {
   test(`runHookLazy answers byte for byte like runHook (global RDD ${global ? "on" : "off"})`, async () => {
-    for (const [event, input] of inputs) {
+    const cwd = mkdtempSync(join(tmpdir(), "odd-lazy-cwd-"));
+    try {
+    for (const [event, input] of inputsFor(cwd)) {
       const a = mkdtempSync(join(tmpdir(), "odd-lazy-a-"));
       const b = mkdtempSync(join(tmpdir(), "odd-lazy-b-"));
       try {
@@ -68,6 +72,9 @@ for (const global of [false, true]) {
         rmSync(a, { recursive: true, force: true });
         rmSync(b, { recursive: true, force: true });
       }
+    }
+    } finally {
+      rmSync(cwd, { recursive: true, force: true });
     }
   });
 }
@@ -146,6 +153,7 @@ test("PreToolUse only handles the Bash delivery gate, so skipping it with RDD of
   const raw = JSON.parse(readFileSync(new URL("../../hooks/hooks.json", import.meta.url), "utf8")) as { hooks: Record<string, { matcher?: string }[]> };
   assert.deepEqual(raw.hooks.PreToolUse!.map((e) => e.matcher), ["Bash"]);
   const dir = mkdtempSync(join(tmpdir(), "odd-lazy-"));
+  const cwd = join(dir, "project");
   try {
     for (const tool_name of ["Read", "Write", "Edit", "Agent", "mcp__x__y", "bash", ""]) {
       assert.equal(preToolUse({ session_id: "s1", cwd, tool_name, tool_input: { command: ["git", "push", "origin", "main"].join(" ") } }, { dataDir: dir }), undefined, tool_name);
