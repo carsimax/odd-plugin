@@ -1,8 +1,9 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { chmodSync, linkSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
+import { performance } from "node:perf_hooks";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { isMachineId, loadMachineId, stateHome } from "./machine-id.js";
@@ -151,5 +152,52 @@ test("B2: concurrent first creation never yields undefined (nlink window), 20 ro
     } finally {
       t.done();
     }
+  }
+});
+
+test("B2: machineId() does not cache a failure and caches the first success", () => {
+  const t = tmp();
+  try {
+    const A = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+    const B = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
+    const script = `
+      const fs = require("node:fs");
+      import(process.argv[1]).then((m) => {
+        const [file, other] = [process.argv[2], process.argv[3]];
+        fs.mkdirSync(require("node:path").dirname(file), { recursive: true });
+        fs.writeFileSync(other, "${A}\\n");
+        fs.linkSync(other, file); // persistent hardlink: nlink 2
+        const r1 = m.machineId();
+        fs.unlinkSync(other);
+        const r2 = m.machineId();
+        fs.writeFileSync(file, "${B}\\n");
+        const r3 = m.machineId();
+        process.stdout.write(JSON.stringify([r1 ?? null, r2 ?? null, r3 ?? null]));
+      });`;
+    const r = spawnSync(process.execPath, ["-e", script, `file://${MODULE}`, t.file, join(t.dir, "other")], {
+      env: { ...process.env, XDG_STATE_HOME: t.dir },
+      encoding: "utf8",
+      timeout: 30_000,
+    });
+    assert.equal(r.status, 0, r.stderr);
+    assert.deepEqual(JSON.parse(r.stdout), [null, A, A]);
+  } finally {
+    t.done();
+  }
+});
+
+test("B2: a persistent hardlink gives up within a bound", () => {
+  const t = tmp();
+  try {
+    mkdirSync(join(t.dir, "odd-plugin"), { recursive: true });
+    const other = join(t.dir, "other");
+    writeFileSync(other, "33333333-3333-4333-8333-333333333333\n");
+    linkSync(other, t.file);
+    const t0 = performance.now();
+    assert.equal(loadMachineId(t.dir), undefined);
+    const ms = performance.now() - t0;
+    assert.ok(ms < 1000, `took ${Math.round(ms)} ms`);
+  } finally {
+    t.done();
   }
 });

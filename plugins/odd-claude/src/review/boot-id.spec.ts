@@ -1,6 +1,10 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { isAbsolute } from "node:path";
+import { spawnSync } from "node:child_process";
+import { chmodSync, existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { isAbsolute, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { type BootReaders, SYSCTL_PATH, isBootId, parseLinuxBoot, parseMacBoot, readBootId } from "./boot-id.js";
 
 const U = "4fd77cbd-1111-4222-8333-444455556666";
@@ -57,4 +61,27 @@ test("isBootId is strict", () => {
 test("sysctl is spawned by absolute path (no PATH lookup)", () => {
   assert.equal(SYSCTL_PATH, "/usr/sbin/sysctl");
   assert.ok(isAbsolute(SYSCTL_PATH));
+});
+
+test("darwin: a fake sysctl first on PATH is never spawned", { skip: process.platform !== "darwin" }, () => {
+  const dir = mkdtempSync(join(tmpdir(), "odd-fake-sysctl-"));
+  try {
+    const FAKE = "dddddddd-dddd-4ddd-8ddd-dddddddddddd";
+    const marker = join(dir, "marker");
+    const fake = join(dir, "sysctl");
+    writeFileSync(fake, `#!/bin/sh\necho ran > '${marker}'\necho ${FAKE}\n`);
+    chmodSync(fake, 0o755);
+    const mod = fileURLToPath(new URL("./boot-id.js", import.meta.url));
+    const r = spawnSync(process.execPath, ["-e", `import(process.argv[1]).then((m) => process.stdout.write(String(m.bootId())))`, `file://${mod}`], {
+      env: { ...process.env, PATH: `${dir}:${process.env.PATH ?? ""}` },
+      encoding: "utf8",
+      timeout: 30_000,
+    });
+    assert.equal(r.status, 0, r.stderr);
+    assert.equal(existsSync(marker), false, "the fake sysctl from PATH ran");
+    assert.ok(!r.stdout.includes(FAKE), r.stdout);
+    assert.match(r.stdout, /^mac:[0-9a-f-]{36}$/);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });
