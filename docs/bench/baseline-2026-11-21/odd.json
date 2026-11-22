@@ -1,0 +1,3245 @@
+{
+  "schema": "odd-claude.bench-result/v1",
+  "meta": {
+    "subject": "odd",
+    "binary": {
+      "path": "~/Developer/03-PERSONAL/odd-claude/plugins/odd-claude/dist/mcp/review-server.js",
+      "version": "2.1.0"
+    },
+    "node": "v26.12.1",
+    "os": {
+      "platform": "darwin",
+      "arch": "arm64",
+      "release": "27.2.0"
+    },
+    "commit": "a813872d27d8b1418802f3eb53ea3b9ed715ace4",
+    "started_at": "2026-11-22T00:31:02.148Z",
+    "repeats": 3
+  },
+  "journeys": [
+    {
+      "id": "low-risk-closes-with-zero-lenses",
+      "ref_id": "j111-approved-transaction-burns-and-shipped-gates-are-unmanaged",
+      "status": "passed",
+      "outcome": {
+        "steps": [
+          {
+            "step": "assess",
+            "outcome": "assessed",
+            "risk": "low"
+          },
+          {
+            "step": "start",
+            "outcome": "closed",
+            "risk": "low",
+            "state": "approved",
+            "lenses": 0
+          },
+          {
+            "step": "acknowledge",
+            "outcome": "acknowledged",
+            "state": "burned"
+          }
+        ]
+      },
+      "metrics": {
+        "human_prompts": {
+          "value": 0,
+          "derivation": "measured"
+        },
+        "manual_tokens": {
+          "value": 0,
+          "derivation": "proxy",
+          "note": "ceil(bytes/4) of human step text"
+        },
+        "commands_to_completion": {
+          "value": 3,
+          "derivation": "measured"
+        },
+        "blocks": {
+          "value": {
+            "self_recovered": 0,
+            "in_band": 0,
+            "out_of_band": 0,
+            "by_design": 0,
+            "dead_end": 0
+          },
+          "derivation": "measured"
+        },
+        "recovery_round_trips": {
+          "value": 0,
+          "derivation": "measured"
+        },
+        "model_runs": {
+          "value": 0,
+          "derivation": "measured"
+        },
+        "human_surface_bytes": {
+          "value": 2667,
+          "derivation": "measured"
+        },
+        "git_subprocesses": {
+          "value": 44,
+          "derivation": "measured"
+        },
+        "latency": {
+          "mcp.review_assess": {
+            "samples": 3,
+            "median_ms": 188.071,
+            "p95_ms": 3283.604,
+            "samples_ms": [
+              3283.603792,
+              188.0710409999997,
+              179.82225000000017
+            ]
+          },
+          "mcp.review_start": {
+            "samples": 3,
+            "median_ms": 289.193,
+            "p95_ms": 311.96,
+            "samples_ms": [
+              289.1928750000002,
+              311.96008299999994,
+              281.74883299999965
+            ]
+          },
+          "mcp.review_acknowledge_approved": {
+            "samples": 3,
+            "median_ms": 119.72,
+            "p95_ms": 124.96,
+            "samples_ms": [
+              119.7197500000002,
+              124.95970899999975,
+              117.03433300000052
+            ]
+          },
+          "journey.total": {
+            "samples": 3,
+            "median_ms": 624.991,
+            "p95_ms": 3692.516,
+            "samples_ms": [
+              3692.5164170000003,
+              624.9908329999994,
+              578.6054160000003
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": "medium-risk-one-lens-consent-capture-ack",
+      "ref_id": "j114-last-reviewer-capture-closes-and-burns",
+      "status": "passed",
+      "outcome": {
+        "steps": [
+          {
+            "step": "assess",
+            "outcome": "assessed",
+            "risk": "medium"
+          },
+          {
+            "step": "start",
+            "outcome": "consent_required",
+            "risk": "medium",
+            "state": "none"
+          },
+          {
+            "step": "answerConsent",
+            "outcome": "consented",
+            "risk": "medium",
+            "state": "reviewing",
+            "lenses": 1
+          },
+          {
+            "step": "captureAll",
+            "outcome": "approved",
+            "state": "approved",
+            "lenses": 1
+          },
+          {
+            "step": "acknowledge",
+            "outcome": "acknowledged",
+            "state": "burned"
+          }
+        ]
+      },
+      "metrics": {
+        "human_prompts": {
+          "value": 2,
+          "derivation": "measured"
+        },
+        "manual_tokens": {
+          "value": 12,
+          "derivation": "proxy",
+          "note": "ceil(bytes/4) of human step text"
+        },
+        "commands_to_completion": {
+          "value": 7,
+          "derivation": "measured"
+        },
+        "blocks": {
+          "value": {
+            "self_recovered": 0,
+            "in_band": 0,
+            "out_of_band": 0,
+            "by_design": 0,
+            "dead_end": 0
+          },
+          "derivation": "measured"
+        },
+        "recovery_round_trips": {
+          "value": 0,
+          "derivation": "measured"
+        },
+        "model_runs": {
+          "value": 1,
+          "derivation": "measured"
+        },
+        "human_surface_bytes": {
+          "value": 12514,
+          "derivation": "measured"
+        },
+        "git_subprocesses": {
+          "value": 177,
+          "derivation": "measured"
+        },
+        "latency": {
+          "mcp.review_assess": {
+            "samples": 3,
+            "median_ms": 266.912,
+            "p95_ms": 281.469,
+            "samples_ms": [
+              192.71708299999955,
+              281.4690420000006,
+              266.91166599999997
+            ]
+          },
+          "mcp.review_start": {
+            "samples": 3,
+            "median_ms": 244.89,
+            "p95_ms": 253.671,
+            "samples_ms": [
+              244.88958400000047,
+              253.67141700000047,
+              242.47433400000045
+            ]
+          },
+          "mcp.review_answer_consent": {
+            "samples": 3,
+            "median_ms": 277.803,
+            "p95_ms": 278.221,
+            "samples_ms": [
+              272.55291599999964,
+              277.80312499999945,
+              278.221207999999
+            ]
+          },
+          "mcp.review_status": {
+            "samples": 3,
+            "median_ms": 145.942,
+            "p95_ms": 149.061,
+            "samples_ms": [
+              149.06074999999964,
+              145.2856670000001,
+              145.94216700000106
+            ]
+          },
+          "mcp.review_capture": {
+            "samples": 6,
+            "median_ms": 463.388,
+            "p95_ms": 630.854,
+            "samples_ms": [
+              316.6595419999994,
+              630.8544579999998,
+              314.8923330000007,
+              610.1166670000002,
+              315.3214590000007,
+              618.0451670000002
+            ]
+          },
+          "mcp.review_acknowledge_approved": {
+            "samples": 3,
+            "median_ms": 114.783,
+            "p95_ms": 114.853,
+            "samples_ms": [
+              114.85329099999944,
+              114.78329200000007,
+              112.94183299999895
+            ]
+          },
+          "journey.total": {
+            "samples": 3,
+            "median_ms": 1979.858,
+            "p95_ms": 1998.022,
+            "samples_ms": [
+              1921.587623999998,
+              1998.0215430000017,
+              1979.8578340000004
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": "high-risk-four-lens-group",
+      "ref_id": "j60-explicit-active-lineage-keeps-four-lens-correction-and-validator-flow",
+      "status": "passed",
+      "outcome": {
+        "steps": [
+          {
+            "step": "start",
+            "outcome": "consented",
+            "risk": "high",
+            "state": "reviewing",
+            "lenses": 4
+          },
+          {
+            "step": "status",
+            "outcome": "status",
+            "next": "collect",
+            "state": "reviewing"
+          },
+          {
+            "step": "captureAll",
+            "outcome": "approved",
+            "state": "approved",
+            "lenses": 4
+          },
+          {
+            "step": "acknowledge",
+            "outcome": "acknowledged",
+            "state": "burned"
+          }
+        ]
+      },
+      "metrics": {
+        "human_prompts": {
+          "value": 2,
+          "derivation": "measured"
+        },
+        "manual_tokens": {
+          "value": 12,
+          "derivation": "proxy",
+          "note": "ceil(bytes/4) of human step text"
+        },
+        "commands_to_completion": {
+          "value": 7,
+          "derivation": "measured"
+        },
+        "blocks": {
+          "value": {
+            "self_recovered": 0,
+            "in_band": 0,
+            "out_of_band": 0,
+            "by_design": 0,
+            "dead_end": 0
+          },
+          "derivation": "measured"
+        },
+        "recovery_round_trips": {
+          "value": 0,
+          "derivation": "measured"
+        },
+        "model_runs": {
+          "value": 4,
+          "derivation": "measured"
+        },
+        "human_surface_bytes": {
+          "value": 40817,
+          "derivation": "measured"
+        },
+        "git_subprocesses": {
+          "value": 233,
+          "derivation": "measured"
+        },
+        "latency": {
+          "mcp.review_start": {
+            "samples": 3,
+            "median_ms": 406.133,
+            "p95_ms": 558.761,
+            "samples_ms": [
+              558.7612910000007,
+              406.1334999999999,
+              393.05304199999955
+            ]
+          },
+          "mcp.review_answer_consent": {
+            "samples": 3,
+            "median_ms": 298.112,
+            "p95_ms": 323.1,
+            "samples_ms": [
+              323.10033400000066,
+              298.1115829999999,
+              277.10829100000046
+            ]
+          },
+          "mcp.review_status": {
+            "samples": 6,
+            "median_ms": 170.736,
+            "p95_ms": 185.832,
+            "samples_ms": [
+              179.55104199999914,
+              165.49895899999865,
+              185.83216699999866,
+              175.5271670000002,
+              165.94554199999766,
+              165.65958300000057
+            ]
+          },
+          "mcp.review_capture_group": {
+            "samples": 6,
+            "median_ms": 660.374,
+            "p95_ms": 990.134,
+            "samples_ms": [
+              353.7982090000005,
+              990.1341249999987,
+              356.1583750000009,
+              964.5896659999999,
+              344.65287499999977,
+              966.1982500000013
+            ]
+          },
+          "mcp.review_acknowledge_approved": {
+            "samples": 3,
+            "median_ms": 115.195,
+            "p95_ms": 118.33,
+            "samples_ms": [
+              118.32974999999897,
+              113.66287499999999,
+              115.19466599999942
+            ]
+          },
+          "journey.total": {
+            "samples": 3,
+            "median_ms": 2500.015,
+            "p95_ms": 2689.174,
+            "samples_ms": [
+              2689.1737099999973,
+              2500.0153329999994,
+              2427.8122489999987
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": "explicit-lens-selection-narrows-review",
+      "status": "passed",
+      "outcome": {
+        "steps": [
+          {
+            "step": "start",
+            "outcome": "consented",
+            "risk": "high",
+            "state": "reviewing",
+            "lenses": 2
+          },
+          {
+            "step": "captureAll",
+            "outcome": "approved",
+            "state": "approved",
+            "lenses": 2
+          }
+        ]
+      },
+      "metrics": {
+        "human_prompts": {
+          "value": 2,
+          "derivation": "measured"
+        },
+        "manual_tokens": {
+          "value": 12,
+          "derivation": "proxy",
+          "note": "ceil(bytes/4) of human step text"
+        },
+        "commands_to_completion": {
+          "value": 5,
+          "derivation": "measured"
+        },
+        "blocks": {
+          "value": {
+            "self_recovered": 0,
+            "in_band": 0,
+            "out_of_band": 0,
+            "by_design": 0,
+            "dead_end": 0
+          },
+          "derivation": "measured"
+        },
+        "recovery_round_trips": {
+          "value": 0,
+          "derivation": "measured"
+        },
+        "model_runs": {
+          "value": 2,
+          "derivation": "measured"
+        },
+        "human_surface_bytes": {
+          "value": 15026,
+          "derivation": "measured"
+        },
+        "git_subprocesses": {
+          "value": 178,
+          "derivation": "measured"
+        },
+        "latency": {
+          "mcp.review_start": {
+            "samples": 3,
+            "median_ms": 383.51,
+            "p95_ms": 402.732,
+            "samples_ms": [
+              383.5101250000007,
+              402.731584000001,
+              334.1669170000023
+            ]
+          },
+          "mcp.review_answer_consent": {
+            "samples": 3,
+            "median_ms": 278.676,
+            "p95_ms": 292.347,
+            "samples_ms": [
+              292.3472079999992,
+              276.0136249999996,
+              278.67620799999713
+            ]
+          },
+          "mcp.review_status": {
+            "samples": 3,
+            "median_ms": 152.12,
+            "p95_ms": 162.805,
+            "samples_ms": [
+              162.8050000000003,
+              152.1197919999977,
+              151.7956669999985
+            ]
+          },
+          "mcp.review_capture_group": {
+            "samples": 6,
+            "median_ms": 581.863,
+            "p95_ms": 747.837,
+            "samples_ms": [
+              348.0977090000015,
+              721.0501249999979,
+              328.97529099999883,
+              734.0374169999996,
+              442.6755840000005,
+              747.8367919999982
+            ]
+          },
+          "journey.total": {
+            "samples": 3,
+            "median_ms": 1907.81,
+            "p95_ms": 1955.151,
+            "samples_ms": [
+              1907.8101669999996,
+              1893.8777089999967,
+              1955.1511679999967
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": "consent-declined-creates-no-review",
+      "status": "passed",
+      "outcome": {
+        "steps": [
+          {
+            "step": "start",
+            "outcome": "consent_required",
+            "risk": "medium",
+            "state": "none"
+          },
+          {
+            "step": "answerConsent",
+            "outcome": "declined",
+            "risk": "medium",
+            "state": "declined"
+          },
+          {
+            "step": "inspect",
+            "outcome": "inspected",
+            "mode": "off",
+            "lineages": 0
+          },
+          {
+            "step": "status",
+            "outcome": "status",
+            "next": "stop",
+            "state": "none"
+          }
+        ]
+      },
+      "metrics": {
+        "human_prompts": {
+          "value": 1,
+          "derivation": "measured"
+        },
+        "manual_tokens": {
+          "value": 4,
+          "derivation": "proxy",
+          "note": "ceil(bytes/4) of human step text"
+        },
+        "commands_to_completion": {
+          "value": 4,
+          "derivation": "measured"
+        },
+        "blocks": {
+          "value": {
+            "self_recovered": 0,
+            "in_band": 0,
+            "out_of_band": 0,
+            "by_design": 0,
+            "dead_end": 0
+          },
+          "derivation": "measured"
+        },
+        "recovery_round_trips": {
+          "value": 0,
+          "derivation": "measured"
+        },
+        "model_runs": {
+          "value": 0,
+          "derivation": "measured"
+        },
+        "human_surface_bytes": {
+          "value": 4287,
+          "derivation": "measured"
+        },
+        "git_subprocesses": {
+          "value": 72,
+          "derivation": "measured"
+        },
+        "latency": {
+          "mcp.review_start": {
+            "samples": 3,
+            "median_ms": 424.273,
+            "p95_ms": 428.505,
+            "samples_ms": [
+              424.2727079999968,
+              428.50524999999834,
+              372.27545800000007
+            ]
+          },
+          "mcp.review_answer_consent": {
+            "samples": 3,
+            "median_ms": 255.592,
+            "p95_ms": 259.278,
+            "samples_ms": [
+              259.278416000001,
+              253.70841700000165,
+              255.59245900000315
+            ]
+          },
+          "mcp.review_inspect": {
+            "samples": 3,
+            "median_ms": 109.031,
+            "p95_ms": 121.546,
+            "samples_ms": [
+              121.5458749999998,
+              108.73158300000068,
+              109.03079200000138
+            ]
+          },
+          "mcp.review_status": {
+            "samples": 3,
+            "median_ms": 136.898,
+            "p95_ms": 149.589,
+            "samples_ms": [
+              149.5892500000009,
+              136.89804100000038,
+              136.21391599999697
+            ]
+          },
+          "journey.total": {
+            "samples": 3,
+            "median_ms": 927.843,
+            "p95_ms": 954.686,
+            "samples_ms": [
+              954.6862489999985,
+              927.843291000001,
+              873.1126250000016
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": "consent-never-answered-implicitly",
+      "ref_id": "j13-next-transition-runs-verbatim",
+      "status": "passed",
+      "outcome": {
+        "steps": [
+          {
+            "step": "start",
+            "outcome": "consent_required",
+            "risk": "medium",
+            "state": "none"
+          },
+          {
+            "step": "start",
+            "outcome": "consent_required",
+            "risk": "medium",
+            "state": "none"
+          },
+          {
+            "step": "inspect",
+            "outcome": "inspected",
+            "mode": "off",
+            "lineages": 0
+          },
+          {
+            "step": "status",
+            "outcome": "status",
+            "next": "start",
+            "state": "none"
+          }
+        ]
+      },
+      "metrics": {
+        "human_prompts": {
+          "value": 0,
+          "derivation": "measured"
+        },
+        "manual_tokens": {
+          "value": 0,
+          "derivation": "proxy",
+          "note": "ceil(bytes/4) of human step text"
+        },
+        "commands_to_completion": {
+          "value": 4,
+          "derivation": "measured"
+        },
+        "blocks": {
+          "value": {
+            "self_recovered": 0,
+            "in_band": 0,
+            "out_of_band": 0,
+            "by_design": 0,
+            "dead_end": 0
+          },
+          "derivation": "measured"
+        },
+        "recovery_round_trips": {
+          "value": 0,
+          "derivation": "measured"
+        },
+        "model_runs": {
+          "value": 0,
+          "derivation": "measured"
+        },
+        "human_surface_bytes": {
+          "value": 6970,
+          "derivation": "measured"
+        },
+        "git_subprocesses": {
+          "value": 77,
+          "derivation": "measured"
+        },
+        "latency": {
+          "mcp.review_start": {
+            "samples": 6,
+            "median_ms": 311.494,
+            "p95_ms": 405.006,
+            "samples_ms": [
+              405.0064170000005,
+              242.46925000000192,
+              396.4653339999968,
+              245.06104200000118,
+              376.674583,
+              246.3139169999995
+            ]
+          },
+          "mcp.review_inspect": {
+            "samples": 3,
+            "median_ms": 109.94,
+            "p95_ms": 110.293,
+            "samples_ms": [
+              107.93416699999943,
+              109.94004100000166,
+              110.29349999999977
+            ]
+          },
+          "mcp.review_status": {
+            "samples": 3,
+            "median_ms": 169.545,
+            "p95_ms": 169.576,
+            "samples_ms": [
+              169.5757080000003,
+              169.5447920000006,
+              167.8925420000014
+            ]
+          },
+          "journey.total": {
+            "samples": 3,
+            "median_ms": 921.011,
+            "p95_ms": 924.986,
+            "samples_ms": [
+              924.9855420000022,
+              921.0112090000002,
+              901.1745420000007
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": "resume-after-consent",
+      "ref_id": "j126-selected-untracked-terminal-status-resumes-without-flags",
+      "status": "passed",
+      "outcome": {
+        "steps": [
+          {
+            "step": "start",
+            "outcome": "consented",
+            "risk": "medium",
+            "state": "reviewing",
+            "lenses": 1
+          },
+          {
+            "step": "resume",
+            "outcome": "closed",
+            "state": "burned",
+            "lenses": 1
+          }
+        ]
+      },
+      "metrics": {
+        "human_prompts": {
+          "value": 2,
+          "derivation": "measured"
+        },
+        "manual_tokens": {
+          "value": 12,
+          "derivation": "proxy",
+          "note": "ceil(bytes/4) of human step text"
+        },
+        "commands_to_completion": {
+          "value": 4,
+          "derivation": "measured"
+        },
+        "blocks": {
+          "value": {
+            "self_recovered": 0,
+            "in_band": 0,
+            "out_of_band": 0,
+            "by_design": 0,
+            "dead_end": 0
+          },
+          "derivation": "measured"
+        },
+        "recovery_round_trips": {
+          "value": 0,
+          "derivation": "measured"
+        },
+        "model_runs": {
+          "value": 1,
+          "derivation": "measured"
+        },
+        "human_surface_bytes": {
+          "value": 5171,
+          "derivation": "measured"
+        },
+        "git_subprocesses": {
+          "value": 130,
+          "derivation": "measured"
+        },
+        "latency": {
+          "mcp.review_start": {
+            "samples": 3,
+            "median_ms": 664.94,
+            "p95_ms": 1009.436,
+            "samples_ms": [
+              369.48875000000044,
+              1009.4363749999975,
+              664.9398329999967
+            ]
+          },
+          "mcp.review_answer_consent": {
+            "samples": 3,
+            "median_ms": 276.713,
+            "p95_ms": 278.479,
+            "samples_ms": [
+              274.83641700000226,
+              278.47933300000295,
+              276.7126669999998
+            ]
+          },
+          "mcp.review_run": {
+            "samples": 6,
+            "median_ms": 404.352,
+            "p95_ms": 799.697,
+            "samples_ms": [
+              227.526167,
+              580.2385419999991,
+              227.86820799999987,
+              669.8197499999951,
+              228.4649169999975,
+              799.6967919999952
+            ]
+          },
+          "journey.total": {
+            "samples": 3,
+            "median_ms": 1969.814,
+            "p95_ms": 2185.604,
+            "samples_ms": [
+              1452.0898760000018,
+              2185.6036659999954,
+              1969.8142089999892
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": "correction-then-validator-approves",
+      "ref_id": "j113-correction-removes-candidate-only-path",
+      "status": "passed",
+      "outcome": {
+        "steps": [
+          {
+            "step": "start",
+            "outcome": "consented",
+            "risk": "high",
+            "state": "reviewing",
+            "lenses": 4
+          },
+          {
+            "step": "captureAll",
+            "outcome": "correction_required",
+            "state": "correction_required",
+            "lenses": 4
+          },
+          {
+            "step": "correct",
+            "outcome": "forecast",
+            "state": "validating"
+          },
+          {
+            "step": "captureAll",
+            "outcome": "approved",
+            "state": "approved",
+            "lenses": 0
+          },
+          {
+            "step": "acknowledge",
+            "outcome": "acknowledged",
+            "state": "burned"
+          }
+        ]
+      },
+      "metrics": {
+        "human_prompts": {
+          "value": 3,
+          "derivation": "measured"
+        },
+        "manual_tokens": {
+          "value": 17,
+          "derivation": "proxy",
+          "note": "ceil(bytes/4) of human step text"
+        },
+        "commands_to_completion": {
+          "value": 8,
+          "derivation": "measured"
+        },
+        "blocks": {
+          "value": {
+            "self_recovered": 0,
+            "in_band": 0,
+            "out_of_band": 0,
+            "by_design": 0,
+            "dead_end": 0
+          },
+          "derivation": "measured"
+        },
+        "recovery_round_trips": {
+          "value": 0,
+          "derivation": "measured"
+        },
+        "model_runs": {
+          "value": 5,
+          "derivation": "measured"
+        },
+        "human_surface_bytes": {
+          "value": 25792,
+          "derivation": "measured"
+        },
+        "git_subprocesses": {
+          "value": 303,
+          "derivation": "measured"
+        },
+        "latency": {
+          "mcp.review_start": {
+            "samples": 3,
+            "median_ms": 474.209,
+            "p95_ms": 550.478,
+            "samples_ms": [
+              474.20875000000524,
+              550.4784169999984,
+              356.6103329999969
+            ]
+          },
+          "mcp.review_answer_consent": {
+            "samples": 3,
+            "median_ms": 278.082,
+            "p95_ms": 282.16,
+            "samples_ms": [
+              271.3307910000003,
+              282.1600410000028,
+              278.0815420000072
+            ]
+          },
+          "mcp.review_status": {
+            "samples": 3,
+            "median_ms": 165.161,
+            "p95_ms": 165.377,
+            "samples_ms": [
+              164.01774999999907,
+              165.3768329999948,
+              165.16058299999713
+            ]
+          },
+          "mcp.review_capture_group": {
+            "samples": 6,
+            "median_ms": 627.098,
+            "p95_ms": 926.732,
+            "samples_ms": [
+              343.7990839999984,
+              909.2259170000034,
+              343.28704099999595,
+              924.0111249999973,
+              344.9709160000057,
+              926.7319999999963
+            ]
+          },
+          "mcp.review_run": {
+            "samples": 3,
+            "median_ms": 237.986,
+            "p95_ms": 240.943,
+            "samples_ms": [
+              237.98616700000275,
+              240.94270799999504,
+              235.91700000000128
+            ]
+          },
+          "mcp.review_capture": {
+            "samples": 3,
+            "median_ms": 521.437,
+            "p95_ms": 523.489,
+            "samples_ms": [
+              523.4892919999984,
+              516.9459580000039,
+              521.4367500000008
+            ]
+          },
+          "mcp.review_acknowledge_approved": {
+            "samples": 3,
+            "median_ms": 115.409,
+            "p95_ms": 118.058,
+            "samples_ms": [
+              118.05774999999994,
+              115.40929199999664,
+              115.17441699999472
+            ]
+          },
+          "journey.total": {
+            "samples": 3,
+            "median_ms": 3042.116,
+            "p95_ms": 3138.611,
+            "samples_ms": [
+              3042.1155010000075,
+              3138.611414999985,
+              2944.083541
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": "correction-noop-refused",
+      "ref_id": "j51-negotiated-status-correction-continuation",
+      "status": "passed",
+      "outcome": {
+        "steps": [
+          {
+            "step": "start",
+            "outcome": "consented",
+            "risk": "high",
+            "state": "reviewing",
+            "lenses": 4
+          },
+          {
+            "step": "captureAll",
+            "outcome": "correction_required",
+            "state": "correction_required",
+            "lenses": 4
+          },
+          {
+            "step": "correct",
+            "outcome": "refused",
+            "reason": "unchanged_candidate",
+            "state": "correction_required"
+          }
+        ]
+      },
+      "metrics": {
+        "human_prompts": {
+          "value": 2,
+          "derivation": "measured"
+        },
+        "manual_tokens": {
+          "value": 12,
+          "derivation": "proxy",
+          "note": "ceil(bytes/4) of human step text"
+        },
+        "commands_to_completion": {
+          "value": 6,
+          "derivation": "measured"
+        },
+        "blocks": {
+          "value": {
+            "self_recovered": 0,
+            "in_band": 1,
+            "out_of_band": 0,
+            "by_design": 0,
+            "dead_end": 0
+          },
+          "derivation": "measured"
+        },
+        "recovery_round_trips": {
+          "value": 0,
+          "derivation": "measured"
+        },
+        "model_runs": {
+          "value": 4,
+          "derivation": "measured"
+        },
+        "human_surface_bytes": {
+          "value": 23436,
+          "derivation": "measured"
+        },
+        "git_subprocesses": {
+          "value": 239,
+          "derivation": "measured"
+        },
+        "latency": {
+          "mcp.review_start": {
+            "samples": 3,
+            "median_ms": 453.786,
+            "p95_ms": 462.213,
+            "samples_ms": [
+              362.453125,
+              453.78600000000006,
+              462.2131669999944
+            ]
+          },
+          "mcp.review_answer_consent": {
+            "samples": 3,
+            "median_ms": 277.906,
+            "p95_ms": 280.492,
+            "samples_ms": [
+              280.4917080000014,
+              277.90587499999674,
+              276.57720800000243
+            ]
+          },
+          "mcp.review_status": {
+            "samples": 3,
+            "median_ms": 164.883,
+            "p95_ms": 167.349,
+            "samples_ms": [
+              164.1012499999997,
+              167.34929099999863,
+              164.88274999999703
+            ]
+          },
+          "mcp.review_capture_group": {
+            "samples": 6,
+            "median_ms": 653.742,
+            "p95_ms": 1104.533,
+            "samples_ms": [
+              343.26608300000225,
+              951.0992500000066,
+              356.38550000000396,
+              1104.5331250000017,
+              344.3160839999982,
+              1085.6792089999944
+            ]
+          },
+          "mcp.review_run": {
+            "samples": 3,
+            "median_ms": 217.401,
+            "p95_ms": 221.63,
+            "samples_ms": [
+              217.40070800000103,
+              217.09674999999697,
+              221.62999999999738
+            ]
+          },
+          "journey.total": {
+            "samples": 3,
+            "median_ms": 2555.298,
+            "p95_ms": 2577.057,
+            "samples_ms": [
+              2318.812124000011,
+              2577.056540999998,
+              2555.298417999984
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": "duplicate-start-guard-during-correction",
+      "status": "passed",
+      "outcome": {
+        "steps": [
+          {
+            "step": "start",
+            "outcome": "consented",
+            "risk": "high",
+            "state": "reviewing",
+            "lenses": 4
+          },
+          {
+            "step": "captureAll",
+            "outcome": "correction_required",
+            "state": "correction_required",
+            "lenses": 4
+          },
+          {
+            "step": "correct",
+            "outcome": "edited"
+          },
+          {
+            "step": "start",
+            "outcome": "refused",
+            "reason": "correction_pending"
+          },
+          {
+            "step": "inspect",
+            "outcome": "inspected",
+            "mode": "off",
+            "lineages": 1
+          }
+        ]
+      },
+      "metrics": {
+        "human_prompts": {
+          "value": 2,
+          "derivation": "measured"
+        },
+        "manual_tokens": {
+          "value": 12,
+          "derivation": "proxy",
+          "note": "ceil(bytes/4) of human step text"
+        },
+        "commands_to_completion": {
+          "value": 7,
+          "derivation": "measured"
+        },
+        "blocks": {
+          "value": {
+            "self_recovered": 0,
+            "in_band": 1,
+            "out_of_band": 0,
+            "by_design": 0,
+            "dead_end": 0
+          },
+          "derivation": "measured"
+        },
+        "recovery_round_trips": {
+          "value": 1,
+          "derivation": "measured"
+        },
+        "model_runs": {
+          "value": 4,
+          "derivation": "measured"
+        },
+        "human_surface_bytes": {
+          "value": 23713,
+          "derivation": "measured"
+        },
+        "git_subprocesses": {
+          "value": 232,
+          "derivation": "measured"
+        },
+        "latency": {
+          "mcp.review_start": {
+            "samples": 6,
+            "median_ms": 258.429,
+            "p95_ms": 540.416,
+            "samples_ms": [
+              540.4157909999994,
+              141.60870799999975,
+              382.72875000000204,
+              141.1287500000035,
+              375.249333000007,
+              139.79550000000017
+            ]
+          },
+          "mcp.review_answer_consent": {
+            "samples": 3,
+            "median_ms": 278.263,
+            "p95_ms": 283.25,
+            "samples_ms": [
+              283.25045800000225,
+              278.26254199999676,
+              277.0278330000001
+            ]
+          },
+          "mcp.review_status": {
+            "samples": 3,
+            "median_ms": 168.941,
+            "p95_ms": 169.664,
+            "samples_ms": [
+              169.6639159999977,
+              164.36987500000396,
+              168.9410829999979
+            ]
+          },
+          "mcp.review_capture_group": {
+            "samples": 6,
+            "median_ms": 638.568,
+            "p95_ms": 960.897,
+            "samples_ms": [
+              347.1989160000012,
+              951.8614589999997,
+              349.21766699999716,
+              923.5628340000039,
+              353.5728339999987,
+              960.8972500000018
+            ]
+          },
+          "mcp.review_inspect": {
+            "samples": 3,
+            "median_ms": 111.396,
+            "p95_ms": 111.699,
+            "samples_ms": [
+              111.69933400000446,
+              110.19841699999961,
+              111.39562499999738
+            ]
+          },
+          "journey.total": {
+            "samples": 3,
+            "median_ms": 2386.879,
+            "p95_ms": 2545.699,
+            "samples_ms": [
+              2545.6985820000045,
+              2349.468835000007,
+              2386.879458000003
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": "binding-drift-mid-run",
+      "status": "passed",
+      "outcome": {
+        "steps": [
+          {
+            "step": "start",
+            "outcome": "consented",
+            "risk": "medium",
+            "state": "reviewing",
+            "lenses": 1
+          },
+          {
+            "step": "correct",
+            "outcome": "edited"
+          },
+          {
+            "step": "resume",
+            "outcome": "refused",
+            "reason": "binding_drift"
+          }
+        ]
+      },
+      "metrics": {
+        "human_prompts": {
+          "value": 1,
+          "derivation": "measured"
+        },
+        "manual_tokens": {
+          "value": 6,
+          "derivation": "proxy",
+          "note": "ceil(bytes/4) of human step text"
+        },
+        "commands_to_completion": {
+          "value": 3,
+          "derivation": "measured"
+        },
+        "blocks": {
+          "value": {
+            "self_recovered": 0,
+            "in_band": 1,
+            "out_of_band": 0,
+            "by_design": 0,
+            "dead_end": 0
+          },
+          "derivation": "measured"
+        },
+        "recovery_round_trips": {
+          "value": 0,
+          "derivation": "measured"
+        },
+        "model_runs": {
+          "value": 0,
+          "derivation": "measured"
+        },
+        "human_surface_bytes": {
+          "value": 2893,
+          "derivation": "measured"
+        },
+        "git_subprocesses": {
+          "value": 69,
+          "derivation": "measured"
+        },
+        "latency": {
+          "mcp.review_start": {
+            "samples": 3,
+            "median_ms": 435.577,
+            "p95_ms": 465.859,
+            "samples_ms": [
+              435.5767500000002,
+              409.1698749999996,
+              465.85854200000176
+            ]
+          },
+          "mcp.review_answer_consent": {
+            "samples": 3,
+            "median_ms": 277.038,
+            "p95_ms": 277.922,
+            "samples_ms": [
+              276.5638749999998,
+              277.03829199999745,
+              277.92225000000326
+            ]
+          },
+          "mcp.review_run": {
+            "samples": 3,
+            "median_ms": 157.453,
+            "p95_ms": 159.885,
+            "samples_ms": [
+              156.76508399999875,
+              159.88479200000438,
+              157.45308400000067
+            ]
+          },
+          "journey.total": {
+            "samples": 3,
+            "median_ms": 868.906,
+            "p95_ms": 901.234,
+            "samples_ms": [
+              868.9057089999988,
+              846.0929590000014,
+              901.2338760000057
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": "binding-drift-after-consent-question",
+      "status": "passed",
+      "outcome": {
+        "steps": [
+          {
+            "step": "start",
+            "outcome": "consent_required",
+            "risk": "medium",
+            "state": "none"
+          },
+          {
+            "step": "correct",
+            "outcome": "edited"
+          },
+          {
+            "step": "answerConsent",
+            "outcome": "refused",
+            "reason": "binding_drift",
+            "state": "none"
+          },
+          {
+            "step": "inspect",
+            "outcome": "inspected",
+            "mode": "off",
+            "lineages": 0
+          }
+        ]
+      },
+      "metrics": {
+        "human_prompts": {
+          "value": 1,
+          "derivation": "measured"
+        },
+        "manual_tokens": {
+          "value": 6,
+          "derivation": "proxy",
+          "note": "ceil(bytes/4) of human step text"
+        },
+        "commands_to_completion": {
+          "value": 3,
+          "derivation": "measured"
+        },
+        "blocks": {
+          "value": {
+            "self_recovered": 0,
+            "in_band": 1,
+            "out_of_band": 0,
+            "by_design": 0,
+            "dead_end": 0
+          },
+          "derivation": "measured"
+        },
+        "recovery_round_trips": {
+          "value": 1,
+          "derivation": "measured"
+        },
+        "model_runs": {
+          "value": 0,
+          "derivation": "measured"
+        },
+        "human_surface_bytes": {
+          "value": 2318,
+          "derivation": "measured"
+        },
+        "git_subprocesses": {
+          "value": 57,
+          "derivation": "measured"
+        },
+        "latency": {
+          "mcp.review_start": {
+            "samples": 3,
+            "median_ms": 489.809,
+            "p95_ms": 559.052,
+            "samples_ms": [
+              559.0518749999974,
+              445.6189999999988,
+              489.8088330000028
+            ]
+          },
+          "mcp.review_answer_consent": {
+            "samples": 3,
+            "median_ms": 214.762,
+            "p95_ms": 220.017,
+            "samples_ms": [
+              220.0170419999995,
+              214.7622080000001,
+              213.78104200000234
+            ]
+          },
+          "mcp.review_inspect": {
+            "samples": 3,
+            "median_ms": 111.503,
+            "p95_ms": 113.668,
+            "samples_ms": [
+              113.66770800000086,
+              110.33075000000099,
+              111.50299999999697
+            ]
+          },
+          "journey.total": {
+            "samples": 3,
+            "median_ms": 815.093,
+            "p95_ms": 892.737,
+            "samples_ms": [
+              892.7366249999977,
+              770.7119579999999,
+              815.0928750000021
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": "gate-push-denied-unreviewed-high-risk",
+      "ref_id": "j05-gate-without-any-review",
+      "status": "passed",
+      "outcome": {
+        "steps": [
+          {
+            "step": "gateCheck",
+            "outcome": "deny",
+            "gate": "deny",
+            "reason": "review_due"
+          }
+        ]
+      },
+      "metrics": {
+        "human_prompts": {
+          "value": 0,
+          "derivation": "measured"
+        },
+        "manual_tokens": {
+          "value": 0,
+          "derivation": "proxy",
+          "note": "ceil(bytes/4) of human step text"
+        },
+        "commands_to_completion": {
+          "value": 1,
+          "derivation": "measured"
+        },
+        "blocks": {
+          "value": {
+            "self_recovered": 0,
+            "in_band": 1,
+            "out_of_band": 0,
+            "by_design": 0,
+            "dead_end": 0
+          },
+          "derivation": "measured"
+        },
+        "recovery_round_trips": {
+          "value": 0,
+          "derivation": "measured"
+        },
+        "model_runs": {
+          "value": 0,
+          "derivation": "measured"
+        },
+        "human_surface_bytes": {
+          "value": 1451,
+          "derivation": "measured"
+        },
+        "git_subprocesses": {
+          "value": 28,
+          "derivation": "measured"
+        },
+        "latency": {
+          "hook.pre_tool_use": {
+            "samples": 3,
+            "median_ms": 241.642,
+            "p95_ms": 242.409,
+            "samples_ms": [
+              241.64220800000476,
+              238.47454100000323,
+              242.4088330000086
+            ]
+          },
+          "journey.total": {
+            "samples": 3,
+            "median_ms": 241.642,
+            "p95_ms": 242.409,
+            "samples_ms": [
+              241.64220800000476,
+              238.47454100000323,
+              242.4088330000086
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": "gate-push-allowed-after-receipt",
+      "status": "passed",
+      "outcome": {
+        "steps": [
+          {
+            "step": "gateCheck",
+            "outcome": "deny",
+            "gate": "deny",
+            "reason": "review_due"
+          },
+          {
+            "step": "start",
+            "outcome": "consented",
+            "risk": "high",
+            "state": "reviewing",
+            "lenses": 4
+          },
+          {
+            "step": "captureAll",
+            "outcome": "approved",
+            "state": "approved",
+            "lenses": 4
+          },
+          {
+            "step": "acknowledge",
+            "outcome": "acknowledged",
+            "state": "burned"
+          },
+          {
+            "step": "gateCheck",
+            "outcome": "allow",
+            "gate": "allow"
+          }
+        ]
+      },
+      "metrics": {
+        "human_prompts": {
+          "value": 2,
+          "derivation": "measured"
+        },
+        "manual_tokens": {
+          "value": 12,
+          "derivation": "proxy",
+          "note": "ceil(bytes/4) of human step text"
+        },
+        "commands_to_completion": {
+          "value": 8,
+          "derivation": "measured"
+        },
+        "blocks": {
+          "value": {
+            "self_recovered": 0,
+            "in_band": 1,
+            "out_of_band": 0,
+            "by_design": 0,
+            "dead_end": 0
+          },
+          "derivation": "measured"
+        },
+        "recovery_round_trips": {
+          "value": 1,
+          "derivation": "measured"
+        },
+        "model_runs": {
+          "value": 4,
+          "derivation": "measured"
+        },
+        "human_surface_bytes": {
+          "value": 26055,
+          "derivation": "measured"
+        },
+        "git_subprocesses": {
+          "value": 230,
+          "derivation": "measured"
+        },
+        "latency": {
+          "hook.pre_tool_use": {
+            "samples": 6,
+            "median_ms": 242.753,
+            "p95_ms": 244.165,
+            "samples_ms": [
+              241.99249999999302,
+              239.3770419999928,
+              243.51279100000102,
+              239.72795800000313,
+              243.6664160000073,
+              244.1647079999966
+            ]
+          },
+          "mcp.review_start": {
+            "samples": 3,
+            "median_ms": 212.069,
+            "p95_ms": 213.737,
+            "samples_ms": [
+              213.73741699999664,
+              208.60145800000464,
+              212.0685419999936
+            ]
+          },
+          "mcp.review_answer_consent": {
+            "samples": 3,
+            "median_ms": 244.322,
+            "p95_ms": 246.091,
+            "samples_ms": [
+              246.09054099999776,
+              240.78404199999932,
+              244.32187499999418
+            ]
+          },
+          "mcp.review_status": {
+            "samples": 3,
+            "median_ms": 147.311,
+            "p95_ms": 149.427,
+            "samples_ms": [
+              147.25820799999929,
+              149.42745799999102,
+              147.31079200000386
+            ]
+          },
+          "mcp.review_capture_group": {
+            "samples": 6,
+            "median_ms": 555.007,
+            "p95_ms": 931.053,
+            "samples_ms": [
+              291.5383339999971,
+              931.0534170000028,
+              293.30199999999604,
+              808.1466669999936,
+              301.86645800000406,
+              825.9572500000068
+            ]
+          },
+          "mcp.review_acknowledge_approved": {
+            "samples": 3,
+            "median_ms": 115.017,
+            "p95_ms": 116.353,
+            "samples_ms": [
+              115.01720899999782,
+              114.04570799999055,
+              116.35349999999744
+            ]
+          },
+          "journey.total": {
+            "samples": 3,
+            "median_ms": 2335.71,
+            "p95_ms": 2426.065,
+            "samples_ms": [
+              2426.0646679999772,
+              2297.5480819999793,
+              2335.709541000004
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": "gate-push-allowed-when-declined",
+      "status": "passed",
+      "outcome": {
+        "steps": [
+          {
+            "step": "gateCheck",
+            "outcome": "deny",
+            "gate": "deny",
+            "reason": "review_due"
+          },
+          {
+            "step": "start",
+            "outcome": "declined",
+            "risk": "high",
+            "state": "declined"
+          },
+          {
+            "step": "gateCheck",
+            "outcome": "allow",
+            "gate": "allow"
+          }
+        ]
+      },
+      "metrics": {
+        "human_prompts": {
+          "value": 1,
+          "derivation": "measured"
+        },
+        "manual_tokens": {
+          "value": 4,
+          "derivation": "proxy",
+          "note": "ceil(bytes/4) of human step text"
+        },
+        "commands_to_completion": {
+          "value": 4,
+          "derivation": "measured"
+        },
+        "blocks": {
+          "value": {
+            "self_recovered": 0,
+            "in_band": 1,
+            "out_of_band": 0,
+            "by_design": 0,
+            "dead_end": 0
+          },
+          "derivation": "measured"
+        },
+        "recovery_round_trips": {
+          "value": 1,
+          "derivation": "measured"
+        },
+        "model_runs": {
+          "value": 0,
+          "derivation": "measured"
+        },
+        "human_surface_bytes": {
+          "value": 3885,
+          "derivation": "measured"
+        },
+        "git_subprocesses": {
+          "value": 100,
+          "derivation": "measured"
+        },
+        "latency": {
+          "hook.pre_tool_use": {
+            "samples": 6,
+            "median_ms": 246.637,
+            "p95_ms": 265.206,
+            "samples_ms": [
+              265.20637500000885,
+              246.0084579999966,
+              244.96558300001197,
+              263.6932499999966,
+              244.5331670000014,
+              247.265916999997
+            ]
+          },
+          "mcp.review_start": {
+            "samples": 3,
+            "median_ms": 211.345,
+            "p95_ms": 259.87,
+            "samples_ms": [
+              259.8696659999987,
+              211.3445420000062,
+              209.19216700000106
+            ]
+          },
+          "mcp.review_answer_consent": {
+            "samples": 3,
+            "median_ms": 224.693,
+            "p95_ms": 244.211,
+            "samples_ms": [
+              244.21083400001226,
+              224.69304099999135,
+              220.87195900001097
+            ]
+          },
+          "journey.total": {
+            "samples": 3,
+            "median_ms": 944.696,
+            "p95_ms": 1015.295,
+            "samples_ms": [
+              1015.2953330000164,
+              944.6964160000061,
+              921.8632100000104
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": "gate-silent-with-rdd-off",
+      "status": "passed",
+      "outcome": {
+        "steps": [
+          {
+            "step": "gateCheck",
+            "outcome": "allow",
+            "gate": "allow"
+          }
+        ]
+      },
+      "metrics": {
+        "human_prompts": {
+          "value": 0,
+          "derivation": "measured"
+        },
+        "manual_tokens": {
+          "value": 0,
+          "derivation": "proxy",
+          "note": "ceil(bytes/4) of human step text"
+        },
+        "commands_to_completion": {
+          "value": 1,
+          "derivation": "measured"
+        },
+        "blocks": {
+          "value": {
+            "self_recovered": 0,
+            "in_band": 0,
+            "out_of_band": 0,
+            "by_design": 0,
+            "dead_end": 0
+          },
+          "derivation": "measured"
+        },
+        "recovery_round_trips": {
+          "value": 0,
+          "derivation": "measured"
+        },
+        "model_runs": {
+          "value": 0,
+          "derivation": "measured"
+        },
+        "human_surface_bytes": {
+          "value": 0,
+          "derivation": "measured"
+        },
+        "git_subprocesses": {
+          "value": 0,
+          "derivation": "measured"
+        },
+        "latency": {
+          "hook.pre_tool_use": {
+            "samples": 3,
+            "median_ms": 70.749,
+            "p95_ms": 71.015,
+            "samples_ms": [
+              70.67004100000486,
+              70.74895800001104,
+              71.01508299999114
+            ]
+          },
+          "journey.total": {
+            "samples": 3,
+            "median_ms": 70.749,
+            "p95_ms": 71.015,
+            "samples_ms": [
+              70.67004100000486,
+              70.74895800001104,
+              71.01508299999114
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": "gate-push-allowed-for-medium-risk-range",
+      "status": "passed",
+      "outcome": {
+        "steps": [
+          {
+            "step": "gateCheck",
+            "outcome": "allow",
+            "gate": "allow"
+          }
+        ]
+      },
+      "metrics": {
+        "human_prompts": {
+          "value": 0,
+          "derivation": "measured"
+        },
+        "manual_tokens": {
+          "value": 0,
+          "derivation": "proxy",
+          "note": "ceil(bytes/4) of human step text"
+        },
+        "commands_to_completion": {
+          "value": 1,
+          "derivation": "measured"
+        },
+        "blocks": {
+          "value": {
+            "self_recovered": 0,
+            "in_band": 0,
+            "out_of_band": 0,
+            "by_design": 0,
+            "dead_end": 0
+          },
+          "derivation": "measured"
+        },
+        "recovery_round_trips": {
+          "value": 0,
+          "derivation": "measured"
+        },
+        "model_runs": {
+          "value": 0,
+          "derivation": "measured"
+        },
+        "human_surface_bytes": {
+          "value": 0,
+          "derivation": "measured"
+        },
+        "git_subprocesses": {
+          "value": 28,
+          "derivation": "measured"
+        },
+        "latency": {
+          "hook.pre_tool_use": {
+            "samples": 3,
+            "median_ms": 244.472,
+            "p95_ms": 245.871,
+            "samples_ms": [
+              244.47158399999898,
+              240.75162499998987,
+              245.87108300000546
+            ]
+          },
+          "journey.total": {
+            "samples": 3,
+            "median_ms": 244.472,
+            "p95_ms": 245.871,
+            "samples_ms": [
+              244.47158399999898,
+              240.75162499998987,
+              245.87108300000546
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": "gate-pr-open-denied-unreviewed",
+      "status": "passed",
+      "outcome": {
+        "steps": [
+          {
+            "step": "gateCheck",
+            "outcome": "deny",
+            "gate": "deny",
+            "reason": "review_due"
+          }
+        ]
+      },
+      "metrics": {
+        "human_prompts": {
+          "value": 0,
+          "derivation": "measured"
+        },
+        "manual_tokens": {
+          "value": 0,
+          "derivation": "proxy",
+          "note": "ceil(bytes/4) of human step text"
+        },
+        "commands_to_completion": {
+          "value": 1,
+          "derivation": "measured"
+        },
+        "blocks": {
+          "value": {
+            "self_recovered": 0,
+            "in_band": 1,
+            "out_of_band": 0,
+            "by_design": 0,
+            "dead_end": 0
+          },
+          "derivation": "measured"
+        },
+        "recovery_round_trips": {
+          "value": 0,
+          "derivation": "measured"
+        },
+        "model_runs": {
+          "value": 0,
+          "derivation": "measured"
+        },
+        "human_surface_bytes": {
+          "value": 1451,
+          "derivation": "measured"
+        },
+        "git_subprocesses": {
+          "value": 26,
+          "derivation": "measured"
+        },
+        "latency": {
+          "hook.pre_tool_use": {
+            "samples": 3,
+            "median_ms": 233.931,
+            "p95_ms": 236.457,
+            "samples_ms": [
+              236.45733399999153,
+              233.93070799999987,
+              230.16049999999814
+            ]
+          },
+          "journey.total": {
+            "samples": 3,
+            "median_ms": 233.931,
+            "p95_ms": 236.457,
+            "samples_ms": [
+              236.45733399999153,
+              233.93070799999987,
+              230.16049999999814
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": "gate-pr-open-allowed-after-receipt",
+      "status": "passed",
+      "outcome": {
+        "steps": [
+          {
+            "step": "gateCheck",
+            "outcome": "deny",
+            "gate": "deny",
+            "reason": "review_due"
+          },
+          {
+            "step": "start",
+            "outcome": "consented",
+            "risk": "high",
+            "state": "reviewing",
+            "lenses": 4
+          },
+          {
+            "step": "captureAll",
+            "outcome": "approved",
+            "state": "approved",
+            "lenses": 4
+          },
+          {
+            "step": "acknowledge",
+            "outcome": "acknowledged",
+            "state": "burned"
+          },
+          {
+            "step": "gateCheck",
+            "outcome": "allow",
+            "gate": "allow"
+          }
+        ]
+      },
+      "metrics": {
+        "human_prompts": {
+          "value": 2,
+          "derivation": "measured"
+        },
+        "manual_tokens": {
+          "value": 12,
+          "derivation": "proxy",
+          "note": "ceil(bytes/4) of human step text"
+        },
+        "commands_to_completion": {
+          "value": 8,
+          "derivation": "measured"
+        },
+        "blocks": {
+          "value": {
+            "self_recovered": 0,
+            "in_band": 1,
+            "out_of_band": 0,
+            "by_design": 0,
+            "dead_end": 0
+          },
+          "derivation": "measured"
+        },
+        "recovery_round_trips": {
+          "value": 1,
+          "derivation": "measured"
+        },
+        "model_runs": {
+          "value": 4,
+          "derivation": "measured"
+        },
+        "human_surface_bytes": {
+          "value": 26055,
+          "derivation": "measured"
+        },
+        "git_subprocesses": {
+          "value": 226,
+          "derivation": "measured"
+        },
+        "latency": {
+          "hook.pre_tool_use": {
+            "samples": 6,
+            "median_ms": 231.197,
+            "p95_ms": 237.429,
+            "samples_ms": [
+              230.14191700000083,
+              230.38320799999929,
+              237.42891699999745,
+              232.0101250000007,
+              230.0355419999978,
+              233.28341699999874
+            ]
+          },
+          "mcp.review_start": {
+            "samples": 3,
+            "median_ms": 210.808,
+            "p95_ms": 211.914,
+            "samples_ms": [
+              211.91441600001417,
+              210.25650000000314,
+              210.80799999999
+            ]
+          },
+          "mcp.review_answer_consent": {
+            "samples": 3,
+            "median_ms": 245.7,
+            "p95_ms": 250.183,
+            "samples_ms": [
+              245.70033300000068,
+              242.19579199999862,
+              250.182541999995
+            ]
+          },
+          "mcp.review_status": {
+            "samples": 3,
+            "median_ms": 147.186,
+            "p95_ms": 158.901,
+            "samples_ms": [
+              147.05037499999162,
+              147.1860000000015,
+              158.90062499999476
+            ]
+          },
+          "mcp.review_capture_group": {
+            "samples": 6,
+            "median_ms": 558.794,
+            "p95_ms": 886.773,
+            "samples_ms": [
+              312.2973750000092,
+              886.7725829999981,
+              294.69337500000256,
+              874.7864580000023,
+              299.705083000008,
+              805.2909590000054
+            ]
+          },
+          "mcp.review_acknowledge_approved": {
+            "samples": 3,
+            "median_ms": 116.503,
+            "p95_ms": 119.696,
+            "samples_ms": [
+              116.50304199999664,
+              115.84366699999373,
+              119.69554099999368
+            ]
+          },
+          "journey.total": {
+            "samples": 3,
+            "median_ms": 2354.401,
+            "p95_ms": 2380.763,
+            "samples_ms": [
+              2380.7632490000105,
+              2354.400834,
+              2307.9017089999834
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": "workspace-review-does-not-authorize-committed-range",
+      "status": "passed",
+      "outcome": {
+        "steps": [
+          {
+            "step": "start",
+            "outcome": "consented",
+            "risk": "high",
+            "state": "reviewing",
+            "lenses": 4
+          },
+          {
+            "step": "captureAll",
+            "outcome": "approved",
+            "state": "approved",
+            "lenses": 4
+          },
+          {
+            "step": "acknowledge",
+            "outcome": "acknowledged",
+            "state": "burned"
+          },
+          {
+            "step": "gateCheck",
+            "outcome": "deny",
+            "gate": "deny",
+            "reason": "review_due"
+          }
+        ]
+      },
+      "metrics": {
+        "human_prompts": {
+          "value": 2,
+          "derivation": "measured"
+        },
+        "manual_tokens": {
+          "value": 12,
+          "derivation": "proxy",
+          "note": "ceil(bytes/4) of human step text"
+        },
+        "commands_to_completion": {
+          "value": 7,
+          "derivation": "measured"
+        },
+        "blocks": {
+          "value": {
+            "self_recovered": 0,
+            "in_band": 1,
+            "out_of_band": 0,
+            "by_design": 0,
+            "dead_end": 0
+          },
+          "derivation": "measured"
+        },
+        "recovery_round_trips": {
+          "value": 0,
+          "derivation": "measured"
+        },
+        "model_runs": {
+          "value": 4,
+          "derivation": "measured"
+        },
+        "human_surface_bytes": {
+          "value": 25730,
+          "derivation": "measured"
+        },
+        "git_subprocesses": {
+          "value": 247,
+          "derivation": "measured"
+        },
+        "latency": {
+          "mcp.review_start": {
+            "samples": 3,
+            "median_ms": 252.993,
+            "p95_ms": 263.171,
+            "samples_ms": [
+              247.1226660000102,
+              263.1712499999994,
+              252.99291699999594
+            ]
+          },
+          "mcp.review_answer_consent": {
+            "samples": 3,
+            "median_ms": 277.83,
+            "p95_ms": 286.85,
+            "samples_ms": [
+              276.7509579999896,
+              286.84966600000917,
+              277.83029199999874
+            ]
+          },
+          "mcp.review_status": {
+            "samples": 3,
+            "median_ms": 165.706,
+            "p95_ms": 170.889,
+            "samples_ms": [
+              165.29750000000058,
+              165.70612499999697,
+              170.88874999999825
+            ]
+          },
+          "mcp.review_capture_group": {
+            "samples": 6,
+            "median_ms": 645.08,
+            "p95_ms": 978.662,
+            "samples_ms": [
+              353.9184169999935,
+              935.4807500000024,
+              354.67937499999243,
+              935.9963330000028,
+              350.89608299999963,
+              978.6622079999943
+            ]
+          },
+          "mcp.review_acknowledge_approved": {
+            "samples": 3,
+            "median_ms": 115.841,
+            "p95_ms": 119.14,
+            "samples_ms": [
+              119.1399170000077,
+              114.70604200000525,
+              115.84070800000336
+            ]
+          },
+          "hook.pre_tool_use": {
+            "samples": 3,
+            "median_ms": 243.777,
+            "p95_ms": 247.937,
+            "samples_ms": [
+              243.38933299999917,
+              247.9369580000057,
+              243.77708300000813
+            ]
+          },
+          "journey.total": {
+            "samples": 3,
+            "median_ms": 2369.046,
+            "p95_ms": 2390.888,
+            "samples_ms": [
+              2341.0995410000032,
+              2369.0457490000117,
+              2390.8880409999983
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": "stop-reminds-once-per-session-and-candidate",
+      "ref_id": "j125-claude-code-stop-hook-reminds-once-per-candidate",
+      "status": "passed",
+      "outcome": {
+        "steps": [
+          {
+            "step": "stopHook",
+            "outcome": "remind"
+          },
+          {
+            "step": "stopHook",
+            "outcome": "silent"
+          },
+          {
+            "step": "correct",
+            "outcome": "edited"
+          },
+          {
+            "step": "stopHook",
+            "outcome": "remind"
+          },
+          {
+            "step": "stopHook",
+            "outcome": "remind"
+          }
+        ]
+      },
+      "metrics": {
+        "human_prompts": {
+          "value": 0,
+          "derivation": "measured"
+        },
+        "manual_tokens": {
+          "value": 0,
+          "derivation": "proxy",
+          "note": "ceil(bytes/4) of human step text"
+        },
+        "commands_to_completion": {
+          "value": 4,
+          "derivation": "measured"
+        },
+        "blocks": {
+          "value": {
+            "self_recovered": 0,
+            "in_band": 3,
+            "out_of_band": 0,
+            "by_design": 0,
+            "dead_end": 0
+          },
+          "derivation": "measured"
+        },
+        "recovery_round_trips": {
+          "value": 1,
+          "derivation": "measured"
+        },
+        "model_runs": {
+          "value": 0,
+          "derivation": "measured"
+        },
+        "human_surface_bytes": {
+          "value": 4212,
+          "derivation": "measured"
+        },
+        "git_subprocesses": {
+          "value": 144,
+          "derivation": "measured"
+        },
+        "latency": {
+          "hook.stop": {
+            "samples": 12,
+            "median_ms": 304.692,
+            "p95_ms": 339.928,
+            "samples_ms": [
+              302.21808299999975,
+              295.5194579999952,
+              298.79729100000986,
+              308.2401660000032,
+              339.9276669999963,
+              330.16658299999835,
+              329.5789999999979,
+              327.2091669999936,
+              307.1657910000067,
+              297.98966700000165,
+              298.2485420000012,
+              299.3869160000031
+            ]
+          },
+          "journey.total": {
+            "samples": 3,
+            "median_ms": 1204.775,
+            "p95_ms": 1326.882,
+            "samples_ms": [
+              1204.774998000008,
+              1326.8824169999862,
+              1202.7909160000127
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": "stop-silent-with-rdd-off",
+      "status": "passed",
+      "outcome": {
+        "steps": [
+          {
+            "step": "stopHook",
+            "outcome": "silent"
+          }
+        ]
+      },
+      "metrics": {
+        "human_prompts": {
+          "value": 0,
+          "derivation": "measured"
+        },
+        "manual_tokens": {
+          "value": 0,
+          "derivation": "proxy",
+          "note": "ceil(bytes/4) of human step text"
+        },
+        "commands_to_completion": {
+          "value": 1,
+          "derivation": "measured"
+        },
+        "blocks": {
+          "value": {
+            "self_recovered": 0,
+            "in_band": 0,
+            "out_of_band": 0,
+            "by_design": 0,
+            "dead_end": 0
+          },
+          "derivation": "measured"
+        },
+        "recovery_round_trips": {
+          "value": 0,
+          "derivation": "measured"
+        },
+        "model_runs": {
+          "value": 0,
+          "derivation": "measured"
+        },
+        "human_surface_bytes": {
+          "value": 0,
+          "derivation": "measured"
+        },
+        "git_subprocesses": {
+          "value": 0,
+          "derivation": "measured"
+        },
+        "latency": {
+          "hook.stop": {
+            "samples": 3,
+            "median_ms": 72.318,
+            "p95_ms": 72.366,
+            "samples_ms": [
+              72.36608299998625,
+              72.31845899998734,
+              72.06758299999638
+            ]
+          },
+          "journey.total": {
+            "samples": 3,
+            "median_ms": 72.318,
+            "p95_ms": 72.366,
+            "samples_ms": [
+              72.36608299998625,
+              72.31845899998734,
+              72.06758299999638
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": "rdd-mode-global-and-clone-scopes",
+      "ref_id": "j119-global-review-mode-status-reports-persisted-source",
+      "status": "passed",
+      "outcome": {
+        "steps": [
+          {
+            "step": "modeSet",
+            "outcome": "mode_set",
+            "mode": "on"
+          },
+          {
+            "step": "modeSet",
+            "outcome": "mode_set",
+            "mode": "off"
+          },
+          {
+            "step": "inspect",
+            "outcome": "inspected",
+            "mode": "off",
+            "lineages": 0
+          },
+          {
+            "step": "modeSet",
+            "outcome": "mode_set",
+            "mode": "on"
+          },
+          {
+            "step": "inspect",
+            "outcome": "inspected",
+            "mode": "on",
+            "lineages": 0
+          }
+        ]
+      },
+      "metrics": {
+        "human_prompts": {
+          "value": 0,
+          "derivation": "measured"
+        },
+        "manual_tokens": {
+          "value": 0,
+          "derivation": "proxy",
+          "note": "ceil(bytes/4) of human step text"
+        },
+        "commands_to_completion": {
+          "value": 5,
+          "derivation": "measured"
+        },
+        "blocks": {
+          "value": {
+            "self_recovered": 0,
+            "in_band": 0,
+            "out_of_band": 0,
+            "by_design": 0,
+            "dead_end": 0
+          },
+          "derivation": "measured"
+        },
+        "recovery_round_trips": {
+          "value": 0,
+          "derivation": "measured"
+        },
+        "model_runs": {
+          "value": 0,
+          "derivation": "measured"
+        },
+        "human_surface_bytes": {
+          "value": 747,
+          "derivation": "measured"
+        },
+        "git_subprocesses": {
+          "value": 27,
+          "derivation": "measured"
+        },
+        "latency": {
+          "hook.review_mode": {
+            "samples": 9,
+            "median_ms": 111.24,
+            "p95_ms": 288.606,
+            "samples_ms": [
+              223.00112499999523,
+              111.46050000000105,
+              107.16754200001014,
+              288.60566599998856,
+              111.23983299999963,
+              106.1608339999948,
+              199.34395799999766,
+              110.25787500001024,
+              105.3183330000029
+            ]
+          },
+          "mcp.review_inspect": {
+            "samples": 6,
+            "median_ms": 111.301,
+            "p95_ms": 113.954,
+            "samples_ms": [
+              113.85533400000713,
+              111.47529200000281,
+              109.95837500000198,
+              111.12766699999338,
+              113.9542919999949,
+              110.13391600000614
+            ]
+          },
+          "journey.total": {
+            "samples": 3,
+            "median_ms": 666.96,
+            "p95_ms": 727.092,
+            "samples_ms": [
+              666.9597930000164,
+              727.0923749999783,
+              639.0083740000118
+            ]
+          }
+        }
+      }
+    }
+  ],
+  "aggregate": {
+    "counts": {
+      "passed": 23,
+      "failed": 0,
+      "unsupported": 0
+    },
+    "metrics": {
+      "human_prompts": {
+        "value": 25,
+        "derivation": "measured"
+      },
+      "manual_tokens": {
+        "value": 145,
+        "derivation": "proxy"
+      },
+      "commands_to_completion": {
+        "value": 102,
+        "derivation": "measured"
+      },
+      "blocks": {
+        "value": {
+          "self_recovered": 0,
+          "in_band": 13,
+          "out_of_band": 0,
+          "by_design": 0,
+          "dead_end": 0
+        },
+        "derivation": "measured"
+      },
+      "recovery_round_trips": {
+        "value": 6,
+        "derivation": "measured"
+      },
+      "model_runs": {
+        "value": 33,
+        "derivation": "measured"
+      },
+      "human_surface_bytes": {
+        "value": 255190,
+        "derivation": "measured"
+      },
+      "git_subprocesses": {
+        "value": 2867,
+        "derivation": "measured"
+      },
+      "latency": {
+        "mcp.review_assess": {
+          "samples": 6,
+          "median_ms": 229.814,
+          "p95_ms": 3283.604,
+          "samples_ms": [
+            3283.603792,
+            188.0710409999997,
+            179.82225000000017,
+            192.71708299999955,
+            281.4690420000006,
+            266.91166599999997
+          ]
+        },
+        "mcp.review_start": {
+          "samples": 54,
+          "median_ms": 365.971,
+          "p95_ms": 559.052,
+          "samples_ms": [
+            289.1928750000002,
+            311.96008299999994,
+            281.74883299999965,
+            244.88958400000047,
+            253.67141700000047,
+            242.47433400000045,
+            558.7612910000007,
+            406.1334999999999,
+            393.05304199999955,
+            383.5101250000007,
+            402.731584000001,
+            334.1669170000023,
+            424.2727079999968,
+            428.50524999999834,
+            372.27545800000007,
+            405.0064170000005,
+            242.46925000000192,
+            396.4653339999968,
+            245.06104200000118,
+            376.674583,
+            246.3139169999995,
+            369.48875000000044,
+            1009.4363749999975,
+            664.9398329999967,
+            474.20875000000524,
+            550.4784169999984,
+            356.6103329999969,
+            362.453125,
+            453.78600000000006,
+            462.2131669999944,
+            540.4157909999994,
+            141.60870799999975,
+            382.72875000000204,
+            141.1287500000035,
+            375.249333000007,
+            139.79550000000017,
+            435.5767500000002,
+            409.1698749999996,
+            465.85854200000176,
+            559.0518749999974,
+            445.6189999999988,
+            489.8088330000028,
+            213.73741699999664,
+            208.60145800000464,
+            212.0685419999936,
+            259.8696659999987,
+            211.3445420000062,
+            209.19216700000106,
+            211.91441600001417,
+            210.25650000000314,
+            210.80799999999,
+            247.1226660000102,
+            263.1712499999994,
+            252.99291699999594
+          ]
+        },
+        "mcp.review_acknowledge_approved": {
+          "samples": 21,
+          "median_ms": 115.841,
+          "p95_ms": 119.72,
+          "samples_ms": [
+            119.7197500000002,
+            124.95970899999975,
+            117.03433300000052,
+            114.85329099999944,
+            114.78329200000007,
+            112.94183299999895,
+            118.32974999999897,
+            113.66287499999999,
+            115.19466599999942,
+            118.05774999999994,
+            115.40929199999664,
+            115.17441699999472,
+            115.01720899999782,
+            114.04570799999055,
+            116.35349999999744,
+            116.50304199999664,
+            115.84366699999373,
+            119.69554099999368,
+            119.1399170000077,
+            114.70604200000525,
+            115.84070800000336
+          ]
+        },
+        "journey.total": {
+          "samples": 69,
+          "median_ms": 1015.295,
+          "p95_ms": 2944.084,
+          "samples_ms": [
+            3692.5164170000003,
+            624.9908329999994,
+            578.6054160000003,
+            1921.587623999998,
+            1998.0215430000017,
+            1979.8578340000004,
+            2689.1737099999973,
+            2500.0153329999994,
+            2427.8122489999987,
+            1907.8101669999996,
+            1893.8777089999967,
+            1955.1511679999967,
+            954.6862489999985,
+            927.843291000001,
+            873.1126250000016,
+            924.9855420000022,
+            921.0112090000002,
+            901.1745420000007,
+            1452.0898760000018,
+            2185.6036659999954,
+            1969.8142089999892,
+            3042.1155010000075,
+            3138.611414999985,
+            2944.083541,
+            2318.812124000011,
+            2577.056540999998,
+            2555.298417999984,
+            2545.6985820000045,
+            2349.468835000007,
+            2386.879458000003,
+            868.9057089999988,
+            846.0929590000014,
+            901.2338760000057,
+            892.7366249999977,
+            770.7119579999999,
+            815.0928750000021,
+            241.64220800000476,
+            238.47454100000323,
+            242.4088330000086,
+            2426.0646679999772,
+            2297.5480819999793,
+            2335.709541000004,
+            1015.2953330000164,
+            944.6964160000061,
+            921.8632100000104,
+            70.67004100000486,
+            70.74895800001104,
+            71.01508299999114,
+            244.47158399999898,
+            240.75162499998987,
+            245.87108300000546,
+            236.45733399999153,
+            233.93070799999987,
+            230.16049999999814,
+            2380.7632490000105,
+            2354.400834,
+            2307.9017089999834,
+            2341.0995410000032,
+            2369.0457490000117,
+            2390.8880409999983,
+            1204.774998000008,
+            1326.8824169999862,
+            1202.7909160000127,
+            72.36608299998625,
+            72.31845899998734,
+            72.06758299999638,
+            666.9597930000164,
+            727.0923749999783,
+            639.0083740000118
+          ]
+        },
+        "mcp.review_answer_consent": {
+          "samples": 42,
+          "median_ms": 276.645,
+          "p95_ms": 292.347,
+          "samples_ms": [
+            272.55291599999964,
+            277.80312499999945,
+            278.221207999999,
+            323.10033400000066,
+            298.1115829999999,
+            277.10829100000046,
+            292.3472079999992,
+            276.0136249999996,
+            278.67620799999713,
+            259.278416000001,
+            253.70841700000165,
+            255.59245900000315,
+            274.83641700000226,
+            278.47933300000295,
+            276.7126669999998,
+            271.3307910000003,
+            282.1600410000028,
+            278.0815420000072,
+            280.4917080000014,
+            277.90587499999674,
+            276.57720800000243,
+            283.25045800000225,
+            278.26254199999676,
+            277.0278330000001,
+            276.5638749999998,
+            277.03829199999745,
+            277.92225000000326,
+            220.0170419999995,
+            214.7622080000001,
+            213.78104200000234,
+            246.09054099999776,
+            240.78404199999932,
+            244.32187499999418,
+            244.21083400001226,
+            224.69304099999135,
+            220.87195900001097,
+            245.70033300000068,
+            242.19579199999862,
+            250.182541999995,
+            276.7509579999896,
+            286.84966600000917,
+            277.83029199999874
+          ]
+        },
+        "mcp.review_status": {
+          "samples": 36,
+          "median_ms": 164.626,
+          "p95_ms": 179.551,
+          "samples_ms": [
+            149.06074999999964,
+            145.2856670000001,
+            145.94216700000106,
+            179.55104199999914,
+            165.49895899999865,
+            185.83216699999866,
+            175.5271670000002,
+            165.94554199999766,
+            165.65958300000057,
+            162.8050000000003,
+            152.1197919999977,
+            151.7956669999985,
+            149.5892500000009,
+            136.89804100000038,
+            136.21391599999697,
+            169.5757080000003,
+            169.5447920000006,
+            167.8925420000014,
+            164.01774999999907,
+            165.3768329999948,
+            165.16058299999713,
+            164.1012499999997,
+            167.34929099999863,
+            164.88274999999703,
+            169.6639159999977,
+            164.36987500000396,
+            168.9410829999979,
+            147.25820799999929,
+            149.42745799999102,
+            147.31079200000386,
+            147.05037499999162,
+            147.1860000000015,
+            158.90062499999476,
+            165.29750000000058,
+            165.70612499999697,
+            170.88874999999825
+          ]
+        },
+        "mcp.review_capture": {
+          "samples": 9,
+          "median_ms": 521.437,
+          "p95_ms": 630.854,
+          "samples_ms": [
+            316.6595419999994,
+            630.8544579999998,
+            314.8923330000007,
+            610.1166670000002,
+            315.3214590000007,
+            618.0451670000002,
+            523.4892919999984,
+            516.9459580000039,
+            521.4367500000008
+          ]
+        },
+        "mcp.review_capture_group": {
+          "samples": 48,
+          "median_ms": 581.863,
+          "p95_ms": 990.134,
+          "samples_ms": [
+            353.7982090000005,
+            990.1341249999987,
+            356.1583750000009,
+            964.5896659999999,
+            344.65287499999977,
+            966.1982500000013,
+            348.0977090000015,
+            721.0501249999979,
+            328.97529099999883,
+            734.0374169999996,
+            442.6755840000005,
+            747.8367919999982,
+            343.7990839999984,
+            909.2259170000034,
+            343.28704099999595,
+            924.0111249999973,
+            344.9709160000057,
+            926.7319999999963,
+            343.26608300000225,
+            951.0992500000066,
+            356.38550000000396,
+            1104.5331250000017,
+            344.3160839999982,
+            1085.6792089999944,
+            347.1989160000012,
+            951.8614589999997,
+            349.21766699999716,
+            923.5628340000039,
+            353.5728339999987,
+            960.8972500000018,
+            291.5383339999971,
+            931.0534170000028,
+            293.30199999999604,
+            808.1466669999936,
+            301.86645800000406,
+            825.9572500000068,
+            312.2973750000092,
+            886.7725829999981,
+            294.69337500000256,
+            874.7864580000023,
+            299.705083000008,
+            805.2909590000054,
+            353.9184169999935,
+            935.4807500000024,
+            354.67937499999243,
+            935.9963330000028,
+            350.89608299999963,
+            978.6622079999943
+          ]
+        },
+        "mcp.review_inspect": {
+          "samples": 18,
+          "median_ms": 110.729,
+          "p95_ms": 121.546,
+          "samples_ms": [
+            121.5458749999998,
+            108.73158300000068,
+            109.03079200000138,
+            107.93416699999943,
+            109.94004100000166,
+            110.29349999999977,
+            111.69933400000446,
+            110.19841699999961,
+            111.39562499999738,
+            113.66770800000086,
+            110.33075000000099,
+            111.50299999999697,
+            113.85533400000713,
+            111.47529200000281,
+            109.95837500000198,
+            111.12766699999338,
+            113.9542919999949,
+            110.13391600000614
+          ]
+        },
+        "mcp.review_run": {
+          "samples": 15,
+          "median_ms": 227.868,
+          "p95_ms": 799.697,
+          "samples_ms": [
+            227.526167,
+            580.2385419999991,
+            227.86820799999987,
+            669.8197499999951,
+            228.4649169999975,
+            799.6967919999952,
+            237.98616700000275,
+            240.94270799999504,
+            235.91700000000128,
+            217.40070800000103,
+            217.09674999999697,
+            221.62999999999738,
+            156.76508399999875,
+            159.88479200000438,
+            157.45308400000067
+          ]
+        },
+        "hook.pre_tool_use": {
+          "samples": 33,
+          "median_ms": 241.642,
+          "p95_ms": 263.693,
+          "samples_ms": [
+            241.64220800000476,
+            238.47454100000323,
+            242.4088330000086,
+            241.99249999999302,
+            239.3770419999928,
+            243.51279100000102,
+            239.72795800000313,
+            243.6664160000073,
+            244.1647079999966,
+            265.20637500000885,
+            246.0084579999966,
+            244.96558300001197,
+            263.6932499999966,
+            244.5331670000014,
+            247.265916999997,
+            70.67004100000486,
+            70.74895800001104,
+            71.01508299999114,
+            244.47158399999898,
+            240.75162499998987,
+            245.87108300000546,
+            236.45733399999153,
+            233.93070799999987,
+            230.16049999999814,
+            230.14191700000083,
+            230.38320799999929,
+            237.42891699999745,
+            232.0101250000007,
+            230.0355419999978,
+            233.28341699999874,
+            243.38933299999917,
+            247.9369580000057,
+            243.77708300000813
+          ]
+        },
+        "hook.stop": {
+          "samples": 15,
+          "median_ms": 299.387,
+          "p95_ms": 339.928,
+          "samples_ms": [
+            302.21808299999975,
+            295.5194579999952,
+            298.79729100000986,
+            308.2401660000032,
+            339.9276669999963,
+            330.16658299999835,
+            329.5789999999979,
+            327.2091669999936,
+            307.1657910000067,
+            297.98966700000165,
+            298.2485420000012,
+            299.3869160000031,
+            72.36608299998625,
+            72.31845899998734,
+            72.06758299999638
+          ]
+        },
+        "hook.review_mode": {
+          "samples": 9,
+          "median_ms": 111.24,
+          "p95_ms": 288.606,
+          "samples_ms": [
+            223.00112499999523,
+            111.46050000000105,
+            107.16754200001014,
+            288.60566599998856,
+            111.23983299999963,
+            106.1608339999948,
+            199.34395799999766,
+            110.25787500001024,
+            105.3183330000029
+          ]
+        }
+      }
+    }
+  }
+}

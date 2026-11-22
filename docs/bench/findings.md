@@ -109,3 +109,15 @@ Caveat to state in the task: A fixes the 6 vs 3 count (becomes 0 vs 3) but moves
 - Reviewer outputs are synthesized; model quality and real model cost are out of scope. `model_runs` counts runs, not tokens or money.
 - `git_subprocesses` counts only calls through the sandbox `PATH` shim.
 - The saved `oracle.json` predates the `not_comparable` mark, so its two gate-allow rows were annotated by hand with the mark the bench now records on its own (the reason string is `UNMANAGED_GATE_REASON`), and its binary path was rewritten to `~/...` (no username). Nothing was rerun; every measurement in it is as recorded.
+
+## 2.1.0 re-run (2026-11-21)
+
+Source: `docs/bench/baseline-2026-11-21/` (K=3, odd 2.1.0 at main a813872, oracle `gentle-ai` 4.6.0, darwin arm64, node v26.12.1). The sections above are kept as the 2.0.0 baseline.
+
+- Comparable 10 of 23, outcomes equal on all 10.
+- git subprocesses: 1475 vs 3692, better 10 of 10 (was 9 better, 1 equal; 1478 before).
+- commands to completion: 50 vs 70. Bytes shown: 130382 vs 230765. Model runs: 17 vs 19.
+- Latency: median ratio 0.71 (was 0.74). Stop with RDD off: 72.3 ms (was 182.5 ms), still a ratio of about 2 against the oracle because of the ~67 ms node start floor.
+- `rdd-mode-global-and-clone-scopes` showed 1.30 at K=3; the K=10 confirmation (`confirm-k10.report.md`) gives 877.4 vs 706.6 ms, ratio 1.24, equal. In the same run `stop-silent-with-rdd-off` is 80.3 vs 40.3 ms, ratio 1.99 (node start floor).
+- human_prompts and manual_tokens remain worse by design (the forecast approval is kept).
+- Hook start-up (`hook-startup.md` method): UserPromptSubmit loads 15 modules in 4.6 ms, SessionStart 25 modules in 8.3 ms, the other hooks 6 to 9 modules in about 3.2 to 3.7 ms. Total per hook 71 to 78 ms, of which node itself is about 67 ms.

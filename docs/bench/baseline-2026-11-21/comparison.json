@@ -1,0 +1,1825 @@
+{
+  "schema": "odd-claude.bench-comparison/v1",
+  "odd": {
+    "subject": "odd",
+    "binary": {
+      "path": "~/Developer/03-PERSONAL/odd-claude/plugins/odd-claude/dist/mcp/review-server.js",
+      "version": "2.1.0"
+    },
+    "node": "v26.12.1",
+    "os": {
+      "platform": "darwin",
+      "arch": "arm64",
+      "release": "27.2.0"
+    },
+    "commit": "a813872d27d8b1418802f3eb53ea3b9ed715ace4",
+    "started_at": "2026-11-22T00:31:02.148Z",
+    "repeats": 3
+  },
+  "oracle": {
+    "subject": "oracle",
+    "binary": {
+      "path": "~/.local/share/odd-claude-oracle/gentle-ai-4.6.0/bin/gentle-ai",
+      "version": "4.6.0"
+    },
+    "node": "v26.12.1",
+    "os": {
+      "platform": "darwin",
+      "arch": "arm64",
+      "release": "27.2.0"
+    },
+    "commit": "binary-only",
+    "started_at": "2026-11-22T00:33:13.599Z",
+    "repeats": 3
+  },
+  "thresholds": {
+    "default": {
+      "relative": 0,
+      "absolute": 0
+    },
+    "per_metric": {
+      "human_surface_bytes": {
+        "relative": 0.1,
+        "absolute": 0
+      },
+      "manual_tokens": {
+        "relative": 0.1,
+        "absolute": 0
+      }
+    },
+    "latency": {
+      "tolerance": 0.25,
+      "floor_ms": 5
+    }
+  },
+  "journeys": [
+    {
+      "id": "low-risk-closes-with-zero-lenses",
+      "kind": "comparable",
+      "outcome": "equal",
+      "metrics": {
+        "human_prompts": {
+          "odd": 0,
+          "oracle": 0,
+          "verdict": "equal"
+        },
+        "manual_tokens": {
+          "odd": 0,
+          "oracle": 0,
+          "verdict": "equal"
+        },
+        "commands_to_completion": {
+          "odd": 3,
+          "oracle": 4,
+          "verdict": "better"
+        },
+        "recovery_round_trips": {
+          "odd": 0,
+          "oracle": 0,
+          "verdict": "equal"
+        },
+        "model_runs": {
+          "odd": 0,
+          "oracle": 0,
+          "verdict": "equal"
+        },
+        "human_surface_bytes": {
+          "odd": 2667,
+          "oracle": 8037,
+          "verdict": "better"
+        },
+        "git_subprocesses": {
+          "odd": 44,
+          "oracle": 94,
+          "verdict": "better"
+        },
+        "blocks": {
+          "odd": 0,
+          "oracle": 0,
+          "verdict": "equal"
+        }
+      },
+      "latency": {
+        "mcp.review_assess": {
+          "odd": {
+            "samples": 3,
+            "median_ms": 188.071,
+            "p95_ms": 3283.604
+          },
+          "ratio": null,
+          "verdict": "not_comparable"
+        },
+        "mcp.review_start": {
+          "odd": {
+            "samples": 3,
+            "median_ms": 289.193,
+            "p95_ms": 311.96
+          },
+          "ratio": null,
+          "verdict": "not_comparable"
+        },
+        "mcp.review_acknowledge_approved": {
+          "odd": {
+            "samples": 3,
+            "median_ms": 119.72,
+            "p95_ms": 124.96
+          },
+          "ratio": null,
+          "verdict": "not_comparable"
+        },
+        "journey.total": {
+          "odd": {
+            "samples": 3,
+            "median_ms": 624.991,
+            "p95_ms": 3692.516
+          },
+          "oracle": {
+            "samples": 3,
+            "median_ms": 906.44,
+            "p95_ms": 981.514
+          },
+          "ratio": 0.69,
+          "verdict": "better"
+        }
+      }
+    },
+    {
+      "id": "medium-risk-one-lens-consent-capture-ack",
+      "kind": "comparable",
+      "outcome": "equal",
+      "metrics": {
+        "human_prompts": {
+          "odd": 2,
+          "oracle": 1,
+          "verdict": "worse"
+        },
+        "manual_tokens": {
+          "odd": 12,
+          "oracle": 6,
+          "verdict": "worse"
+        },
+        "commands_to_completion": {
+          "odd": 7,
+          "oracle": 7,
+          "verdict": "equal"
+        },
+        "recovery_round_trips": {
+          "odd": 0,
+          "oracle": 0,
+          "verdict": "equal"
+        },
+        "model_runs": {
+          "odd": 1,
+          "oracle": 1,
+          "verdict": "equal"
+        },
+        "human_surface_bytes": {
+          "odd": 12514,
+          "oracle": 20520,
+          "verdict": "better"
+        },
+        "git_subprocesses": {
+          "odd": 177,
+          "oracle": 290,
+          "verdict": "better"
+        },
+        "blocks": {
+          "odd": 0,
+          "oracle": 0,
+          "verdict": "equal"
+        }
+      },
+      "latency": {
+        "mcp.review_assess": {
+          "odd": {
+            "samples": 3,
+            "median_ms": 266.912,
+            "p95_ms": 281.469
+          },
+          "ratio": null,
+          "verdict": "not_comparable"
+        },
+        "mcp.review_start": {
+          "odd": {
+            "samples": 3,
+            "median_ms": 244.89,
+            "p95_ms": 253.671
+          },
+          "ratio": null,
+          "verdict": "not_comparable"
+        },
+        "mcp.review_answer_consent": {
+          "odd": {
+            "samples": 3,
+            "median_ms": 277.803,
+            "p95_ms": 278.221
+          },
+          "ratio": null,
+          "verdict": "not_comparable"
+        },
+        "mcp.review_status": {
+          "odd": {
+            "samples": 3,
+            "median_ms": 145.942,
+            "p95_ms": 149.061
+          },
+          "ratio": null,
+          "verdict": "not_comparable"
+        },
+        "mcp.review_capture": {
+          "odd": {
+            "samples": 6,
+            "median_ms": 463.388,
+            "p95_ms": 630.854
+          },
+          "ratio": null,
+          "verdict": "not_comparable"
+        },
+        "mcp.review_acknowledge_approved": {
+          "odd": {
+            "samples": 3,
+            "median_ms": 114.783,
+            "p95_ms": 114.853
+          },
+          "ratio": null,
+          "verdict": "not_comparable"
+        },
+        "journey.total": {
+          "odd": {
+            "samples": 3,
+            "median_ms": 1979.858,
+            "p95_ms": 1998.022
+          },
+          "oracle": {
+            "samples": 3,
+            "median_ms": 2730.922,
+            "p95_ms": 2832.445
+          },
+          "ratio": 0.725,
+          "verdict": "better"
+        }
+      }
+    },
+    {
+      "id": "high-risk-four-lens-group",
+      "kind": "comparable",
+      "outcome": "equal",
+      "metrics": {
+        "human_prompts": {
+          "odd": 2,
+          "oracle": 1,
+          "verdict": "worse"
+        },
+        "manual_tokens": {
+          "odd": 12,
+          "oracle": 6,
+          "verdict": "worse"
+        },
+        "commands_to_completion": {
+          "odd": 7,
+          "oracle": 10,
+          "verdict": "better"
+        },
+        "recovery_round_trips": {
+          "odd": 0,
+          "oracle": 0,
+          "verdict": "equal"
+        },
+        "model_runs": {
+          "odd": 4,
+          "oracle": 4,
+          "verdict": "equal"
+        },
+        "human_surface_bytes": {
+          "odd": 40817,
+          "oracle": 48019,
+          "verdict": "better"
+        },
+        "git_subprocesses": {
+          "odd": 233,
+          "oracle": 547,
+          "verdict": "better"
+        },
+        "blocks": {
+          "odd": 0,
+          "oracle": 0,
+          "verdict": "equal"
+        }
+      },
+      "latency": {
+        "mcp.review_start": {
+          "odd": {
+            "samples": 3,
+            "median_ms": 406.133,
+            "p95_ms": 558.761
+          },
+          "ratio": null,
+          "verdict": "not_comparable"
+        },
+        "mcp.review_answer_consent": {
+          "odd": {
+            "samples": 3,
+            "median_ms": 298.112,
+            "p95_ms": 323.1
+          },
+          "ratio": null,
+          "verdict": "not_comparable"
+        },
+        "mcp.review_status": {
+          "odd": {
+            "samples": 6,
+            "median_ms": 170.736,
+            "p95_ms": 185.832
+          },
+          "ratio": null,
+          "verdict": "not_comparable"
+        },
+        "mcp.review_capture_group": {
+          "odd": {
+            "samples": 6,
+            "median_ms": 660.374,
+            "p95_ms": 990.134
+          },
+          "ratio": null,
+          "verdict": "not_comparable"
+        },
+        "mcp.review_acknowledge_approved": {
+          "odd": {
+            "samples": 3,
+            "median_ms": 115.195,
+            "p95_ms": 118.33
+          },
+          "ratio": null,
+          "verdict": "not_comparable"
+        },
+        "journey.total": {
+          "odd": {
+            "samples": 3,
+            "median_ms": 2500.015,
+            "p95_ms": 2689.174
+          },
+          "oracle": {
+            "samples": 3,
+            "median_ms": 4528.507,
+            "p95_ms": 4555.99
+          },
+          "ratio": 0.552,
+          "verdict": "better"
+        }
+      }
+    },
+    {
+      "id": "explicit-lens-selection-narrows-review",
+      "kind": "comparable",
+      "outcome": "equal",
+      "metrics": {
+        "human_prompts": {
+          "odd": 2,
+          "oracle": 1,
+          "verdict": "worse"
+        },
+        "manual_tokens": {
+          "odd": 12,
+          "oracle": 6,
+          "verdict": "worse"
+        },
+        "commands_to_completion": {
+          "odd": 5,
+          "oracle": 6,
+          "verdict": "better"
+        },
+        "recovery_round_trips": {
+          "odd": 0,
+          "oracle": 0,
+          "verdict": "equal"
+        },
+        "model_runs": {
+          "odd": 2,
+          "oracle": 2,
+          "verdict": "equal"
+        },
+        "human_surface_bytes": {
+          "odd": 15026,
+          "oracle": 24762,
+          "verdict": "better"
+        },
+        "git_subprocesses": {
+          "odd": 178,
+          "oracle": 331,
+          "verdict": "better"
+        },
+        "blocks": {
+          "odd": 0,
+          "oracle": 0,
+          "verdict": "equal"
+        }
+      },
+      "latency": {
+        "mcp.review_start": {
+          "odd": {
+            "samples": 3,
+            "median_ms": 383.51,
+            "p95_ms": 402.732
+          },
+          "ratio": null,
+          "verdict": "not_comparable"
+        },
+        "mcp.review_answer_consent": {
+          "odd": {
+            "samples": 3,
+            "median_ms": 278.676,
+            "p95_ms": 292.347
+          },
+          "ratio": null,
+          "verdict": "not_comparable"
+        },
+        "mcp.review_status": {
+          "odd": {
+            "samples": 3,
+            "median_ms": 152.12,
+            "p95_ms": 162.805
+          },
+          "ratio": null,
+          "verdict": "not_comparable"
+        },
+        "mcp.review_capture_group": {
+          "odd": {
+            "samples": 6,
+            "median_ms": 581.863,
+            "p95_ms": 747.837
+          },
+          "ratio": null,
+          "verdict": "not_comparable"
+        },
+        "journey.total": {
+          "odd": {
+            "samples": 3,
+            "median_ms": 1907.81,
+            "p95_ms": 1955.151
+          },
+          "oracle": {
+            "samples": 3,
+            "median_ms": 2800.037,
+            "p95_ms": 2810.099
+          },
+          "ratio": 0.681,
+          "verdict": "better"
+        }
+      }
+    },
+    {
+      "id": "consent-declined-creates-no-review",
+      "kind": "divergent",
+      "outcome": "not_comparable",
+      "metrics": {
+        "human_prompts": {
+          "odd": 1,
+          "oracle": 1,
+          "verdict": "not_comparable"
+        },
+        "manual_tokens": {
+          "odd": 4,
+          "oracle": 4,
+          "verdict": "not_comparable"
+        },
+        "commands_to_completion": {
+          "odd": 4,
+          "oracle": 6,
+          "verdict": "not_comparable"
+        },
+        "recovery_round_trips": {
+          "odd": 0,
+          "oracle": 0,
+          "verdict": "not_comparable"
+        },
+        "model_runs": {
+          "odd": 0,
+          "oracle": 0,
+          "verdict": "not_comparable"
+        },
+        "human_surface_bytes": {
+          "odd": 4287,
+          "oracle": 13272,
+          "verdict": "not_comparable"
+        },
+        "git_subprocesses": {
+          "odd": 72,
+          "oracle": 99,
+          "verdict": "not_comparable"
+        },
+        "blocks": {
+          "odd": 0,
+          "oracle": 0,
+          "verdict": "not_comparable"
+        }
+      },
+      "latency": {
+        "mcp.review_start": {
+          "odd": {
+            "samples": 3,
+            "median_ms": 424.273,
+            "p95_ms": 428.505
+          },
+          "ratio": null,
+          "verdict": "not_comparable"
+        },
+        "mcp.review_answer_consent": {
+          "odd": {
+            "samples": 3,
+            "median_ms": 255.592,
+            "p95_ms": 259.278
+          },
+          "ratio": null,
+          "verdict": "not_comparable"
+        },
+        "mcp.review_inspect": {
+          "odd": {
+            "samples": 3,
+            "median_ms": 109.031,
+            "p95_ms": 121.546
+          },
+          "ratio": null,
+          "verdict": "not_comparable"
+        },
+        "mcp.review_status": {
+          "odd": {
+            "samples": 3,
+            "median_ms": 136.898,
+            "p95_ms": 149.589
+          },
+          "ratio": null,
+          "verdict": "not_comparable"
+        },
+        "journey.total": {
+          "odd": {
+            "samples": 3,
+            "median_ms": 927.843,
+            "p95_ms": 954.686
+          },
+          "oracle": {
+            "samples": 3,
+            "median_ms": 896.32,
+            "p95_ms": 927.111
+          },
+          "ratio": 1.035,
+          "verdict": "not_comparable"
+        }
+      },
+      "divergence": [
+        "step 4: a decline persists nothing",
+        "product default RDD mode is on (odd: off)"
+      ]
+    },
+    {
+      "id": "consent-never-answered-implicitly",
+      "kind": "divergent",
+      "outcome": "not_comparable",
+      "metrics": {
+        "human_prompts": {
+          "odd": 0,
+          "oracle": 0,
+          "verdict": "not_comparable"
+        },
+        "manual_tokens": {
+          "odd": 0,
+          "oracle": 0,
+          "verdict": "not_comparable"
+        },
+        "commands_to_completion": {
+          "odd": 4,
+          "oracle": 7,
+          "verdict": "not_comparable"
+        },
+        "recovery_round_trips": {
+          "odd": 0,
+          "oracle": 0,
+          "verdict": "not_comparable"
+        },
+        "model_runs": {
+          "odd": 0,
+          "oracle": 0,
+          "verdict": "not_comparable"
+        },
+        "human_surface_bytes": {
+          "odd": 6970,
+          "oracle": 19977,
+          "verdict": "not_comparable"
+        },
+        "git_subprocesses": {
+          "odd": 77,
+          "oracle": 123,
+          "verdict": "not_comparable"
+        },
+        "blocks": {
+          "odd": 0,
+          "oracle": 0,
+          "verdict": "not_comparable"
+        }
+      },
+      "latency": {
+        "mcp.review_start": {
+          "odd": {
+            "samples": 6,
+            "median_ms": 311.494,
+            "p95_ms": 405.006
+          },
+          "ratio": null,
+          "verdict": "not_comparable"
+        },
+        "mcp.review_inspect": {
+          "odd": {
+            "samples": 3,
+            "median_ms": 109.94,
+            "p95_ms": 110.293
+          },
+          "ratio": null,
+          "verdict": "not_comparable"
+        },
+        "mcp.review_status": {
+          "odd": {
+            "samples": 3,
+            "median_ms": 169.545,
+            "p95_ms": 169.576
+          },
+          "ratio": null,
+          "verdict": "not_comparable"
+        },
+        "journey.total": {
+          "odd": {
+            "samples": 3,
+            "median_ms": 921.011,
+            "p95_ms": 924.986
+          },
+          "oracle": {
+            "samples": 3,
+            "median_ms": 1020.593,
+            "p95_ms": 1048.584
+          },
+          "ratio": 0.902,
+          "verdict": "not_comparable"
+        }
+      },
+      "divergence": [
+        "product default RDD mode is on (odd: off)"
+      ]
+    },
+    {
+      "id": "resume-after-consent",
+      "kind": "comparable",
+      "outcome": "equal",
+      "metrics": {
+        "human_prompts": {
+          "odd": 2,
+          "oracle": 1,
+          "verdict": "worse"
+        },
+        "manual_tokens": {
+          "odd": 12,
+          "oracle": 6,
+          "verdict": "worse"
+        },
+        "commands_to_completion": {
+          "odd": 4,
+          "oracle": 6,
+          "verdict": "better"
+        },
+        "recovery_round_trips": {
+          "odd": 0,
+          "oracle": 0,
+          "verdict": "equal"
+        },
+        "model_runs": {
+          "odd": 1,
+          "oracle": 1,
+          "verdict": "equal"
+        },
+        "human_surface_bytes": {
+          "odd": 5171,
+          "oracle": 20175,
+          "verdict": "better"
+        },
+        "git_subprocesses": {
+          "odd": 130,
+          "oracle": 267,
+          "verdict": "better"
+        },
+        "blocks": {
+          "odd": 0,
+          "oracle": 0,
+          "verdict": "equal"
+        }
+      },
+      "latency": {
+        "mcp.review_start": {
+          "odd": {
+            "samples": 3,
+            "median_ms": 664.94,
+            "p95_ms": 1009.436
+          },
+          "ratio": null,
+          "verdict": "not_comparable"
+        },
+        "mcp.review_answer_consent": {
+          "odd": {
+            "samples": 3,
+            "median_ms": 276.713,
+            "p95_ms": 278.479
+          },
+          "ratio": null,
+          "verdict": "not_comparable"
+        },
+        "mcp.review_run": {
+          "odd": {
+            "samples": 6,
+            "median_ms": 404.352,
+            "p95_ms": 799.697
+          },
+          "ratio": null,
+          "verdict": "not_comparable"
+        },
+        "journey.total": {
+          "odd": {
+            "samples": 3,
+            "median_ms": 1969.814,
+            "p95_ms": 2185.604
+          },
+          "oracle": {
+            "samples": 3,
+            "median_ms": 2288.23,
+            "p95_ms": 2412.436
+          },
+          "ratio": 0.861,
+          "verdict": "equal"
+        }
+      }
+    },
+    {
+      "id": "correction-then-validator-approves",
+      "kind": "comparable",
+      "outcome": "equal",
+      "metrics": {
+        "human_prompts": {
+          "odd": 3,
+          "oracle": 1,
+          "verdict": "worse"
+        },
+        "manual_tokens": {
+          "odd": 17,
+          "oracle": 6,
+          "verdict": "worse"
+        },
+        "commands_to_completion": {
+          "odd": 8,
+          "oracle": 14,
+          "verdict": "better"
+        },
+        "recovery_round_trips": {
+          "odd": 0,
+          "oracle": 0,
+          "verdict": "equal"
+        },
+        "model_runs": {
+          "odd": 5,
+          "oracle": 6,
+          "verdict": "better"
+        },
+        "human_surface_bytes": {
+          "odd": 25792,
+          "oracle": 60418,
+          "verdict": "better"
+        },
+        "git_subprocesses": {
+          "odd": 303,
+          "oracle": 1128,
+          "verdict": "better"
+        },
+        "blocks": {
+          "odd": 0,
+          "oracle": 0,
+          "verdict": "equal"
+        }
+      },
+      "latency": {
+        "mcp.review_start": {
+          "odd": {
+            "samples": 3,
+            "median_ms": 474.209,
+            "p95_ms": 550.478
+          },
+          "ratio": null,
+          "verdict": "not_comparable"
+        },
+        "mcp.review_answer_consent": {
+          "odd": {
+            "samples": 3,
+            "median_ms": 278.082,
+            "p95_ms": 282.16
+          },
+          "ratio": null,
+          "verdict": "not_comparable"
+        },
+        "mcp.review_status": {
+          "odd": {
+            "samples": 3,
+            "median_ms": 165.161,
+            "p95_ms": 165.377
+          },
+          "ratio": null,
+          "verdict": "not_comparable"
+        },
+        "mcp.review_capture_group": {
+          "odd": {
+            "samples": 6,
+            "median_ms": 627.098,
+            "p95_ms": 926.732
+          },
+          "ratio": null,
+          "verdict": "not_comparable"
+        },
+        "mcp.review_run": {
+          "odd": {
+            "samples": 3,
+            "median_ms": 237.986,
+            "p95_ms": 240.943
+          },
+          "ratio": null,
+          "verdict": "not_comparable"
+        },
+        "mcp.review_capture": {
+          "odd": {
+            "samples": 3,
+            "median_ms": 521.437,
+            "p95_ms": 523.489
+          },
+          "ratio": null,
+          "verdict": "not_comparable"
+        },
+        "mcp.review_acknowledge_approved": {
+          "odd": {
+            "samples": 3,
+            "median_ms": 115.409,
+            "p95_ms": 118.058
+          },
+          "ratio": null,
+          "verdict": "not_comparable"
+        },
+        "journey.total": {
+          "odd": {
+            "samples": 3,
+            "median_ms": 3042.116,
+            "p95_ms": 3138.611
+          },
+          "oracle": {
+            "samples": 3,
+            "median_ms": 8831.386,
+            "p95_ms": 8968.819
+          },
+          "ratio": 0.344,
+          "verdict": "better"
+        }
+      }
+    },
+    {
+      "id": "correction-noop-refused",
+      "kind": "comparable",
+      "outcome": "equal",
+      "metrics": {
+        "human_prompts": {
+          "odd": 2,
+          "oracle": 1,
+          "verdict": "worse"
+        },
+        "manual_tokens": {
+          "odd": 12,
+          "oracle": 6,
+          "verdict": "worse"
+        },
+        "commands_to_completion": {
+          "odd": 6,
+          "oracle": 11,
+          "verdict": "better"
+        },
+        "recovery_round_trips": {
+          "odd": 0,
+          "oracle": 0,
+          "verdict": "equal"
+        },
+        "model_runs": {
+          "odd": 4,
+          "oracle": 5,
+          "verdict": "better"
+        },
+        "human_surface_bytes": {
+          "odd": 23436,
+          "oracle": 41999,
+          "verdict": "better"
+        },
+        "git_subprocesses": {
+          "odd": 239,
+          "oracle": 804,
+          "verdict": "better"
+        },
+        "blocks": {
+          "odd": 1,
+          "oracle": 1,
+          "verdict": "equal"
+        }
+      },
+      "latency": {
+        "mcp.review_start": {
+          "odd": {
+            "samples": 3,
+            "median_ms": 453.786,
+            "p95_ms": 462.213
+          },
+          "ratio": null,
+          "verdict": "not_comparable"
+        },
+        "mcp.review_answer_consent": {
+          "odd": {
+            "samples": 3,
+            "median_ms": 277.906,
+            "p95_ms": 280.492
+          },
+          "ratio": null,
+          "verdict": "not_comparable"
+        },
+        "mcp.review_status": {
+          "odd": {
+            "samples": 3,
+            "median_ms": 164.883,
+            "p95_ms": 167.349
+          },
+          "ratio": null,
+          "verdict": "not_comparable"
+        },
+        "mcp.review_capture_group": {
+          "odd": {
+            "samples": 6,
+            "median_ms": 653.742,
+            "p95_ms": 1104.533
+          },
+          "ratio": null,
+          "verdict": "not_comparable"
+        },
+        "mcp.review_run": {
+          "odd": {
+            "samples": 3,
+            "median_ms": 217.401,
+            "p95_ms": 221.63
+          },
+          "ratio": null,
+          "verdict": "not_comparable"
+        },
+        "journey.total": {
+          "odd": {
+            "samples": 3,
+            "median_ms": 2555.298,
+            "p95_ms": 2577.057
+          },
+          "oracle": {
+            "samples": 3,
+            "median_ms": 6461.591,
+            "p95_ms": 6592.619
+          },
+          "ratio": 0.395,
+          "verdict": "better"
+        }
+      }
+    },
+    {
+      "id": "duplicate-start-guard-during-correction",
+      "kind": "divergent",
+      "outcome": "not_comparable",
+      "metrics": {
+        "human_prompts": {
+          "odd": 2,
+          "oracle": 1,
+          "verdict": "not_comparable"
+        },
+        "manual_tokens": {
+          "odd": 12,
+          "oracle": 6,
+          "verdict": "not_comparable"
+        },
+        "commands_to_completion": {
+          "odd": 7,
+          "oracle": 12,
+          "verdict": "not_comparable"
+        },
+        "recovery_round_trips": {
+          "odd": 1,
+          "oracle": 0,
+          "verdict": "not_comparable"
+        },
+        "model_runs": {
+          "odd": 4,
+          "oracle": 5,
+          "verdict": "not_comparable"
+        },
+        "human_surface_bytes": {
+          "odd": 23713,
+          "oracle": 40362,
+          "verdict": "not_comparable"
+        },
+        "git_subprocesses": {
+          "odd": 232,
+          "oracle": 796,
+          "verdict": "not_comparable"
+        },
+        "blocks": {
+          "odd": 1,
+          "oracle": 0,
+          "verdict": "not_comparable"
+        }
+      },
+      "latency": {
+        "mcp.review_start": {
+          "odd": {
+            "samples": 6,
+            "median_ms": 258.429,
+            "p95_ms": 540.416
+          },
+          "ratio": null,
+          "verdict": "not_comparable"
+        },
+        "mcp.review_answer_consent": {
+          "odd": {
+            "samples": 3,
+            "median_ms": 278.263,
+            "p95_ms": 283.25
+          },
+          "ratio": null,
+          "verdict": "not_comparable"
+        },
+        "mcp.review_status": {
+          "odd": {
+            "samples": 3,
+            "median_ms": 168.941,
+            "p95_ms": 169.664
+          },
+          "ratio": null,
+          "verdict": "not_comparable"
+        },
+        "mcp.review_capture_group": {
+          "odd": {
+            "samples": 6,
+            "median_ms": 638.568,
+            "p95_ms": 960.897
+          },
+          "ratio": null,
+          "verdict": "not_comparable"
+        },
+        "mcp.review_inspect": {
+          "odd": {
+            "samples": 3,
+            "median_ms": 111.396,
+            "p95_ms": 111.699
+          },
+          "ratio": null,
+          "verdict": "not_comparable"
+        },
+        "journey.total": {
+          "odd": {
+            "samples": 3,
+            "median_ms": 2386.879,
+            "p95_ms": 2545.699
+          },
+          "oracle": {
+            "samples": 3,
+            "median_ms": 6498.071,
+            "p95_ms": 6527.337
+          },
+          "ratio": 0.367,
+          "verdict": "not_comparable"
+        }
+      },
+      "divergence": [
+        "step 4: no duplicate-start guard",
+        "product default RDD mode is on (odd: off)"
+      ]
+    },
+    {
+      "id": "binding-drift-mid-run",
+      "kind": "divergent",
+      "outcome": "not_comparable",
+      "metrics": {
+        "human_prompts": {
+          "odd": 1,
+          "oracle": 1,
+          "verdict": "not_comparable"
+        },
+        "manual_tokens": {
+          "odd": 6,
+          "oracle": 6,
+          "verdict": "not_comparable"
+        },
+        "commands_to_completion": {
+          "odd": 3,
+          "oracle": 6,
+          "verdict": "not_comparable"
+        },
+        "recovery_round_trips": {
+          "odd": 0,
+          "oracle": 0,
+          "verdict": "not_comparable"
+        },
+        "model_runs": {
+          "odd": 0,
+          "oracle": 1,
+          "verdict": "not_comparable"
+        },
+        "human_surface_bytes": {
+          "odd": 2893,
+          "oracle": 20175,
+          "verdict": "not_comparable"
+        },
+        "git_subprocesses": {
+          "odd": 69,
+          "oracle": 277,
+          "verdict": "not_comparable"
+        },
+        "blocks": {
+          "odd": 1,
+          "oracle": 0,
+          "verdict": "not_comparable"
+        }
+      },
+      "latency": {
+        "mcp.review_start": {
+          "odd": {
+            "samples": 3,
+            "median_ms": 435.577,
+            "p95_ms": 465.859
+          },
+          "ratio": null,
+          "verdict": "not_comparable"
+        },
+        "mcp.review_answer_consent": {
+          "odd": {
+            "samples": 3,
+            "median_ms": 277.038,
+            "p95_ms": 277.922
+          },
+          "ratio": null,
+          "verdict": "not_comparable"
+        },
+        "mcp.review_run": {
+          "odd": {
+            "samples": 3,
+            "median_ms": 157.453,
+            "p95_ms": 159.885
+          },
+          "ratio": null,
+          "verdict": "not_comparable"
+        },
+        "journey.total": {
+          "odd": {
+            "samples": 3,
+            "median_ms": 868.906,
+            "p95_ms": 901.234
+          },
+          "oracle": {
+            "samples": 3,
+            "median_ms": 2563.325,
+            "p95_ms": 2604.335
+          },
+          "ratio": 0.339,
+          "verdict": "not_comparable"
+        }
+      },
+      "divergence": [
+        "step 3: frozen candidate review ignores later drift"
+      ]
+    },
+    {
+      "id": "binding-drift-after-consent-question",
+      "kind": "divergent",
+      "outcome": "not_comparable",
+      "metrics": {
+        "human_prompts": {
+          "odd": 1,
+          "oracle": 1,
+          "verdict": "not_comparable"
+        },
+        "manual_tokens": {
+          "odd": 6,
+          "oracle": 6,
+          "verdict": "not_comparable"
+        },
+        "commands_to_completion": {
+          "odd": 3,
+          "oracle": 5,
+          "verdict": "not_comparable"
+        },
+        "recovery_round_trips": {
+          "odd": 1,
+          "oracle": 1,
+          "verdict": "not_comparable"
+        },
+        "model_runs": {
+          "odd": 0,
+          "oracle": 0,
+          "verdict": "not_comparable"
+        },
+        "human_surface_bytes": {
+          "odd": 2318,
+          "oracle": 9603,
+          "verdict": "not_comparable"
+        },
+        "git_subprocesses": {
+          "odd": 57,
+          "oracle": 62,
+          "verdict": "not_comparable"
+        },
+        "blocks": {
+          "odd": 1,
+          "oracle": 1,
+          "verdict": "not_comparable"
+        }
+      },
+      "latency": {
+        "mcp.review_start": {
+          "odd": {
+            "samples": 3,
+            "median_ms": 489.809,
+            "p95_ms": 559.052
+          },
+          "ratio": null,
+          "verdict": "not_comparable"
+        },
+        "mcp.review_answer_consent": {
+          "odd": {
+            "samples": 3,
+            "median_ms": 214.762,
+            "p95_ms": 220.017
+          },
+          "ratio": null,
+          "verdict": "not_comparable"
+        },
+        "mcp.review_inspect": {
+          "odd": {
+            "samples": 3,
+            "median_ms": 111.503,
+            "p95_ms": 113.668
+          },
+          "ratio": null,
+          "verdict": "not_comparable"
+        },
+        "journey.total": {
+          "odd": {
+            "samples": 3,
+            "median_ms": 815.093,
+            "p95_ms": 892.737
+          },
+          "oracle": {
+            "samples": 3,
+            "median_ms": 621.945,
+            "p95_ms": 750.137
+          },
+          "ratio": 1.311,
+          "verdict": "not_comparable"
+        }
+      },
+      "divergence": [
+        "product default RDD mode is on (odd: off)"
+      ]
+    },
+    {
+      "id": "gate-push-denied-unreviewed-high-risk",
+      "kind": "unsupported",
+      "outcome": "not_comparable",
+      "metrics": {},
+      "latency": {},
+      "reason": "4.6.0 `review validate --gate` is non-deciding: for every candidate it reports delivery=unmanaged (allowed=false, repository policy decides), so the product has no delivery denial to compare"
+    },
+    {
+      "id": "gate-push-allowed-after-receipt",
+      "kind": "unsupported",
+      "outcome": "not_comparable",
+      "metrics": {},
+      "latency": {},
+      "reason": "4.6.0 `review validate --gate` is non-deciding: for every candidate it reports delivery=unmanaged (allowed=false, repository policy decides), so the product has no delivery denial to compare"
+    },
+    {
+      "id": "gate-push-allowed-when-declined",
+      "kind": "unsupported",
+      "outcome": "not_comparable",
+      "metrics": {},
+      "latency": {},
+      "reason": "4.6.0 `review validate --gate` is non-deciding: for every candidate it reports delivery=unmanaged (allowed=false, repository policy decides), so the product has no delivery denial to compare"
+    },
+    {
+      "id": "gate-silent-with-rdd-off",
+      "kind": "not_comparable",
+      "outcome": "not_comparable",
+      "metrics": {
+        "human_prompts": {
+          "odd": 0,
+          "oracle": 0,
+          "verdict": "not_comparable"
+        },
+        "manual_tokens": {
+          "odd": 0,
+          "oracle": 0,
+          "verdict": "not_comparable"
+        },
+        "commands_to_completion": {
+          "odd": 1,
+          "oracle": 1,
+          "verdict": "not_comparable"
+        },
+        "recovery_round_trips": {
+          "odd": 0,
+          "oracle": 0,
+          "verdict": "not_comparable"
+        },
+        "model_runs": {
+          "odd": 0,
+          "oracle": 0,
+          "verdict": "not_comparable"
+        },
+        "human_surface_bytes": {
+          "odd": 0,
+          "oracle": 349,
+          "verdict": "not_comparable"
+        },
+        "git_subprocesses": {
+          "odd": 0,
+          "oracle": 3,
+          "verdict": "not_comparable"
+        },
+        "blocks": {
+          "odd": 0,
+          "oracle": 0,
+          "verdict": "not_comparable"
+        }
+      },
+      "latency": {
+        "hook.pre_tool_use": {
+          "odd": {
+            "samples": 3,
+            "median_ms": 70.749,
+            "p95_ms": 71.015
+          },
+          "ratio": null,
+          "verdict": "not_comparable"
+        },
+        "journey.total": {
+          "odd": {
+            "samples": 3,
+            "median_ms": 70.749,
+            "p95_ms": 71.015
+          },
+          "oracle": {
+            "samples": 3,
+            "median_ms": 39.151,
+            "p95_ms": 46.12
+          },
+          "ratio": 1.807,
+          "verdict": "not_comparable"
+        }
+      },
+      "not_comparable": [
+        "the oracle gate reported delivery=unmanaged: it never decides, so its near-zero cost is no win over a gate that does"
+      ]
+    },
+    {
+      "id": "gate-push-allowed-for-medium-risk-range",
+      "kind": "not_comparable",
+      "outcome": "not_comparable",
+      "metrics": {
+        "human_prompts": {
+          "odd": 0,
+          "oracle": 0,
+          "verdict": "not_comparable"
+        },
+        "manual_tokens": {
+          "odd": 0,
+          "oracle": 0,
+          "verdict": "not_comparable"
+        },
+        "commands_to_completion": {
+          "odd": 1,
+          "oracle": 1,
+          "verdict": "not_comparable"
+        },
+        "recovery_round_trips": {
+          "odd": 0,
+          "oracle": 0,
+          "verdict": "not_comparable"
+        },
+        "model_runs": {
+          "odd": 0,
+          "oracle": 0,
+          "verdict": "not_comparable"
+        },
+        "human_surface_bytes": {
+          "odd": 0,
+          "oracle": 340,
+          "verdict": "not_comparable"
+        },
+        "git_subprocesses": {
+          "odd": 28,
+          "oracle": 3,
+          "verdict": "not_comparable"
+        },
+        "blocks": {
+          "odd": 0,
+          "oracle": 0,
+          "verdict": "not_comparable"
+        }
+      },
+      "latency": {
+        "hook.pre_tool_use": {
+          "odd": {
+            "samples": 3,
+            "median_ms": 244.472,
+            "p95_ms": 245.871
+          },
+          "ratio": null,
+          "verdict": "not_comparable"
+        },
+        "journey.total": {
+          "odd": {
+            "samples": 3,
+            "median_ms": 244.472,
+            "p95_ms": 245.871
+          },
+          "oracle": {
+            "samples": 3,
+            "median_ms": 32.621,
+            "p95_ms": 35.322
+          },
+          "ratio": 7.494,
+          "verdict": "not_comparable"
+        }
+      },
+      "not_comparable": [
+        "the oracle gate reported delivery=unmanaged: it never decides, so its near-zero cost is no win over a gate that does"
+      ]
+    },
+    {
+      "id": "gate-pr-open-denied-unreviewed",
+      "kind": "unsupported",
+      "outcome": "not_comparable",
+      "metrics": {},
+      "latency": {},
+      "reason": "4.6.0 `review validate --gate` is non-deciding: for every candidate it reports delivery=unmanaged (allowed=false, repository policy decides), so the product has no delivery denial to compare"
+    },
+    {
+      "id": "gate-pr-open-allowed-after-receipt",
+      "kind": "unsupported",
+      "outcome": "not_comparable",
+      "metrics": {},
+      "latency": {},
+      "reason": "4.6.0 `review validate --gate` is non-deciding: for every candidate it reports delivery=unmanaged (allowed=false, repository policy decides), so the product has no delivery denial to compare"
+    },
+    {
+      "id": "workspace-review-does-not-authorize-committed-range",
+      "kind": "unsupported",
+      "outcome": "not_comparable",
+      "metrics": {},
+      "latency": {},
+      "reason": "4.6.0 `review validate --gate` is non-deciding: for every candidate it reports delivery=unmanaged (allowed=false, repository policy decides), so the product has no delivery denial to compare"
+    },
+    {
+      "id": "stop-reminds-once-per-session-and-candidate",
+      "kind": "comparable",
+      "outcome": "equal",
+      "metrics": {
+        "human_prompts": {
+          "odd": 0,
+          "oracle": 0,
+          "verdict": "equal"
+        },
+        "manual_tokens": {
+          "odd": 0,
+          "oracle": 0,
+          "verdict": "equal"
+        },
+        "commands_to_completion": {
+          "odd": 4,
+          "oracle": 4,
+          "verdict": "equal"
+        },
+        "recovery_round_trips": {
+          "odd": 1,
+          "oracle": 1,
+          "verdict": "equal"
+        },
+        "model_runs": {
+          "odd": 0,
+          "oracle": 0,
+          "verdict": "equal"
+        },
+        "human_surface_bytes": {
+          "odd": 4212,
+          "oracle": 4569,
+          "verdict": "equal"
+        },
+        "git_subprocesses": {
+          "odd": 144,
+          "oracle": 200,
+          "verdict": "better"
+        },
+        "blocks": {
+          "odd": 3,
+          "oracle": 3,
+          "verdict": "equal"
+        }
+      },
+      "latency": {
+        "hook.stop": {
+          "odd": {
+            "samples": 12,
+            "median_ms": 304.692,
+            "p95_ms": 339.928
+          },
+          "ratio": null,
+          "verdict": "not_comparable"
+        },
+        "journey.total": {
+          "odd": {
+            "samples": 3,
+            "median_ms": 1204.775,
+            "p95_ms": 1326.882
+          },
+          "oracle": {
+            "samples": 3,
+            "median_ms": 1428.658,
+            "p95_ms": 1444.811
+          },
+          "ratio": 0.843,
+          "verdict": "equal"
+        }
+      }
+    },
+    {
+      "id": "stop-silent-with-rdd-off",
+      "kind": "comparable",
+      "outcome": "equal",
+      "metrics": {
+        "human_prompts": {
+          "odd": 0,
+          "oracle": 0,
+          "verdict": "equal"
+        },
+        "manual_tokens": {
+          "odd": 0,
+          "oracle": 0,
+          "verdict": "equal"
+        },
+        "commands_to_completion": {
+          "odd": 1,
+          "oracle": 1,
+          "verdict": "equal"
+        },
+        "recovery_round_trips": {
+          "odd": 0,
+          "oracle": 0,
+          "verdict": "equal"
+        },
+        "model_runs": {
+          "odd": 0,
+          "oracle": 0,
+          "verdict": "equal"
+        },
+        "human_surface_bytes": {
+          "odd": 0,
+          "oracle": 0,
+          "verdict": "equal"
+        },
+        "git_subprocesses": {
+          "odd": 0,
+          "oracle": 3,
+          "verdict": "better"
+        },
+        "blocks": {
+          "odd": 0,
+          "oracle": 0,
+          "verdict": "equal"
+        }
+      },
+      "latency": {
+        "hook.stop": {
+          "odd": {
+            "samples": 3,
+            "median_ms": 72.318,
+            "p95_ms": 72.366
+          },
+          "ratio": null,
+          "verdict": "not_comparable"
+        },
+        "journey.total": {
+          "odd": {
+            "samples": 3,
+            "median_ms": 72.318,
+            "p95_ms": 72.366
+          },
+          "oracle": {
+            "samples": 3,
+            "median_ms": 35.619,
+            "p95_ms": 41.759
+          },
+          "ratio": 2.03,
+          "verdict": "worse"
+        }
+      }
+    },
+    {
+      "id": "rdd-mode-global-and-clone-scopes",
+      "kind": "comparable",
+      "outcome": "equal",
+      "metrics": {
+        "human_prompts": {
+          "odd": 0,
+          "oracle": 0,
+          "verdict": "equal"
+        },
+        "manual_tokens": {
+          "odd": 0,
+          "oracle": 0,
+          "verdict": "equal"
+        },
+        "commands_to_completion": {
+          "odd": 5,
+          "oracle": 7,
+          "verdict": "better"
+        },
+        "recovery_round_trips": {
+          "odd": 0,
+          "oracle": 0,
+          "verdict": "equal"
+        },
+        "model_runs": {
+          "odd": 0,
+          "oracle": 0,
+          "verdict": "equal"
+        },
+        "human_surface_bytes": {
+          "odd": 747,
+          "oracle": 2266,
+          "verdict": "better"
+        },
+        "git_subprocesses": {
+          "odd": 27,
+          "oracle": 28,
+          "verdict": "better"
+        },
+        "blocks": {
+          "odd": 0,
+          "oracle": 0,
+          "verdict": "equal"
+        }
+      },
+      "latency": {
+        "hook.review_mode": {
+          "odd": {
+            "samples": 9,
+            "median_ms": 111.24,
+            "p95_ms": 288.606
+          },
+          "ratio": null,
+          "verdict": "not_comparable"
+        },
+        "mcp.review_inspect": {
+          "odd": {
+            "samples": 6,
+            "median_ms": 111.301,
+            "p95_ms": 113.954
+          },
+          "ratio": null,
+          "verdict": "not_comparable"
+        },
+        "journey.total": {
+          "odd": {
+            "samples": 3,
+            "median_ms": 666.96,
+            "p95_ms": 727.092
+          },
+          "oracle": {
+            "samples": 3,
+            "median_ms": 511.056,
+            "p95_ms": 533.961
+          },
+          "ratio": 1.305,
+          "verdict": "worse"
+        }
+      }
+    }
+  ],
+  "summary": {
+    "outcome": {
+      "equal": 10,
+      "different": 0,
+      "not_comparable": 13
+    },
+    "metrics": {
+      "equal": 41,
+      "better": 27,
+      "worse": 12,
+      "not_comparable": 56
+    },
+    "journeys": {
+      "total": 23,
+      "comparable": 10,
+      "divergent": 5,
+      "unsupported": 6,
+      "missing": 0,
+      "not_comparable": 2
+    },
+    "per_metric": {
+      "human_prompts": {
+        "verdicts": {
+          "equal": 4,
+          "better": 0,
+          "worse": 6,
+          "not_comparable": 0
+        },
+        "odd_total": 13,
+        "oracle_total": 6
+      },
+      "manual_tokens": {
+        "verdicts": {
+          "equal": 4,
+          "better": 0,
+          "worse": 6,
+          "not_comparable": 0
+        },
+        "odd_total": 77,
+        "oracle_total": 36
+      },
+      "commands_to_completion": {
+        "verdicts": {
+          "equal": 3,
+          "better": 7,
+          "worse": 0,
+          "not_comparable": 0
+        },
+        "odd_total": 50,
+        "oracle_total": 70
+      },
+      "recovery_round_trips": {
+        "verdicts": {
+          "equal": 10,
+          "better": 0,
+          "worse": 0,
+          "not_comparable": 0
+        },
+        "odd_total": 1,
+        "oracle_total": 1
+      },
+      "model_runs": {
+        "verdicts": {
+          "equal": 8,
+          "better": 2,
+          "worse": 0,
+          "not_comparable": 0
+        },
+        "odd_total": 17,
+        "oracle_total": 19
+      },
+      "human_surface_bytes": {
+        "verdicts": {
+          "equal": 2,
+          "better": 8,
+          "worse": 0,
+          "not_comparable": 0
+        },
+        "odd_total": 130382,
+        "oracle_total": 230765
+      },
+      "git_subprocesses": {
+        "verdicts": {
+          "equal": 0,
+          "better": 10,
+          "worse": 0,
+          "not_comparable": 0
+        },
+        "odd_total": 1475,
+        "oracle_total": 3692
+      },
+      "blocks": {
+        "verdicts": {
+          "equal": 10,
+          "better": 0,
+          "worse": 0,
+          "not_comparable": 0
+        },
+        "odd_total": 4,
+        "oracle_total": 4
+      }
+    },
+    "latency": {
+      "compared": 10,
+      "verdicts": {
+        "equal": 2,
+        "better": 6,
+        "worse": 2,
+        "not_comparable": 0
+      },
+      "median_ratio": 0.708
+    }
+  }
+}
