@@ -52,6 +52,8 @@ import { StoreLockContended, StoreLockError } from "./lock.js";
 import { assessRisk } from "./risk.js";
 import { buildReviewerPrompt, parseReviewerOutput, runReviewer } from "./runner.js";
 import { digestPaths, freezeSnapshot, resolveRepository, SnapshotError, snapshotIdentity } from "./snapshot.js";
+import { readProfile } from "../lib/profiles.js";
+import { reviewerRoute } from "./reviewer-model.js";
 import { startReview } from "./start.js";
 import { blockingFindingIds } from "./state.js";
 import { reviewStatus } from "./status.js";
@@ -243,6 +245,10 @@ export async function runReview(input, deps = {}) {
             ...(input.effort !== undefined ? { effort: input.effort } : {}),
             ...(input.timeoutMs !== undefined ? { timeoutMs: input.timeoutMs } : {}),
         };
+        // S3: without an explicit caller model every reviewer child follows the active profile route of its role. The profile is
+        // read once per run (readProfile never throws: unreadable state is the balanced default).
+        const profile = input.model === undefined ? readProfile(deps.profileState) : undefined;
+        const optionsFor = (slot) => profile === undefined ? runnerOpts : { ...runnerOpts, ...reviewerRoute(profile, slot.role, slot.lens) };
         /** Whether the candidate is exactly `identity` now (the frozen world the slots were issued for). */
         const currentIdentity = () => {
             const frozen = freezeSnapshot(input.cwd, snapTarget);
@@ -306,7 +312,7 @@ export async function runReview(input, deps = {}) {
             const notStarted = { ok: false, code: "nonzero_exit", message: "the reviewer was not started: the run stopped first", elapsedMs: 0 };
             const results = boundedAll(slots.length, limit, async (i) => {
                 try {
-                    const out = await run(prompts[i], runnerOpts);
+                    const out = await run(prompts[i], optionsFor(slots[i]));
                     if (!out.ok)
                         halted = true;
                     return out;

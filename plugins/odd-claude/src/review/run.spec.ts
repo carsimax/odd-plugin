@@ -9,7 +9,8 @@ import { isTargetConsumed } from "./ack.js";
 import { lensArtifactSubject, treeDiffPaths } from "./artifact.js";
 import { beginCorrectionValidation, captureLensResult, captureValidatorResult, planCorrection } from "./capture.js";
 import { readDecline } from "./consent.js";
-import type { RunOutcome, RunReviewerOptions } from "./runner.js";
+import { REVIEWER_ARGUMENTS, reviewerArguments, type RunOutcome, type RunReviewerOptions } from "./runner.js";
+import { useProfile } from "../lib/profiles.js";
 import { makeFakeClaude, type FakeRecord } from "./runner-fake.testkit.js";
 import { runReview, validateReviewerOptions, MAX_TRANSITIONS, type ReviewRunInput, type ReviewRunOutcome, type RunDeps } from "./run.js";
 import { startReview, type RiskAssessment, type RiskAssessor } from "./start.js";
@@ -1374,5 +1375,140 @@ test("A1: after a candidate-as-base correction, HEAD back on the original base w
     assert.equal(view.target_identity, closed.target_identity, "same identity: original base + corrected tree");
     assert.equal(view.consumed.status, "consumed");
     assert.equal(view.next_transition.reason_code, "target_already_acknowledged");
+  });
+});
+
+// ---- T2 / S3: reviewer runs follow the active profile route of their role ----
+
+const routeOf = (calls: Calls): Record<string, string> =>
+  Object.fromEntries(calls.roles.map((key, i) => [key, `${calls.opts[i]!.model ?? "-"}/${calls.opts[i]!.effort ?? "-"}`]));
+
+async function withProfile(choose: ((dataDir: string) => void) | undefined, fn: (profileState: { dataDir: string }) => Promise<void>): Promise<void> {
+  const dataDir = mkdtempSync(join(tmpdir(), "odd-run-profile-"));
+  try {
+    choose?.(dataDir);
+    await fn({ dataDir });
+  } finally {
+    rmSync(dataDir, { recursive: true, force: true });
+  }
+}
+
+const CAPTURED_REFUTER_HELD = async (r: Repo, lineage: string): Promise<void> => {
+  const rec = stateOf(r, lineage);
+  const subject = lensArtifactSubject(r.commonDir, rec, "risk")!;
+  const held = await captureLensResult(
+    r.commonDir, lineage, rec.revision,
+    { lens: "risk", subject, result: { subject_hash: subject.subject_hash, inspection: { status: "completed", paths: treeDiffPaths(r.commonDir, rec.base_tree, rec.candidate_tree) }, findings: [{ ...SEVERE, evidence_class: "inferential" }], evidence: ["x"] } },
+    { awaitRefuter: true },
+  );
+  assert.equal(held.ok && held.state, "reviewing");
+};
+
+test("S3 balanced by default (no profile state): risk lens opus/medium, the other three lenses sonnet/medium", async () => {
+  await withProfile(undefined, async (profileState) => {
+    await withRepo(async (r) => {
+      const lineage = await grant(r, "high");
+      const { calls, runner } = fakeRunner();
+      const { done } = await forecastThenRun(r, lineage, { riskAssessor: assess("high"), runner, profileState });
+      is(done, "closed");
+      assert.deepEqual(routeOf(calls), { risk: "opus/medium", resilience: "sonnet/medium", readability: "sonnet/medium", reliability: "sonnet/medium" });
+    });
+  });
+});
+
+test("S3 balanced by default: the refuter and the targeted validator run opus/medium", async () => {
+  await withProfile(undefined, async (profileState) => {
+    await withRepo(async (r) => {
+      const lineage = await grant(r, "medium");
+      await CAPTURED_REFUTER_HELD(r, lineage);
+      const { calls, runner } = fakeRunner();
+      is((await forecastThenRun(r, lineage, { riskAssessor: assess("medium"), runner, profileState })).done, "closed");
+      assert.deepEqual(routeOf(calls), { refuter: "opus/medium" });
+    });
+    await withRepo(async (r) => {
+      const lineage = await grant(r, "medium");
+      const { calls, runner } = fakeRunner({ findings: { risk: [SEVERE] } });
+      const deps: RunDeps = { riskAssessor: assess("medium"), runner, profileState };
+      is((await forecastThenRun(r, lineage, deps)).done, "input-required");
+      writeFileSync(join(r.repo, "a.txt"), "ONE\nTWO\nthree\nfour\nfive\n");
+      const forecast = is(await runReview(input(r, { lineageId: lineage }), deps), "forecast");
+      is(await runReview(input(r, { lineageId: lineage, reviewerRunAcknowledged: true, reviewerRunBinding: forecast.reviewer_run_binding }), deps), "closed");
+      assert.deepEqual(routeOf(calls), { risk: "opus/medium", validator: "opus/medium" });
+    });
+  });
+});
+
+test("S3 economy stored: lenses haiku without effort, refuter and validator sonnet/medium", async () => {
+  await withProfile((dataDir) => useProfile("economy", { dataDir }), async (profileState) => {
+    await withRepo(async (r) => {
+      const lineage = await grant(r, "high");
+      const { calls, runner } = fakeRunner();
+      is((await forecastThenRun(r, lineage, { riskAssessor: assess("high"), runner, profileState })).done, "closed");
+      assert.deepEqual(routeOf(calls), { risk: "haiku/-", resilience: "haiku/-", readability: "haiku/-", reliability: "haiku/-" });
+    });
+    await withRepo(async (r) => {
+      const lineage = await grant(r, "medium");
+      await CAPTURED_REFUTER_HELD(r, lineage);
+      const { calls, runner } = fakeRunner();
+      is((await forecastThenRun(r, lineage, { riskAssessor: assess("medium"), runner, profileState })).done, "closed");
+      assert.deepEqual(routeOf(calls), { refuter: "sonnet/medium" });
+    });
+    await withRepo(async (r) => {
+      const lineage = await grant(r, "medium");
+      const { calls, runner } = fakeRunner({ findings: { risk: [SEVERE] } });
+      const deps: RunDeps = { riskAssessor: assess("medium"), runner, profileState };
+      is((await forecastThenRun(r, lineage, deps)).done, "input-required");
+      writeFileSync(join(r.repo, "a.txt"), "ONE\nTWO\nthree\nfour\nfive\n");
+      const forecast = is(await runReview(input(r, { lineageId: lineage }), deps), "forecast");
+      is(await runReview(input(r, { lineageId: lineage, reviewerRunAcknowledged: true, reviewerRunBinding: forecast.reviewer_run_binding }), deps), "closed");
+      assert.deepEqual(routeOf(calls), { risk: "haiku/-", validator: "sonnet/medium" });
+    });
+  });
+});
+
+test("S3 an explicit caller model wins for every role (and keeps the caller's effort handling)", async () => {
+  await withProfile(undefined, async (profileState) => {
+    await withRepo(async (r) => {
+      const lineage = await grant(r, "high");
+      const { calls, runner } = fakeRunner();
+      is((await forecastThenRun(r, lineage, { riskAssessor: assess("high"), runner, profileState }, { model: "haiku" })).done, "closed");
+      assert.deepEqual(routeOf(calls), { risk: "haiku/-", resilience: "haiku/-", readability: "haiku/-", reliability: "haiku/-" });
+    });
+    await withRepo(async (r) => {
+      const lineage = await grant(r, "medium");
+      await CAPTURED_REFUTER_HELD(r, lineage);
+      const { calls, runner } = fakeRunner();
+      is((await forecastThenRun(r, lineage, { riskAssessor: assess("medium"), runner, profileState }, { model: "sonnet", effort: "high" })).done, "closed");
+      assert.deepEqual(routeOf(calls), { refuter: "sonnet/high" });
+    });
+  });
+});
+
+test("S3 an unreadable profile state never throws: the review runs with the balanced route", async () => {
+  await withProfile(undefined, async () => {
+    await withRepo(async (r) => {
+      const lineage = await grant(r, "medium");
+      const { calls, runner } = fakeRunner();
+      const profileState = { dataDir: "relative/not/absolute" };
+      is((await forecastThenRun(r, lineage, { riskAssessor: assess("medium"), runner, profileState })).done, "closed");
+      assert.deepEqual(routeOf(calls), { risk: "opus/medium" });
+    });
+  });
+});
+
+test("S3 integration (fake claude binary): the argument vector differs from the explicit-model one only by --model/--effort", async () => {
+  await withProfile(undefined, async (profileState) => {
+    await withRepo(async (r) => {
+      const lineage = await grant(r, "medium");
+      const fake = fakeFor(r, lineage, (hash, paths) => JSON.stringify({ subject_hash: hash, inspection: { status: "completed", paths }, findings: [], evidence: ["read it all"] }));
+      try {
+        is((await forecastThenRun(r, lineage, { profileState }, { claudePath: fake.binary })).done, "closed");
+        const rec = JSON.parse(readFileSync(fake.recordFile, "utf8")) as FakeRecord;
+        assert.deepEqual(rec.args, [...REVIEWER_ARGUMENTS, "--model", "opus", "--effort", "medium"]);
+        assert.equal(reviewerArguments({ model: "opus", effort: "medium" }).join("\0"), rec.args.join("\0"));
+      } finally {
+        rmSync(fake.dir, { recursive: true, force: true });
+      }
+    });
   });
 });

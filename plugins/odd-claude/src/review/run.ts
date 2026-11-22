@@ -57,6 +57,9 @@ import { StoreLockContended, StoreLockError } from "./lock.js";
 import { assessRisk } from "./risk.js";
 import { buildReviewerPrompt, parseReviewerOutput, runReviewer, type ReviewerPromptInput, type ReviewerRole, type RunOutcome, type RunReviewerOptions } from "./runner.js";
 import { digestPaths, freezeSnapshot, resolveRepository, SnapshotError, snapshotIdentity, type SnapshotTarget } from "./snapshot.js";
+import type { StateOptions } from "../lib/state.js";
+import { readProfile } from "../lib/profiles.js";
+import { reviewerRoute } from "./reviewer-model.js";
 import { startReview, type RiskAssessor, type StartTarget } from "./start.js";
 import { blockingFindingIds, type Projection, type StateRecord } from "./state.js";
 import { reviewStatus, type StatusAcknowledgement, type StatusEnvelope } from "./status.js";
@@ -162,6 +165,8 @@ export interface RunDeps {
   /** Reviewers of a group running at once (default 2). */
   concurrency?: number;
   maxTransitions?: number;
+  /** Where the active model profile is read from (default: the plugin data dir of the environment). Never throws. */
+  profileState?: StateOptions;
   /**
    * Test seams (deterministic): called at the last synchronous moment before the abort recheck that guards a capture /
    * an acknowledgement, so a test can abort exactly there.
@@ -339,6 +344,11 @@ export async function runReview(input: ReviewRunInput, deps: RunDeps = {}): Prom
       ...(input.effort !== undefined ? { effort: input.effort } : {}),
       ...(input.timeoutMs !== undefined ? { timeoutMs: input.timeoutMs } : {}),
     };
+    // S3: without an explicit caller model every reviewer child follows the active profile route of its role. The profile is
+    // read once per run (readProfile never throws: unreadable state is the balanced default).
+    const profile = input.model === undefined ? readProfile(deps.profileState) : undefined;
+    const optionsFor = (slot: Pick<Slot, "role" | "lens">): RunReviewerOptions =>
+      profile === undefined ? runnerOpts : { ...runnerOpts, ...reviewerRoute(profile, slot.role, slot.lens) };
 
     /** Whether the candidate is exactly `identity` now (the frozen world the slots were issued for). */
     const currentIdentity = (): string | undefined => {
@@ -410,7 +420,7 @@ export async function runReview(input: ReviewRunInput, deps: RunDeps = {}): Prom
         limit,
         async (i) => {
           try {
-            const out = await run(prompts[i]!, runnerOpts);
+            const out = await run(prompts[i]!, optionsFor(slots[i]!));
             if (!out.ok) halted = true;
             return out;
           } catch (e) {

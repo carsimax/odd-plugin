@@ -75,7 +75,7 @@ const LENS_PROPS = {
     locale: { type: "string", minLength: 2, maxLength: 35, pattern: "^[A-Za-z]{2,3}([-_][A-Za-z0-9]{2,8})*$" },
 };
 const RUN_PROPS = {
-    model: { type: "string", enum: ["fable", "opus", "sonnet", "haiku"], description: "Reviewer model family." },
+    model: { type: "string", enum: ["fable", "opus", "sonnet", "haiku"], description: "Reviewer model family for every reviewer of this run. Omit it to follow the active model profile per role (balanced by default)." },
     effort: { type: "string", enum: ["low", "medium", "high", "xhigh", "max"], description: "Reviewer effort (needs a model; not for haiku)." },
     timeout_ms: { type: "integer", minimum: 1000, maximum: 7_200_000 },
     reviewer_run_acknowledged: { type: "boolean", description: "Authorizes the reviewer batch of the forecast named by reviewer_run_binding. Never set it before the user saw the forecast." },
