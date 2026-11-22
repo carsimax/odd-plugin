@@ -10,7 +10,7 @@ import { lensArtifactSubject, treeDiffPaths } from "./artifact.js";
 import { beginCorrectionValidation, captureLensResult, captureValidatorResult, planCorrection } from "./capture.js";
 import { readDecline } from "./consent.js";
 import { REVIEWER_ARGUMENTS, reviewerArguments, type RunOutcome, type RunReviewerOptions } from "./runner.js";
-import { useProfile } from "../lib/profiles.js";
+import { clearProfile, setRole, useProfile } from "../lib/profiles.js";
 import { makeFakeClaude, type FakeRecord } from "./runner-fake.testkit.js";
 import { runReview, validateReviewerOptions, MAX_TRANSITIONS, type ReviewRunInput, type ReviewRunOutcome, type RunDeps } from "./run.js";
 import { startReview, type RiskAssessment, type RiskAssessor } from "./start.js";
@@ -1552,4 +1552,107 @@ test("S3 integration (fake claude binary): the argument vector differs from the 
       }
     });
   });
+});
+
+
+test("S3 B1 economy->max: binding-drift, zero calls, then fresh forecast under max runs opus", async () => {
+  await withProfile((d) => useProfile("economy", { dataDir: d }), async (ps) => {
+    await withRepo(async (r) => {
+      const lineage = await grant(r, "high");
+      const { calls, runner } = fakeRunner();
+      const deps: RunDeps = { riskAssessor: assess("high"), runner, profileState: ps };
+      const f1 = is(await runReview(input(r, { lineageId: lineage }), deps), "forecast");
+      useProfile("max", ps);
+      is(await runReview(input(r, { lineageId: lineage, reviewerRunAcknowledged: true, reviewerRunBinding: f1.reviewer_run_binding }), deps), "binding-drift");
+      assert.equal(calls.roles.length, 0);
+      const f2 = is(await runReview(input(r, { lineageId: lineage }), deps), "forecast");
+      assert.notEqual(f2.reviewer_run_binding, f1.reviewer_run_binding);
+      for (const v of f2.reviewers) assert.equal(v.model, "opus");
+      is(await runReview(input(r, { lineageId: lineage, reviewerRunAcknowledged: true, reviewerRunBinding: f2.reviewer_run_binding }), deps), "closed");
+      assert.deepEqual(Object.values(routeOf(calls)).map((x) => x.split("/")[0]), ["opus", "opus", "opus", "opus"]);
+      assert.deepEqual([...Object.values(routeOf(calls)).map((x) => x.split("/")[1])].sort(), f2.reviewers.map((v) => v.effort!).sort());
+    });
+  });
+});
+
+test("S3 B1 balanced(default)->clear and balanced->economy and custom one-role change", async () => {
+  // default -> economy: drift
+  await withProfile(undefined, async (ps) => {
+    await withRepo(async (r) => {
+      const lineage = await grant(r, "high");
+      const { calls, runner } = fakeRunner();
+      const deps: RunDeps = { riskAssessor: assess("high"), runner, profileState: ps };
+      const f = is(await runReview(input(r, { lineageId: lineage }), deps), "forecast");
+      useProfile("economy", ps);
+      is(await runReview(input(r, { lineageId: lineage, reviewerRunAcknowledged: true, reviewerRunBinding: f.reviewer_run_binding }), deps), "binding-drift");
+      assert.equal(calls.roles.length, 0);
+    });
+  });
+  // custom: only readability effort changes -> drift
+  await withProfile(undefined, async (ps) => {
+    await withRepo(async (r) => {
+      const lineage = await grant(r, "high");
+      const { calls, runner } = fakeRunner();
+      const deps: RunDeps = { riskAssessor: assess("high"), runner, profileState: ps };
+      const f = is(await runReview(input(r, { lineageId: lineage }), deps), "forecast");
+      setRole("odd-review-readability", "sonnet", "high", ps);
+      is(await runReview(input(r, { lineageId: lineage, reviewerRunAcknowledged: true, reviewerRunBinding: f.reviewer_run_binding }), deps), "binding-drift");
+      assert.equal(calls.roles.length, 0);
+    });
+  });
+  // explicit balanced -> clear (still balanced routes): no drift, runs
+  await withProfile((d) => useProfile("balanced", { dataDir: d }), async (ps) => {
+    await withRepo(async (r) => {
+      const lineage = await grant(r, "high");
+      const { calls, runner } = fakeRunner();
+      const deps: RunDeps = { riskAssessor: assess("high"), runner, profileState: ps };
+      const f = is(await runReview(input(r, { lineageId: lineage }), deps), "forecast");
+      clearProfile(ps);
+      is(await runReview(input(r, { lineageId: lineage, reviewerRunAcknowledged: true, reviewerRunBinding: f.reviewer_run_binding }), deps), "closed");
+      assert.deepEqual(routeOf(calls), { risk: "opus/medium", resilience: "sonnet/medium", readability: "sonnet/medium", reliability: "sonnet/medium" });
+    });
+  });
+});
+
+test("S3 B1 explicit caller model: profile change does not drift; runs caller model; view shows caller model", async () => {
+  await withProfile((d) => useProfile("economy", { dataDir: d }), async (ps) => {
+    await withRepo(async (r) => {
+      const lineage = await grant(r, "high");
+      const { calls, runner } = fakeRunner();
+      const deps: RunDeps = { riskAssessor: assess("high"), runner, profileState: ps };
+      const f = is(await runReview(input(r, { lineageId: lineage, model: "sonnet", effort: "high" }), deps), "forecast");
+      assert.equal(f.model, "sonnet");
+      for (const v of f.reviewers) { assert.equal(v.model, "sonnet"); assert.equal(v.effort, "high"); }
+      useProfile("max", ps);
+      is(await runReview(input(r, { lineageId: lineage, model: "sonnet", effort: "high", reviewerRunAcknowledged: true, reviewerRunBinding: f.reviewer_run_binding }), deps), "closed");
+      assert.deepEqual(routeOf(calls), { risk: "sonnet/high", resilience: "sonnet/high", readability: "sonnet/high", reliability: "sonnet/high" });
+    });
+  });
+  // explicit model at forecast, ack without model -> drift (must not silently run profile)
+  await withProfile(undefined, async (ps) => {
+    await withRepo(async (r) => {
+      const lineage = await grant(r, "high");
+      const { calls, runner } = fakeRunner();
+      const deps: RunDeps = { riskAssessor: assess("high"), runner, profileState: ps };
+      const f = is(await runReview(input(r, { lineageId: lineage, model: "haiku" }), deps), "forecast");
+      is(await runReview(input(r, { lineageId: lineage, reviewerRunAcknowledged: true, reviewerRunBinding: f.reviewer_run_binding }), deps), "binding-drift");
+      assert.equal(calls.roles.length, 0);
+    });
+  });
+});
+
+test("S3 B1 refuter slot view shows resolved route (balanced opus/medium; economy sonnet/medium)", async () => {
+  for (const [choose, want] of [[undefined, "opus/medium"], [(d: string) => useProfile("economy", { dataDir: d }), "sonnet/medium"]] as const) {
+    await withProfile(choose as any, async (ps) => {
+      await withRepo(async (r) => {
+        const lineage = await grant(r, "medium");
+        await CAPTURED_REFUTER_HELD(r, lineage);
+        const { calls, runner } = fakeRunner();
+        const { forecast, done } = await forecastThenRun(r, lineage, { riskAssessor: assess("medium"), runner, profileState: ps });
+        is(done, "closed");
+        assert.deepEqual(forecast.reviewers.map((v) => `${v.role}:${v.model}/${v.effort}`), [`refuter:${want}`]);
+        assert.deepEqual(routeOf(calls), { refuter: want });
+      });
+    });
+  }
 });
