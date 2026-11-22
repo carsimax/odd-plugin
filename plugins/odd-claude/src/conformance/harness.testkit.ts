@@ -22,7 +22,7 @@ export const CLEAN_ENV: NodeJS.ProcessEnv = (() => {
 })();
 
 export function git(cwd: string, ...args: string[]): string {
-  const r = spawnSync("git", ["-c", "user.name=t", "-c", "user.email=t@t.invalid", "-c", "commit.gpgsign=false", "-C", cwd, ...args], { env: CLEAN_ENV, encoding: "utf8" });
+  const r = spawnSync("git", ["-c", "user.name=t", "-c", "user.email=t@t.invalid", "-c", "commit.gpgsign=false", "-c", "gc.auto=0", "-c", "maintenance.auto=false", "-C", cwd, ...args], { env: CLEAN_ENV, encoding: "utf8" });
   if (r.status !== 0) throw new Error(`git ${args.join(" ")} failed: ${r.stderr}`);
   return r.stdout;
 }
@@ -47,6 +47,9 @@ export function makeWorld(): World {
   mkdirSync(repo);
   mkdirSync(data);
   git(repo, "init", "-q", "-b", "main");
+  // Persisted in the repo config so copies (and the servers run on them) never spawn a detached auto-gc/maintenance that could prune objects mid-copy.
+  git(repo, "config", "gc.auto", "0");
+  git(repo, "config", "maintenance.auto", "false");
   writeFileSync(join(repo, "package.json"), '{"name":"x"}\n');
   writeFileSync(join(repo, "README.md"), "# t\n");
   writeFileSync(join(repo, "a.txt"), "one\ntwo\nthree\n");
@@ -54,6 +57,8 @@ export function makeWorld(): World {
   git(repo, "add", "-A");
   git(repo, "commit", "-q", "-m", "init");
   git(dir, "init", "-q", "--bare", "-b", "main", origin);
+  git(origin, "config", "gc.auto", "0");
+  git(origin, "config", "maintenance.auto", "false");
   git(repo, "remote", "add", "origin", origin);
   git(repo, "push", "-q", "-u", "origin", "main");
   git(repo, "remote", "set-head", "origin", "main");
