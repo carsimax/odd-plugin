@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { type BootReaders, isBootId, parseLinuxBoot, parseMacBoot, readBootId } from "./boot-id.js";
+import { isAbsolute } from "node:path";
+import { type BootReaders, SYSCTL_PATH, isBootId, parseLinuxBoot, parseMacBoot, readBootId } from "./boot-id.js";
 
 const U = "4fd77cbd-1111-4222-8333-444455556666";
 
@@ -51,4 +52,9 @@ test("isBootId is strict", () => {
   assert.ok(!isBootId("a b"));
   assert.ok(!isBootId("x".repeat(129)));
   assert.ok(!isBootId(5));
+});
+
+test("sysctl is spawned by absolute path (no PATH lookup)", () => {
+  assert.equal(SYSCTL_PATH, "/usr/sbin/sysctl");
+  assert.ok(isAbsolute(SYSCTL_PATH));
 });

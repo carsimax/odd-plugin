@@ -3,7 +3,7 @@
 // lock may be judged dead by pid only when the owner recorded the SAME machine id AND the SAME boot identity.
 //   Linux: /proc/sys/kernel/random/boot_id + the pid namespace link of /proc/self/ns/pid, e.g. "<uuid>/pid:[4026531836]"
 //          (a container shares the host boot_id but not the pid namespace).
-//   macOS: `kern.bootsessionuuid` (a per-boot UUID) via one cached `sysctl -n` call (1 s timeout).
+//   macOS: `kern.bootsessionuuid` (a per-boot UUID) via one cached `/usr/sbin/sysctl -n` call (absolute path, 1 s timeout).
 // Anything else, or any failure, is `undefined` (callers use the hostname rule). Nothing here throws.
 import { spawnSync } from "node:child_process";
 import { closeSync, constants, fstatSync, openSync, readlinkSync, readSync } from "node:fs";
@@ -65,6 +65,9 @@ function boundedRead(path: string): string | undefined {
   }
 }
 
+/** Absolute path: no PATH lookup that a shadowing binary could answer. */
+export const SYSCTL_PATH = "/usr/sbin/sysctl";
+
 export const realReaders: BootReaders = {
   platform: process.platform,
   readText: boundedRead,
@@ -77,7 +80,7 @@ export const realReaders: BootReaders = {
   },
   sysctl(name) {
     try {
-      const r = spawnSync("sysctl", ["-n", name], { timeout: 1000, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"], maxBuffer: 4096 });
+      const r = spawnSync(SYSCTL_PATH, ["-n", name], { timeout: 1000, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"], maxBuffer: 4096 });
       return r.status === 0 && typeof r.stdout === "string" ? r.stdout : undefined;
     } catch {
       return undefined;

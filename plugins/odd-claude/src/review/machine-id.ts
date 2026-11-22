@@ -28,7 +28,26 @@ export function stateHome(env: NodeJS.ProcessEnv = process.env): string | undefi
   }
 }
 
-type Read = { kind: "ok"; id: string } | { kind: "absent" } | { kind: "bad" };
+// "linked": the ONLY defect is nlink > 1. The creator briefly has two names (link(2) then unlink of the temp), so this is
+// transient for a racing reader; a persistent hardlink stays bad after the bounded retry.
+type Read = { kind: "ok"; id: string } | { kind: "absent" } | { kind: "bad" } | { kind: "linked" };
+
+const LINK_RETRIES = 20;
+const LINK_RETRY_MS = 5;
+
+function sleepSync(ms: number): void {
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+}
+
+/** readId that waits (bounded: 20 x 5 ms) while the only defect is the creator's transient second link. */
+function readIdSettled(file: string): Read {
+  let r = readId(file);
+  for (let i = 0; i < LINK_RETRIES && r.kind === "linked"; i++) {
+    sleepSync(LINK_RETRY_MS);
+    r = readId(file);
+  }
+  return r;
+}
 
 function readId(file: string): Read {
   let fd: number;
@@ -39,7 +58,8 @@ function readId(file: string): Read {
   }
   try {
     const st = fstatSync(fd);
-    if (!st.isFile() || st.nlink > 1 || st.size > MAX_BYTES) return { kind: "bad" };
+    if (!st.isFile() || st.size > MAX_BYTES) return { kind: "bad" };
+    if (st.nlink > 1) return { kind: "linked" };
     const buf = Buffer.alloc(MAX_BYTES + 1);
     let n = 0;
     for (;;) {
@@ -64,9 +84,9 @@ export function loadMachineId(stateDir: string): string | undefined {
     mkdirSync(dir, { recursive: true, mode: 0o700 });
     if (!lstatSync(dir).isDirectory()) return undefined; // a symlinked dir is never followed
     const file = join(dir, "machine-id");
-    const first = readId(file);
+    const first = readIdSettled(file);
     if (first.kind === "ok") return first.id;
-    if (first.kind === "bad") return undefined;
+    if (first.kind === "bad" || first.kind === "linked") return undefined;
     const tmp = `${file}.tmp-${randomUUID()}`;
     try {
       const fd = openSync(tmp, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW, 0o600);
@@ -84,7 +104,7 @@ export function loadMachineId(stateDir: string): string | undefined {
     } finally {
       rmSync(tmp, { force: true });
     }
-    const again = readId(file);
+    const again = readIdSettled(file);
     return again.kind === "ok" ? again.id : undefined;
   } catch {
     return undefined;
@@ -93,11 +113,15 @@ export function loadMachineId(stateDir: string): string | undefined {
 
 let cached: { value: string | undefined } | undefined;
 
-/** The machine id for this process, resolved once (a failure is cached too: hostname-only for the whole process). */
+/**
+ * The machine id for this process, resolved once. Only a SUCCESS is cached: a failure (transient race, unreadable home)
+ * is retried by the next acquire, which is cheap (one open/read), so a transient error never pins hostname-only for
+ * the whole process; a persistent failure just stays hostname-only.
+ */
 export function machineId(): string | undefined {
-  if (!cached) {
-    const home = stateHome();
-    cached = { value: home ? loadMachineId(home) : undefined };
-  }
-  return cached.value;
+  if (cached) return cached.value;
+  const home = stateHome();
+  const value = home ? loadMachineId(home) : undefined;
+  if (value !== undefined) cached = { value };
+  return value;
 }

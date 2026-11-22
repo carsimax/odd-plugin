@@ -26,6 +26,20 @@ export function stateHome(env = process.env) {
         return undefined;
     }
 }
+const LINK_RETRIES = 20;
+const LINK_RETRY_MS = 5;
+function sleepSync(ms) {
+    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+}
+/** readId that waits (bounded: 20 x 5 ms) while the only defect is the creator's transient second link. */
+function readIdSettled(file) {
+    let r = readId(file);
+    for (let i = 0; i < LINK_RETRIES && r.kind === "linked"; i++) {
+        sleepSync(LINK_RETRY_MS);
+        r = readId(file);
+    }
+    return r;
+}
 function readId(file) {
     let fd;
     try {
@@ -36,8 +50,10 @@ function readId(file) {
     }
     try {
         const st = fstatSync(fd);
-        if (!st.isFile() || st.nlink > 1 || st.size > MAX_BYTES)
+        if (!st.isFile() || st.size > MAX_BYTES)
             return { kind: "bad" };
+        if (st.nlink > 1)
+            return { kind: "linked" };
         const buf = Buffer.alloc(MAX_BYTES + 1);
         let n = 0;
         for (;;) {
@@ -66,10 +82,10 @@ export function loadMachineId(stateDir) {
         if (!lstatSync(dir).isDirectory())
             return undefined; // a symlinked dir is never followed
         const file = join(dir, "machine-id");
-        const first = readId(file);
+        const first = readIdSettled(file);
         if (first.kind === "ok")
             return first.id;
-        if (first.kind === "bad")
+        if (first.kind === "bad" || first.kind === "linked")
             return undefined;
         const tmp = `${file}.tmp-${randomUUID()}`;
         try {
@@ -92,7 +108,7 @@ export function loadMachineId(stateDir) {
         finally {
             rmSync(tmp, { force: true });
         }
-        const again = readId(file);
+        const again = readIdSettled(file);
         return again.kind === "ok" ? again.id : undefined;
     }
     catch {
@@ -100,11 +116,17 @@ export function loadMachineId(stateDir) {
     }
 }
 let cached;
-/** The machine id for this process, resolved once (a failure is cached too: hostname-only for the whole process). */
+/**
+ * The machine id for this process, resolved once. Only a SUCCESS is cached: a failure (transient race, unreadable home)
+ * is retried by the next acquire, which is cheap (one open/read), so a transient error never pins hostname-only for
+ * the whole process; a persistent failure just stays hostname-only.
+ */
 export function machineId() {
-    if (!cached) {
-        const home = stateHome();
-        cached = { value: home ? loadMachineId(home) : undefined };
-    }
-    return cached.value;
+    if (cached)
+        return cached.value;
+    const home = stateHome();
+    const value = home ? loadMachineId(home) : undefined;
+    if (value !== undefined)
+        cached = { value };
+    return value;
 }

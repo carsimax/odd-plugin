@@ -131,3 +131,25 @@ test("concurrent first creation by several processes yields one id", async () =>
     t.done();
   }
 });
+
+test("B2: concurrent first creation never yields undefined (nlink window), 20 rounds", async () => {
+  const script = `import(process.argv[1]).then((m) => process.stdout.write(String(m.loadMachineId(process.argv[2]))));`;
+  const run = (dir: string) =>
+    new Promise<string>((resolve, reject) => {
+      const c = spawn(process.execPath, ["-e", script, `file://${MODULE}`, dir], { stdio: ["ignore", "pipe", "inherit"] });
+      let out = "";
+      c.stdout.on("data", (d) => (out += d));
+      c.on("error", reject);
+      c.on("close", () => resolve(out));
+    });
+  for (let round = 0; round < 20; round++) {
+    const t = tmp();
+    try {
+      const ids = await Promise.all(Array.from({ length: 8 }, () => run(t.dir)));
+      assert.ok(isMachineId(ids[0]), `round ${round}: ${ids.join(",")}`);
+      assert.deepEqual([...new Set(ids)], [ids[0]], `round ${round}: ${ids.join(",")}`);
+    } finally {
+      t.done();
+    }
+  }
+});
