@@ -2,6 +2,20 @@
 
 A Claude Code plugin that ports the ODD harness of gentle-shell (MIT) <!-- odd-check: allow --> to Claude Code. **v2.0** adds native receipt-driven review (RDD) on top of **v1.1** (the mods UX) and **v1.0** (the parity release): the ODD persona, orchestrator cards, agents, skills, native integrations, advisory review, themes and lifecycle hooks. Apart from the RDD delivery gate and Stop settle reminder, which can block only when you turn RDD on (it is off by default), the plugin ships **no deny/ask/block hook** (user decision, v0.5, amended for v2): its hooks only add context. Coordinator mode and the admission rules are prompt text, not enforcement; otherwise the only enforcement is Claude Code's native permission system (see [Permission modes](#permission-modes)). The plugin collects no data and sends nothing anywhere.
 
+## What's new in 2.3.0
+
+**Balanced by default.** A minor bump with two behavior changes to read in the upgrade notes.
+
+- **Balanced profile is the default.** The `balanced` preset carries the new per-role models, and it applies when no profile was chosen. Economy, max and custom remain; `clear` returns to balanced.
+- **Native RDD reviewers follow the active profile per role** (risk, resilience, readability, reliability, refuter, validator). An explicit model passed by the caller still overrides it.
+- **`odd-explore` runs on haiku in every preset**, and the orchestrator launches several explorers in parallel on distinct fronts for deeper context.
+- **One persona only: neutral**, with neutral Spanish (no voseo). The mentor persona is removed; a stored `mentor` reads as neutral and `persona mentor` is refused.
+
+Upgrade notes:
+
+- If you relied on "no profile = session model", agents now get the balanced models unless you pick another profile (`/odd-claude:profile`).
+- If you relied on the mentor persona, it no longer exists; neutral is used instead.
+
 ## What's new in 2.2.0
 
 **Production readiness.** A minor bump, but the Node minimum rose, so read the first item.

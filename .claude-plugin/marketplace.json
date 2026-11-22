@@ -8,7 +8,7 @@
       "name": "odd-claude",
       "source": "./plugins/odd-claude",
       "description": "odd-claude: opinionated workflow plugin for Claude Code (Engram memory, review agents, doctor/status/setup).",
-      "version": "2.2.0"
+      "version": "2.3.0"
     }
   ]
 }
