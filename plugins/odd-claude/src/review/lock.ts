@@ -30,12 +30,15 @@
 //   * fail closed: unexpected FS errors throw `StoreLockError`; ownership is never assumed.
 //   * leftovers of a kill -9 (`LOCK.tmp-*`, `LOCK.stale-*`, `LOCK.release-*`, dead `LOCK.claim-*`) are inert and are
 //     swept best-effort at acquire time, bounded, only when their owner is provably dead (or unreadable and old).
-// Machine identity: the owner record carries `host` (`os.hostname()`, for humans and old readers) and `machine`, a
-// stable random id persisted on disk (machine-id.ts). `os.hostname()` can change (macOS returns the DHCP address), so
-// "same machine" is decided by the machine id ALONE when both the record and this process have a valid one (a
-// hostname change no longer matters, a different id is NEVER local). A record without `machine` (older version), or a
-// process that could not load an id, falls back to the hostname comparison exactly as before (fail closed on a
-// changed hostname: remove `LOCK` by hand after checking the owner). Never network-derived.
+// Machine identity: the owner record carries `host` (`os.hostname()`, for humans and old readers), `machine` (a stable
+// random id persisted on disk, machine-id.ts) and `boot` (boot + pid-namespace identity, boot-id.ts). `os.hostname()`
+// can change (macOS returns the DHCP address), but `kill(pid, 0)` is only proof inside the pid namespace that owns the
+// pid, and the machine id file can be SHARED (a container mounting ~/.local/state, an NFS home). So the owner is local
+// by id only when BOTH sides have a valid machine id AND a boot identity and both are equal; in EVERY other case
+// (a missing field on either side, different ids, different boot/namespace) the hostname rule applies exactly as
+// before: same hostname = local, different hostname = never taken over (fail closed: remove `LOCK` by hand after
+// checking the owner). Never network-derived. Residual: two machines with the same hostname sharing a store over a
+// network filesystem were already a limit of the hostname rule.
 // Not implemented on purpose: the Go shared/exclusive maintenance lock (REVIEW-MAINTENANCE.lock). Its only
 // exclusive users are recover/reclaim/quarantine/legacy maintenance, which are out of scope for the faithful core
 // (v2-rdd S3); writers (U3, U5-U7) need only this exclusive store lock.
@@ -44,6 +47,7 @@ import { closeSync, constants, fstatSync, fsyncSync, lstatSync, mkdirSync, openS
 import { hostname } from "node:os";
 import { join } from "node:path";
 import { performance } from "node:perf_hooks";
+import { bootId as processBoot, isBootId } from "./boot-id.js";
 import { isMachineId, machineId as processMachineId } from "./machine-id.js";
 
 const OWNER_FILE = "owner.json";
@@ -56,6 +60,8 @@ export interface StoreLockOwner {
   host: string;
   /** Stable machine id (absent in records written by older versions or when no id could be loaded). */
   machine?: string;
+  /** Boot + pid-namespace identity (absent when unavailable or in older records). */
+  boot?: string;
   ownerId: string;
   startedAt: number;
 }
@@ -69,6 +75,8 @@ export interface StoreLockOptions {
   host?: string;
   /** Machine id seam: a UUID, or `null` for hostname-only. Without it, `host` given means hostname-only, else the persisted id. */
   machineId?: string | null;
+  /** Boot identity seam, same semantics as `machineId`. */
+  bootId?: string | null;
   now?: () => number;
   isProcessDead?: (pid: number) => boolean;
 }
@@ -100,7 +108,7 @@ export class StoreLockContended extends Error {
     readonly blocker?: StoreLockBlocker,
   ) {
     const o = blocker?.owner;
-    const who = o ? ` by pid ${o.pid} on ${o.host}${o.machine ? ` (machine ${o.machine.slice(0, 8)})` : ""}` : "";
+    const who = o ? ` by pid ${o.pid} on ${o.host}${o.machine ? ` (machine ${o.machine.slice(0, 8)}${o.boot ? `, boot ${o.boot.slice(0, 8)}` : ""})` : ""}` : "";
     const what = blocker?.kind === "reclaim" ? "a stale review store lock is being reclaimed" : "review store lock is held";
     super(`${what}${who} (waited ${Math.round(waitedMs)} ms): ${path}`);
     this.name = "StoreLockContended";
@@ -124,6 +132,7 @@ export function storeLockPath(storeRoot: string): string {
 interface Config {
   host: string;
   machine?: string;
+  boot?: string;
   now: () => number;
   isDead: (pid: number) => boolean;
   staleUnreadableMs: number;
@@ -154,7 +163,7 @@ function processDead(pid: number): boolean {
 }
 
 function newRecord(cfg: Config): StoreLockOwner {
-  return { pid: process.pid, host: cfg.host, ...(cfg.machine ? { machine: cfg.machine } : {}), ownerId: randomBytes(16).toString("hex"), startedAt: cfg.now() };
+  return { pid: process.pid, host: cfg.host, ...(cfg.machine ? { machine: cfg.machine } : {}), ...(cfg.boot ? { boot: cfg.boot } : {}), ownerId: randomBytes(16).toString("hex"), startedAt: cfg.now() };
 }
 
 function parseOwner(raw: string): StoreLockOwner | undefined {
@@ -168,7 +177,7 @@ function parseOwner(raw: string): StoreLockOwner | undefined {
       typeof v.startedAt === "number"
     ) {
       // An invalid `machine` is ignored: the record then follows the hostname rule.
-      return { pid: v.pid, host: v.host, ...(isMachineId(v.machine) ? { machine: v.machine } : {}), ownerId: v.ownerId, startedAt: v.startedAt };
+      return { pid: v.pid, host: v.host, ...(isMachineId(v.machine) ? { machine: v.machine } : {}), ...(isBootId(v.boot) ? { boot: v.boot } : {}), ownerId: v.ownerId, startedAt: v.startedAt };
     }
   } catch {
     // unreadable
@@ -255,9 +264,12 @@ function observe(path: string): Observed {
   return { kind: "record", record, identity: record.ownerId, ino: dirIdentity };
 }
 
-/** Same machine: ids only when both sides have one, else the hostname (legacy record or no id here). */
+/** Local by id needs machine AND boot identity on both sides, all equal; anything else is the hostname rule. */
 function isLocal(record: StoreLockOwner, cfg: Config): boolean {
-  if (record.machine !== undefined && cfg.machine !== undefined) return record.machine === cfg.machine;
+  if (
+    record.machine !== undefined && cfg.machine !== undefined && record.machine === cfg.machine &&
+    record.boot !== undefined && cfg.boot !== undefined && record.boot === cfg.boot
+  ) return true;
   return record.host === cfg.host;
 }
 
@@ -409,6 +421,12 @@ function resolveMachine(options: StoreLockOptions): string | undefined {
   return processMachineId();
 }
 
+function resolveBoot(options: StoreLockOptions): string | undefined {
+  if (options.bootId !== undefined) return isBootId(options.bootId) ? options.bootId : undefined;
+  if (options.host !== undefined) return undefined;
+  return processBoot();
+}
+
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
 /** Acquires the exclusive store lock, waiting up to `timeoutMs`. Throws StoreLockContended or StoreLockError. */
@@ -416,6 +434,7 @@ export async function acquireStoreLock(storeRoot: string, options: StoreLockOpti
   const cfg: Config = {
     host: options.host ?? hostname(),
     machine: resolveMachine(options),
+    boot: resolveBoot(options),
     now: options.now ?? Date.now,
     isDead: options.isProcessDead ?? processDead,
     staleUnreadableMs: options.staleUnreadableMs ?? UNREADABLE_STALE_MS,

@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
-import { chmodSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
+import { chmodSync, linkSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -48,6 +48,19 @@ for (const [name, content] of [
     }
   });
 }
+
+test("a hardlinked file (nlink > 1) is rejected", () => {
+  const t = tmp();
+  try {
+    mkdirSync(join(t.dir, "odd-plugin"), { recursive: true });
+    const other = join(t.dir, "other");
+    writeFileSync(other, "33333333-3333-4333-8333-333333333333\n");
+    linkSync(other, t.file);
+    assert.equal(loadMachineId(t.dir), undefined);
+  } finally {
+    t.done();
+  }
+});
 
 test("symlinked file is never followed", () => {
   const t = tmp();

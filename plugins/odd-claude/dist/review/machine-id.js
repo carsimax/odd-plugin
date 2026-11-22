@@ -36,7 +36,7 @@ function readId(file) {
     }
     try {
         const st = fstatSync(fd);
-        if (!st.isFile() || st.size > MAX_BYTES)
+        if (!st.isFile() || st.nlink > 1 || st.size > MAX_BYTES)
             return { kind: "bad" };
         const buf = Buffer.alloc(MAX_BYTES + 1);
         let n = 0;

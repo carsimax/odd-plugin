@@ -8,6 +8,8 @@ import { acquireStoreLock, StoreLockContended, storeLockPath } from "./lock.js";
 
 const M1 = "11111111-1111-4111-8111-111111111111";
 const M2 = "22222222-2222-4222-8222-222222222222";
+const B1 = "boot-one/pid:[4026531836]";
+const B2 = "boot-one/pid:[4026532999]"; // same boot, another pid namespace (a container)
 
 function tmp(): { root: string; done: () => void } {
   const dir = mkdtempSync(join(tmpdir(), "odd-lock-host-"));
@@ -39,11 +41,12 @@ const quick = { timeoutMs: 300, pollMs: 10 };
 test("same machine id, dead owner, DIFFERENT hostname: taken over", async () => {
   const t = tmp();
   try {
-    seed(t.root, { pid: deadPid(), host: "192.168.168.105", machine: M1 });
-    const h = await acquireStoreLock(t.root, { ...quick, host: "192.168.1.89", machineId: M1 });
+    seed(t.root, { pid: deadPid(), host: "192.168.168.105", machine: M1, boot: B1 });
+    const h = await acquireStoreLock(t.root, { ...quick, host: "192.168.1.89", machineId: M1, bootId: B1 });
     const rec = JSON.parse(readFileSync(join(storeLockPath(t.root), "owner.json"), "utf8"));
     assert.equal(rec.host, "192.168.1.89");
     assert.equal(rec.machine, M1);
+    assert.equal(rec.boot, B1);
     assert.equal(rec.pid, process.pid);
     assert.deepEqual(h.release(), { status: "released" });
   } finally {
@@ -54,10 +57,10 @@ test("same machine id, dead owner, DIFFERENT hostname: taken over", async () => 
 test("same machine id, LIVE owner, different hostname: contended, record untouched", async () => {
   const t = tmp();
   try {
-    const lock = seed(t.root, { pid: process.pid, host: "elsewhere", machine: M1 });
+    const lock = seed(t.root, { pid: process.pid, host: "elsewhere", machine: M1, boot: B1 });
     const before = readFileSync(join(lock, "owner.json"), "utf8");
     await assert.rejects(
-      acquireStoreLock(t.root, { ...quick, host: "other-name", machineId: M1 }),
+      acquireStoreLock(t.root, { ...quick, host: "other-name", machineId: M1, bootId: B1 }),
       (e: unknown) => e instanceof StoreLockContended && e.owner?.pid === process.pid && /pid \d+ on elsewhere/.test(e.message) && e.message.includes(M1.slice(0, 8)),
     );
     assert.equal(readFileSync(join(lock, "owner.json"), "utf8"), before);
@@ -66,13 +69,69 @@ test("same machine id, LIVE owner, different hostname: contended, record untouch
   }
 });
 
-test("a different machine id is never local, even with the same hostname and a dead pid", async () => {
+test("(d) different machine ids + same hostname + dead pid: hostname rule, taken over", async () => {
   const t = tmp();
   try {
-    const lock = seed(t.root, { pid: deadPid(), host: "same-host", machine: M2 });
+    seed(t.root, { pid: deadPid(), host: "same-host", machine: M2, boot: B1 });
+    const h = await acquireStoreLock(t.root, { ...quick, host: "same-host", machineId: M1, bootId: B1 });
+    assert.deepEqual(h.release(), { status: "released" });
+  } finally {
+    t.done();
+  }
+});
+
+test("different machine ids AND different hostnames: never local, record untouched", async () => {
+  const t = tmp();
+  try {
+    const lock = seed(t.root, { pid: deadPid(), host: "host-a", machine: M2, boot: B1 });
     const before = readFileSync(join(lock, "owner.json"), "utf8");
-    await assert.rejects(acquireStoreLock(t.root, { ...quick, host: "same-host", machineId: M1 }), StoreLockContended);
+    await assert.rejects(acquireStoreLock(t.root, { ...quick, host: "host-b", machineId: M1, bootId: B1 }), StoreLockContended);
     assert.equal(readFileSync(join(lock, "owner.json"), "utf8"), before);
+  } finally {
+    t.done();
+  }
+});
+
+test("(a) same machine id, DIFFERENT boot identity (other pid namespace), pid in our namespace, other hostname: contended, record byte-identical", async () => {
+  for (const pid of [process.pid, deadPid()]) {
+    const t = tmp();
+    try {
+      const lock = seed(t.root, { pid, host: "host-container", machine: M1, boot: B2 });
+      const before = readFileSync(join(lock, "owner.json"), "utf8");
+      await assert.rejects(acquireStoreLock(t.root, { ...quick, host: "host-mac", machineId: M1, bootId: B1 }), StoreLockContended);
+      assert.equal(readFileSync(join(lock, "owner.json"), "utf8"), before);
+    } finally {
+      t.done();
+    }
+  }
+});
+
+test("(c) same machine id, boot missing on the record or here: hostname rule", async () => {
+  const t = tmp();
+  try {
+    const lock = seed(t.root, { pid: deadPid(), host: "old-host", machine: M1 });
+    await assert.rejects(acquireStoreLock(t.root, { ...quick, host: "new-host", machineId: M1, bootId: B1 }), StoreLockContended);
+    assert.equal(JSON.parse(readFileSync(join(lock, "owner.json"), "utf8")).host, "old-host");
+    await assert.rejects(acquireStoreLock(t.root, { ...quick, host: "new-host", machineId: M1, bootId: null }), StoreLockContended);
+    const h = await acquireStoreLock(t.root, { ...quick, host: "old-host", machineId: M1, bootId: B1 });
+    assert.deepEqual(h.release(), { status: "released" });
+    seed(t.root, { pid: deadPid(), host: "old-host", machine: M1, boot: B1 });
+    const h2 = await acquireStoreLock(t.root, { ...quick, host: "old-host", machineId: M1, bootId: null });
+    assert.deepEqual(h2.release(), { status: "released" });
+  } finally {
+    t.done();
+  }
+});
+
+test("a test-supplied host without machineId records no machine and no boot", async () => {
+  const t = tmp();
+  try {
+    const h = await acquireStoreLock(t.root, { ...quick, host: "fake-host" });
+    const rec = JSON.parse(readFileSync(join(storeLockPath(t.root), "owner.json"), "utf8"));
+    assert.equal(rec.host, "fake-host");
+    assert.equal("machine" in rec, false);
+    assert.equal("boot" in rec, false);
+    assert.deepEqual(h.release(), { status: "released" });
   } finally {
     t.done();
   }
@@ -121,7 +180,7 @@ test("a real process crash (kill -9) after a hostname change is taken over using
   const state = mkdtempSync(join(tmpdir(), "odd-lock-host-state-"));
   try {
     const ready = join(state, "ready");
-    const script = `Promise.all([import("${new URL("./lock.js", import.meta.url).href}"), import("${new URL("./machine-id.js", import.meta.url).href}")]).then(async ([m, id]) => { await m.acquireStoreLock(process.argv[1], { host: "old-name", machineId: id.machineId() }); require("node:fs").writeFileSync(process.argv[2], "r"); setInterval(() => {}, 1000); });`;
+    const script = `Promise.all([import("${new URL("./lock.js", import.meta.url).href}"), import("${new URL("./machine-id.js", import.meta.url).href}")]).then(async ([m, id]) => { await m.acquireStoreLock(process.argv[1], { host: "old-name", machineId: id.machineId(), bootId: (await import("${new URL("./boot-id.js", import.meta.url).href}")).bootId() ?? null }); require("node:fs").writeFileSync(process.argv[2], "r"); setInterval(() => {}, 1000); });`;
     const child = spawn(process.execPath, ["-e", script, t.root, ready], { env: { ...process.env, XDG_STATE_HOME: state }, stdio: "ignore" });
     const t0 = Date.now();
     while (!(await import("node:fs")).existsSync(ready)) {
@@ -133,7 +192,7 @@ test("a real process crash (kill -9) after a hostname change is taken over using
     assert.match(rec.machine, /^[0-9a-f-]{36}$/);
     child.kill("SIGKILL");
     await new Promise((r) => child.once("close", r));
-    const h = await acquireStoreLock(t.root, { ...quick, host: "new-name", machineId: rec.machine });
+    const h = await acquireStoreLock(t.root, { ...quick, host: "new-name", machineId: rec.machine, bootId: rec.boot });
     assert.deepEqual(h.release(), { status: "released" });
   } finally {
     t.done();
