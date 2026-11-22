@@ -1,0 +1,65 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ci:
+    name: ${{ matrix.os }} / node ${{ matrix.node }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        # 20 = the plugin's `engines.node` floor (>=20); 26 = the version used for development.
+        node: ["20", "26"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+          cache-dependency-path: plugins/odd-claude/package-lock.json
+
+      - name: Install plugin dependencies
+        working-directory: plugins/odd-claude
+        run: npm ci
+
+      - name: Build, and fail if the committed dist/ is stale
+        working-directory: plugins/odd-claude
+        run: |
+          npm run build
+          if [ -n "$(git status --porcelain -- dist)" ]; then
+            echo "::error::dist/ does not match src/. Run 'npm run build' in plugins/odd-claude and commit dist/."
+            git status --porcelain -- dist
+            git diff --stat -- dist
+            exit 1
+          fi
+
+      - name: Test
+        working-directory: plugins/odd-claude
+        run: npm test
+
+      - name: Check (naming / data-collection guard)
+        working-directory: plugins/odd-claude
+        run: npm run check
+
+      - name: Bench unit tests (no oracle binary)
+        run: npm run test:bench
+
+      - name: Install Claude Code CLI
+        run: npm i -g @anthropic-ai/claude-code
+
+      - name: Validate the plugin manifests
+        run: claude plugin validate plugins/odd-claude
