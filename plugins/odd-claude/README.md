@@ -2,13 +2,25 @@
 
 A Claude Code plugin that ports the ODD harness of gentle-shell (MIT) <!-- odd-check: allow --> to Claude Code. **v2.0** adds native receipt-driven review (RDD) on top of **v1.1** (the mods UX) and **v1.0** (the parity release): the ODD persona, orchestrator cards, agents, skills, native integrations, advisory review, themes and lifecycle hooks. Apart from the RDD delivery gate and Stop settle reminder, which can block only when you turn RDD on (it is off by default), the plugin ships **no deny/ask/block hook** (user decision, v0.5, amended for v2): its hooks only add context. Coordinator mode and the admission rules are prompt text, not enforcement; otherwise the only enforcement is Claude Code's native permission system (see [Permission modes](#permission-modes)). The plugin collects no data and sends nothing anywhere.
 
+## What's new in 2.1.0
+
+**Peer orchestrators (R07).** One Claude Code session on this machine can send a short message to another live session, with the recipient's human consent and no dependency on mods. See [Peer orchestrators](#peer-orchestrators-r07).
+
+- Consent is closed by default: a session accepts mail from another only after *you* type `/odd-claude:peers allow <sender session id>` in the recipient session. Grants are recorded only by the `UserPromptSubmit` hook from your own prompt; the model cannot grant itself.
+- Three MCP tools in the new `peers` server: `odd_orchestrator_session_id`, `odd_orchestrator_list`, `odd_orchestrator_send_message` (accepted into the mailbox, not a read receipt).
+- Delivery on the recipient's next prompt (and `SessionStart`), inside an untrusted `<peer-messages untrusted="true">` wrapper; messages from other sessions are data, not instructions.
+- Everything a hook injects together stays under a 9000-character context budget; a message that does not fit stays queued, an oversized one is truncated.
+- Limits: message 1-8192 bytes, reason 8-512 bytes, 50 queued messages per mailbox, 10 per minute per sender, 24 h TTL. A model with shell access can bypass the consent files; Bash approval is the boundary.
+- Review store: the abandoned lineage sweep removes inert lineage directories left by a crash in the middle of START (at most 16 per call, older than one hour, under the store lock; see "Abandoned lineage directory" under RDD).
+- Version 2.1.0 is a minor bump: new feature, no breaking change.
+
 ## What's new in 2.0.0
 
 **Native receipt-driven review (RDD).** A TypeScript review engine ships in the plugin: review tools over MCP, isolated `claude -p` reviewers, a Stop settle reminder and a `git push` / `gh pr` delivery gate. It is **off by default** and has an off switch that always wins. See [Receipt-driven review (RDD)](#receipt-driven-review-rdd).
 
 - New: the `review` MCP server (`review_*` tools), the `review-mode.js` switch CLI, a `PreToolUse` hook on `Bash` in `hooks/hooks.json`.
 - Changed: the "no deny" rule now has a scoped exception: only the RDD delivery gate and Stop settle reminder can block, and only with RDD on (user decision S3, 2026-11-19). Everything else stays advisory.
-- Not in 2.0.0: recover, reclaim, quarantine and legacy maintenance of the review store, and a few other items (see the [roadmap](../../docs/roadmap.md)). Inter-session peer orchestrators (R07) are implemented on this branch but unreleased: see [Peer orchestrators](#peer-orchestrators-r07-unreleased).
+- Not in 2.0.0: recover, reclaim, quarantine and legacy maintenance of the review store, and a few other items (see the [roadmap](../../docs/roadmap.md)). Inter-session peer orchestrators (R07) shipped in 2.1.0: see [Peer orchestrators](#peer-orchestrators-r07).
 - Version 2.0.0 is a major bump because a hook can now deny a command (with RDD on).
 
 ## Receipt-driven review (RDD)
@@ -130,7 +142,7 @@ The mods UX (Phase 5), unchanged in 2.0. Every feature ships a non-mod version t
 
 **Enabling mods.** Mods are gated by Claude Code. Enable them in your Claude Code build/account (see `docs/research/open-questions.md`, Q1) and load the plugin; the `modules` entry in `hooks/hooks.json` points at `hooks/register.ts`. With mods off the plugin loads without errors and only the fallbacks apply. `claude plugin test plugins/odd-claude` runs the mod tests.
 
-**Interactive checks still pending.** These could not be observed in `claude -p` and have not been verified in an interactive session: the `/odd-agents` and `/odd-changes` panes, quiet rendering, banner visibility (`systemMessage`) and the statusLine against a live payload (the fields come from the public documentation and fixtures).
+**Interactive checks (2026-11-21, Claude Code 2.1.330, mods enabled, `--plugin-dir`, driven through a pseudo-terminal).** Observed: the startup banner is visible as the `SessionStart` `systemMessage` ("odd-claude v2.1.0 · ODD harness for Claude Code …"); `/odd-agents` opens a pane with the subagent table ("No subagents recorded for this session"); `/odd-changes` opens a pane with the changes summary (outside a repository it says so); quiet rendering: with `/odd-claude:quiet on` the Bash result of `seq 1 300` renders as a one-line summary marked quiet, and with quiet off the normal rendering returns (the command's reply text says "needs mods" regardless of whether mods are on, a wording nit); the `odd-status` statusLine rendered against a live payload (model, branch, tokens/s) with an empty stderr. The live payload keys were: `context_window`, `cost`, `cwd`, `effort`, `exceeds_200k_tokens`, `fast_mode`, `model`, `output_style`, `prompt_cache`, `prompt_id`, `rate_limits`, `scratchpad_dir`, `session_id`, `session_name`, `thinking`, `transcript_path`, `version`, `workspace`. Not observed: the live pane auto-refresh every 5 s over time, and `profiles` routing via `agent.spawn`.
 
 ## What's in v1.0
 
@@ -138,7 +150,7 @@ The mods UX (Phase 5), unchanged in 2.0. Every feature ships a non-mod version t
 - **Agents** (`odd-claude:<agent>`): `odd-explore`, `odd-verify`, `odd-worker`, `odd-jd-fix`, `odd-jd-judge-a`, `odd-jd-judge-b`, `odd-review-risk`, `odd-review-resilience`, `odd-review-readability`, `odd-review-reliability`.
 - **Hooks** (advisory; only the RDD-gated ones below can block): `SessionStart` (context, scratch dir, title, status file, skill registry, optional codegraph warm-up), `UserPromptSubmit` (context, quota advisory), `PostToolUse` (exploration budget, context backstop), `StopFailure` (quota advisory), `Stop` (status file; empty output unless RDD is on, see [RDD](#receipt-driven-review-rdd)), `PreToolUse` on `Bash` (RDD delivery gate; silent unless RDD is on), `SubagentStart`/`SubagentStop` (record the subagent in session state; silent), `SessionEnd` (scratch cleanup, resume hint, status file).
 - **Themes**: `odd`, `odd cute`, `odd bold`. **Output style**: `odd`. **Cards**, **support docs** and **sounds assets** (see below).
-- **Not implemented, by user decision (2026-11-18):** R57 (notification sounds; the `assets/sounds/` files are only shipped assets) and R63 (GitHub star prompt). Native RDD shipped in 2.0.0; inter-session peers (R07) are implemented but unreleased, see [Peer orchestrators](#peer-orchestrators-r07-unreleased).
+- **Not implemented, by user decision (2026-11-18):** R57 (notification sounds; the `assets/sounds/` files are only shipped assets) and R63 (GitHub star prompt). Native RDD shipped in 2.0.0; inter-session peers (R07) shipped in 2.1.0, see [Peer orchestrators](#peer-orchestrators-r07).
 - **No deny, with one scoped exception:** the only blocks the plugin can emit are the Stop settle reminder and the delivery gate (PreToolUse on `git push` / `gh pr`) of [RDD](#receipt-driven-review-rdd), both off by default (see [Permission modes](#permission-modes)).
 
 ## Themes
@@ -237,9 +249,9 @@ For development, load the plugin from a checkout without installing:
 claude --plugin-dir plugins/odd-claude
 ```
 
-## Peer orchestrators (R07, unreleased)
+## Peer orchestrators (R07)
 
-**What it is.** One Claude Code session on this machine can send a short message to another live session, with the recipient's human consent, with no dependency on mods. The channel is a file mailbox under `${CLAUDE_PLUGIN_DATA}/peers/<recipient session id>/`, delivered by hooks. Unreleased: it is on the `chore/review-maintenance` branch and no version has been bumped for it.
+**What it is.** One Claude Code session on this machine can send a short message to another live session, with the recipient's human consent, with no dependency on mods. The channel is a file mailbox under `${CLAUDE_PLUGIN_DATA}/peers/<recipient session id>/`, delivered by hooks. Released in 2.1.0.
 
 **Enabling it (closed by default).** A session accepts mail from another one only after *you* type `/odd-claude:peers allow <sender session id>` in the recipient session. Grants are recorded ONLY by the `UserPromptSubmit` hook, and only when your own prompt, trimmed, is exactly `allow <id>`, `revoke <id>` or `revoke --all` after the command name (one valid session id). The model cannot forge `input.prompt`, the skill has `disable-model-invocation: true` and its CLI (`dist/cli/peers.js list|status`) is read-only. Grants live in `${CLAUDE_PLUGIN_DATA}/peers/.grants/<your session id>.json` (atomic, 0600, symlinks refused).
 
@@ -272,7 +284,7 @@ claude --plugin-dir plugins/odd-claude
 - `/odd-claude:changes`: summary of the project's working-tree changes (R46): branch, `git status` entries (modified, staged, deleted, renamed, untracked; capped at 50) and `git diff --stat`. Read-only git with a 5 s timeout, no user text on any command line, never throws (outside a repository it says so). It reads Git, not a per-session record: no PostToolUse recording is added, so the hooks stay as fast as before. With mods enabled, `/odd-changes` opens a pane with the same text, refreshed every 5 s (`hooks/register.ts`, `$.process.run`); it degrades silently when panes or git are unavailable.
 - `/odd-claude:banner [on|off|status]`: startup banner (R45), two plain text lines shown to the user as the `SessionStart` `systemMessage` on a fresh startup (not on resume/clear/compact), so it never enters the model context. ON by default; `ODD_CLAUDE_NO_BANNER=1` or `/odd-claude:banner off` (plugin state `banner.json`) disables it. Visibility of `systemMessage` was not observable in `claude -p` (the hook runs and succeeds there); there is no mod variant, the same message is shown with mods on.
 - `/odd-claude:quiet [on|off|status]`: quiet tool rendering (R51), an optional mod feature. When ON, the mod's `ui.render` hook on `ToolResult` draws long (>10 lines), successful Bash/Read/Grep/Glob results as one summary line (`Bash: 120 lines of output (ctrl+o to expand)`). OFF by default; the flag is plugin state `quiet.json`, read by the mod on every render. Render-only (the model sees the stored result), failed/interrupted/stderr results, expanded rows (ctrl+o), short output and unknown shapes use the default rendering, and any error falls back to `next(e)`. Without mods (off, `-p`, safe mode) the command only stores the flag and says quiet rendering needs mods. Upstream's per-tool config is reduced to this single switch.
-- `/odd-claude:peers [allow <session-id>|revoke <session-id>|revoke --all]` (R07): per-session consent for peer messages, typed by you, closed by default. Everything else about peers (tools, delivery, limits, the shell-access limit) is under [Peer orchestrators](#peer-orchestrators-r07-unreleased).
+- `/odd-claude:peers [allow <session-id>|revoke <session-id>|revoke --all]` (R07): per-session consent for peer messages, typed by you, closed by default. Everything else about peers (tools, delivery, limits, the shell-access limit) is under [Peer orchestrators](#peer-orchestrators-r07).
 - `/odd-claude:status`: shows the current session state, registered hooks and the roadmap position.
 - `/odd-claude:coordinator [on|off|status]`: shows or switches coordinator mode (see above).
 - `/odd-claude:setup [default|acceptEdits|auto|plan|bypassPermissions|statusline on|statusline off|restore [backup]]`: opt-in writer for `permissions.defaultMode` and `statusLine` in `~/.claude/settings.json` (the only keys it handles). Always a diff, explicit confirmation, a 0600 backup, an atomic write and `restore`.
