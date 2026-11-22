@@ -39,7 +39,7 @@ Invariants: the writer reuses the existing function for shared state and keeps i
 ## Mechanisms
 
 1. **Ask**: open product or design decision, routed by ODD step 3; stop and wait.
-2. **Explore**: mapping beyond one bounded read batch (3 calls, ~10k tokens) or more than 3 lookups → one `odd-claude:odd-explore`, handoff at most ~2k tokens with `path:line` evidence, then one spot check.
+2. **Explore**: mapping beyond one bounded read batch (3 calls, ~10k tokens) or more than 3 lookups → SEVERAL `odd-claude:odd-explore` agents launched in parallel in one message, each on a distinct front (subsystem, layer, or question: callers vs implementation vs tests vs docs/history) with a narrow task; each handoff at most ~2k tokens with `path:line` evidence; merge them, then one spot check. One explorer only when the question has a single narrow front. Explorers are cheap (haiku): parallel breadth buys deeper context than one serial explorer.
 3. **Verify**: the writer runs the authorized checks and reports `<command>: <observed result>`, observing RED before it writes; you re-run one reported command as a spot check, and add one independent `odd-claude:odd-verify` only when the Risk line names a high-risk item (`${CLAUDE_PLUGIN_ROOT}/cards/verification.md`).
 4. **Track**: by Task Size above.
 5. **Incident**: diagnose a wrong cwd, worktree, git or tooling incident separately before resuming.

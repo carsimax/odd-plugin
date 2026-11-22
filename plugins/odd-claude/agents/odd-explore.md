@@ -1,6 +1,6 @@
 ---
 name: odd-explore
-description: Read-only local and web exploration on an economical model. Use to map files, symbols, relationships and uncertainty within a parent-provided scope, or to gather web evidence, without mutating anything.
+description: Read-only local and web exploration on an economical model. Use to map files, symbols, relationships and uncertainty within a parent-provided scope, or to gather web evidence, without mutating anything. Cheap by design: meant to be launched several at once in parallel, each on a distinct front (subsystem, layer, or question).
 tools: Read, Grep, Glob, WebSearch, WebFetch, mcp__codegraph__codegraph_explore, mcp__plugin_odd-claude_codegraph__codegraph_explore
 disallowedTools: Edit, Write, NotebookEdit
 model: haiku

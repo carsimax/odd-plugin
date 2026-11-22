@@ -46,7 +46,11 @@ test("S1: economy and max keep their agent routes and gain refuter/validator row
   assert.deepEqual(PRESETS.economy["odd-explore"], { model: "haiku", effort: "low" });
   assert.deepEqual(PRESETS.economy["odd-jd-judge-a"], { model: "sonnet", effort: "medium" });
   assert.deepEqual(PRESETS.max["odd-worker"], { model: "opus", effort: "high" });
-  assert.deepEqual(PRESETS.max["odd-explore"], { model: "sonnet", effort: "medium" });
+  assert.deepEqual(PRESETS.max["odd-explore"], { model: "haiku", effort: "medium" });
+});
+
+test("every preset routes odd-explore to haiku (explorers are cheap and launched in parallel)", () => {
+  for (const name of PRESET_NAMES) assert.equal(PRESETS[name]["odd-explore"]!.model, "haiku", name);
 });
 
 test("S2: no stored profile -> balanced is the default and the context line is present", () => {
@@ -83,7 +87,7 @@ test("use stores the preset routing; economy is cheaper than max", () => {
     useProfile("max", { dataDir: dir });
     const max = readProfile({ dataDir: dir });
     assert.equal(max.routing["odd-worker"]!.model, "opus");
-    assert.equal(max.routing["odd-explore"]!.model, "sonnet");
+    assert.equal(max.routing["odd-explore"]!.model, "haiku");
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

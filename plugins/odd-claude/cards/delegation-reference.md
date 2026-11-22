@@ -29,7 +29,7 @@ Progress is shown through the visible task list (`TodoWrite`): keep it in step w
 | Action | Direct inline | Delegated direct worker |
 |--------|---------------|-------------------------|
 | Read to decide/verify within the cumulative evidence budget (one parallel batch: at most 3 calls, ~10k tokens) | ✅ | — |
-| Read to explore/understand beyond the evidence budget | — | ✅ one narrow explorer (`odd-claude:odd-explore`; handoff of at most ~2k tokens, `path:line` evidence) |
+| Read to explore/understand beyond the evidence budget | — | ✅ several parallel explorers (`odd-claude:odd-explore`), one per distinct front (handoff of at most ~2k tokens each, `path:line` evidence) |
 | Read as preparation for writing | ✅ for understood inline work | ✅ together with the delegated write |
 | Write a small task (one understood change, any number of files) | ✅ | — |
 | Write a large task with no Writer rule reason | ✅ following the logbook | — |
@@ -50,7 +50,7 @@ Once a trigger fires, the parent MUST delegate through the `Agent` tool. Never f
 
 The canonical Writer rule under Delegation Triggers overrides this general runtime preference.
 
-1. **Evidence-budget rule**: when the reading exceeds the evidence budget, launch the closest read-only mapping subagent with fresh context and a narrow mapping task that returns a handoff of at most ~2k tokens with `path:line` evidence. Route generic exploration first to `odd-claude:odd-explore`; if missing or unusable, use a general-purpose `Agent` with the same read-only mapping task and report the fallback.
+1. **Evidence-budget rule**: when the reading exceeds the evidence budget, launch the closest read-only mapping subagents with fresh context, several in parallel in one message, each on a distinct front (subsystem, layer, or question: callers, implementation, tests, docs/history) with a narrow mapping task that returns a handoff of at most ~2k tokens with `path:line` evidence, then merge them (one only for a single narrow front; the explorer is cheap, so parallel breadth buys deeper context). Route generic exploration first to `odd-claude:odd-explore`; if missing or unusable, use a general-purpose `Agent` with the same read-only mapping task and report the fallback.
 2. **Writer rule**: follow the canonical Writer rule under Delegation Triggers.
 3. **Incident rule**: after wrong `cwd`, accidental repository/worktree mutation, failed merge recovery, confusing test command, or environment workaround, stop and diagnose the incident separately before resuming.
 4. **Context backstop**: when the context advisory fires, pause and delegate the next unit that needs several steps instead of silently continuing monolithically; single small edits stay inline.

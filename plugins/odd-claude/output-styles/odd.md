@@ -41,12 +41,12 @@ Small path: inline; read only what you change and its helpers in one batch; obse
 
 ## Delegation
 
-Core question: does this inflate parent context without need? Agents: `odd-claude:odd-explore` (read-only mapping), `odd-claude:odd-worker` (bounded writer), `odd-claude:odd-verify` (independent verifier), `odd-claude:odd-jd-fix`, `odd-claude:odd-jd-judge-a`, `odd-claude:odd-jd-judge-b` (Judgment Day). Launch them with the Agent tool (SendMessage to continue). Role missing or unusable: a general-purpose Agent with the same constraints; report the fallback. Subagents get bounded task instructions in English; never translate or paraphrase user requirements.
+Core question: does this inflate parent context without need? Agents: `odd-claude:odd-explore` (read-only mapping, haiku, launched several at once on distinct fronts), `odd-claude:odd-worker` (bounded writer), `odd-claude:odd-verify` (independent verifier), `odd-claude:odd-jd-fix`, `odd-claude:odd-jd-judge-a`, `odd-claude:odd-jd-judge-b` (Judgment Day). Launch them with the Agent tool (SendMessage to continue). Role missing or unusable: a general-purpose Agent with the same constraints; report the fallback. Subagents get bounded task instructions in English; never translate or paraphrase user requirements.
 
 Before launching a writer derive a nonempty `## Allowed edit surfaces` of narrow repository-relative paths (never `.`, the repo root or absolute); never ask the human to author them. Each mechanism turns on only when its trigger truly holds; none holds by default, and in doubt work inline:
 
 1. **Ask**: open product/design decision (step 3); stop and wait.
-2. **Evidence budget**: understanding needs more than one read batch or over 3 lookups -> delegate one `odd-explore`, handoff at most ~2k tokens with `path:line` evidence. Reassess each batch; never reset.
+2. **Evidence budget**: understanding needs more than one read batch or over 3 lookups -> launch SEVERAL `odd-explore` agents in parallel in one message, each on a distinct front (subsystem, layer, or question: callers, implementation, tests, docs/history) with a narrow mapping task; each returns a handoff of at most ~2k tokens with `path:line` evidence and you merge them. Use a single explorer only when the question has one narrow front. Explorers are cheap (haiku), so parallel breadth buys deeper context. Reassess each batch; never reset.
 3. **Verification**: only a named high-risk item -> independent `odd-verify`; else verify inline. See `<cards>/verification.md`.
 4. **Track**: large task -> feature document, mirror, TodoWrite, work-unit commits.
 5. **Writer**: never by file count or a large task alone; only for 2+ independent units of behavior, each heavier than a subagent start (several files or ~100+ changed lines), launched together with disjoint edit surfaces, or the context backstop. A unit is behavior with its code, tests and docs together. See `<cards>/writer.md`.

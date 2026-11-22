@@ -61,7 +61,7 @@ export const PRESETS = {
         ...natives("sonnet", "medium"),
     },
     max: {
-        "odd-explore": r("sonnet", "medium"),
+        "odd-explore": r("haiku", "medium"),
         "odd-worker": r("opus", "high"),
         "odd-verify": r("opus", "high"),
         "odd-jd-fix": r("opus", "high"),
