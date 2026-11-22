@@ -35,13 +35,13 @@ function loaded(event: string, input: object, setup?: (data: string) => void): {
       input: JSON.stringify(input),
       encoding: "utf8",
       cwd: dir,
-      env: { PATH: process.env.PATH, HOME: dir, CLAUDE_PLUGIN_DATA: data, CLAUDE_PLUGIN_ROOT: root, ODD_PROBE_OUT: out },
+      env: { PATH: process.env.PATH, HOME: dir, CLAUDE_PLUGIN_DATA: data, CLAUDE_PLUGIN_ROOT: root, ODD_PROBE_OUT: out, ODD_CLAUDE_NO_SKILL_REGISTRY: "1" },
     });
     assert.equal(r.status, 0, r.stderr);
     const files = existsSync(out) ? readFileSync(out, "utf8").split("\n").filter((l) => l !== "").map((u) => fileURLToPath(u)).filter((f) => f.startsWith(root + "/")).map((f) => f.slice(root.length + 1)) : [];
     return { files, stdout: r.stdout };
   } finally {
-    rmSync(dir, { recursive: true, force: true });
+    rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 });
   }
 }
 
@@ -49,7 +49,7 @@ const HANDLERS = ["post-tool-use", "pre-tool-use", "session-end", "session-start
 const ENGINE = ["review/gate.js", "review/risk.js", "review/status.js", "review/start.js", "review/consent.js", "review/ack.js"];
 // A private project dir: SessionStart writes `<cwd>/.atl/skill-registry.md`, so the shared real tmpdir must not be the cwd.
 const projectDir = mkdtempSync(join(tmpdir(), "odd-lazyload-cwd-"));
-after(() => rmSync(projectDir, { recursive: true, force: true }));
+after(() => rmSync(projectDir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 }));
 const base = { session_id: "s1", cwd: projectDir };
 
 const cases: { name: string; event: string; input: object; own: string; reviewFree: boolean }[] = [
