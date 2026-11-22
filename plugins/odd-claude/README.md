@@ -13,7 +13,7 @@ A Claude Code plugin that ports the ODD harness of gentle-shell (MIT) <!-- odd-c
 
 Upgrade notes:
 
-- If you relied on "no profile = session model", agents now get the balanced models unless you pick another profile (`/odd-claude:profile`).
+- If you relied on "no profile = session model", agents now get the balanced models unless you pick another profile (`/odd-claude:profiles`).
 - If you relied on the mentor persona, it no longer exists; neutral is used instead.
 
 ## What's new in 2.2.0
