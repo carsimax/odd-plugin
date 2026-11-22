@@ -30,8 +30,12 @@
 //   * fail closed: unexpected FS errors throw `StoreLockError`; ownership is never assumed.
 //   * leftovers of a kill -9 (`LOCK.tmp-*`, `LOCK.stale-*`, `LOCK.release-*`, dead `LOCK.claim-*`) are inert and are
 //     swept best-effort at acquire time, bounded, only when their owner is provably dead (or unreadable and old).
-// Host identity is `os.hostname()`. It can change (e.g. macOS network changes); a dead lock recorded under another
-// hostname is then never taken over (fail closed: remove `LOCK` by hand after checking the owner). Not worked around.
+// Machine identity: the owner record carries `host` (`os.hostname()`, for humans and old readers) and `machine`, a
+// stable random id persisted on disk (machine-id.ts). `os.hostname()` can change (macOS returns the DHCP address), so
+// "same machine" is decided by the machine id ALONE when both the record and this process have a valid one (a
+// hostname change no longer matters, a different id is NEVER local). A record without `machine` (older version), or a
+// process that could not load an id, falls back to the hostname comparison exactly as before (fail closed on a
+// changed hostname: remove `LOCK` by hand after checking the owner). Never network-derived.
 // Not implemented on purpose: the Go shared/exclusive maintenance lock (REVIEW-MAINTENANCE.lock). Its only
 // exclusive users are recover/reclaim/quarantine/legacy maintenance, which are out of scope for the faithful core
 // (v2-rdd S3); writers (U3, U5-U7) need only this exclusive store lock.
@@ -40,6 +44,7 @@ import { closeSync, constants, fstatSync, fsyncSync, lstatSync, mkdirSync, openS
 import { hostname } from "node:os";
 import { join } from "node:path";
 import { performance } from "node:perf_hooks";
+import { isMachineId, machineId as processMachineId } from "./machine-id.js";
 
 const OWNER_FILE = "owner.json";
 export const START_LOCK_TIMEOUT_MS = 2_000; // Go compactStartLockTimeout
@@ -49,6 +54,8 @@ export const UNREADABLE_STALE_MS = 30_000;
 export interface StoreLockOwner {
   pid: number;
   host: string;
+  /** Stable machine id (absent in records written by older versions or when no id could be loaded). */
+  machine?: string;
   ownerId: string;
   startedAt: number;
 }
@@ -60,6 +67,8 @@ export interface StoreLockOptions {
   staleUnreadableMs?: number;
   /** Test seams. */
   host?: string;
+  /** Machine id seam: a UUID, or `null` for hostname-only. Without it, `host` given means hostname-only, else the persisted id. */
+  machineId?: string | null;
   now?: () => number;
   isProcessDead?: (pid: number) => boolean;
 }
@@ -90,7 +99,8 @@ export class StoreLockContended extends Error {
     readonly waitedMs: number,
     readonly blocker?: StoreLockBlocker,
   ) {
-    const who = blocker?.owner ? ` by pid ${blocker.owner.pid} on ${blocker.owner.host}` : "";
+    const o = blocker?.owner;
+    const who = o ? ` by pid ${o.pid} on ${o.host}${o.machine ? ` (machine ${o.machine.slice(0, 8)})` : ""}` : "";
     const what = blocker?.kind === "reclaim" ? "a stale review store lock is being reclaimed" : "review store lock is held";
     super(`${what}${who} (waited ${Math.round(waitedMs)} ms): ${path}`);
     this.name = "StoreLockContended";
@@ -113,6 +123,7 @@ export function storeLockPath(storeRoot: string): string {
 
 interface Config {
   host: string;
+  machine?: string;
   now: () => number;
   isDead: (pid: number) => boolean;
   staleUnreadableMs: number;
@@ -143,7 +154,7 @@ function processDead(pid: number): boolean {
 }
 
 function newRecord(cfg: Config): StoreLockOwner {
-  return { pid: process.pid, host: cfg.host, ownerId: randomBytes(16).toString("hex"), startedAt: cfg.now() };
+  return { pid: process.pid, host: cfg.host, ...(cfg.machine ? { machine: cfg.machine } : {}), ownerId: randomBytes(16).toString("hex"), startedAt: cfg.now() };
 }
 
 function parseOwner(raw: string): StoreLockOwner | undefined {
@@ -156,7 +167,8 @@ function parseOwner(raw: string): StoreLockOwner | undefined {
       typeof v.ownerId === "string" && v.ownerId !== "" &&
       typeof v.startedAt === "number"
     ) {
-      return { pid: v.pid, host: v.host, ownerId: v.ownerId, startedAt: v.startedAt };
+      // An invalid `machine` is ignored: the record then follows the hostname rule.
+      return { pid: v.pid, host: v.host, ...(isMachineId(v.machine) ? { machine: v.machine } : {}), ownerId: v.ownerId, startedAt: v.startedAt };
     }
   } catch {
     // unreadable
@@ -243,9 +255,15 @@ function observe(path: string): Observed {
   return { kind: "record", record, identity: record.ownerId, ino: dirIdentity };
 }
 
-/** Stale only with proof: dead owner on this host, or an unreadable record that is old. */
+/** Same machine: ids only when both sides have one, else the hostname (legacy record or no id here). */
+function isLocal(record: StoreLockOwner, cfg: Config): boolean {
+  if (record.machine !== undefined && cfg.machine !== undefined) return record.machine === cfg.machine;
+  return record.host === cfg.host;
+}
+
+/** Stale only with proof: dead owner on this machine, or an unreadable record that is old. */
 function isStale(o: Observed, cfg: Config): boolean {
-  if (o.kind === "record") return o.record.host === cfg.host && cfg.isDead(o.record.pid);
+  if (o.kind === "record") return isLocal(o.record, cfg) && cfg.isDead(o.record.pid);
   if (o.kind === "unreadable") return cfg.now() - o.mtimeMs > cfg.staleUnreadableMs;
   return false;
 }
@@ -385,12 +403,19 @@ function sweep(storeRoot: string, cfg: Config): void {
   }
 }
 
+function resolveMachine(options: StoreLockOptions): string | undefined {
+  if (options.machineId !== undefined) return isMachineId(options.machineId) ? options.machineId : undefined;
+  if (options.host !== undefined) return undefined; // a faked hostname is a faked machine: never the real id
+  return processMachineId();
+}
+
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
 /** Acquires the exclusive store lock, waiting up to `timeoutMs`. Throws StoreLockContended or StoreLockError. */
 export async function acquireStoreLock(storeRoot: string, options: StoreLockOptions = {}): Promise<StoreLockHandle> {
   const cfg: Config = {
     host: options.host ?? hostname(),
+    machine: resolveMachine(options),
     now: options.now ?? Date.now,
     isDead: options.isProcessDead ?? processDead,
     staleUnreadableMs: options.staleUnreadableMs ?? UNREADABLE_STALE_MS,
