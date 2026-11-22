@@ -853,7 +853,7 @@ test("R1: after the tree is built, a file swapped for a hardlink or changed cont
   }
 });
 
-test("R2: with core.precomposeunicode, an NFD name on disk is frozen under its NFC path", () => {
+test("R2: with core.precomposeunicode, an NFD name on disk is frozen under its NFC path", { skip: process.platform !== "darwin" ? "core.precomposeunicode and NFD/NFC normalization are macOS-only" : false }, () => {
   const f = makeRepo();
   try {
     git(f.repo, "config", "core.precomposeunicode", "true"); // explicit: the default differs per platform (macOS sets it, Linux leaves it unset)
