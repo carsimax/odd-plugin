@@ -8,6 +8,10 @@ on:
 permissions:
   contents: read
 
+env:
+  # Exact Claude Code CLI version used for every live check; bump deliberately.
+  CLAUDE_CODE_VERSION: 2.1.330
+
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
@@ -24,9 +28,11 @@ jobs:
         # 20 = the plugin's `engines.node` floor (>=20); 26 = the version used for development.
         node: ["20", "26"]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: ${{ matrix.node }}
           cache: npm
@@ -37,9 +43,11 @@ jobs:
         run: npm ci
 
       - name: Build, and fail if the committed dist/ is stale
+        # The drift check runs on one cell only; the other cells still build.
         working-directory: plugins/odd-claude
         run: |
           npm run build
+          if [ "${{ matrix.os }}/${{ matrix.node }}" != "ubuntu-latest/26" ]; then exit 0; fi
           if [ -n "$(git status --porcelain -- dist)" ]; then
             echo "::error::dist/ does not match src/. Run 'npm run build' in plugins/odd-claude and commit dist/."
             git status --porcelain -- dist
@@ -55,11 +63,12 @@ jobs:
         working-directory: plugins/odd-claude
         run: npm run check
 
+      # Needs only plugins/odd-claude/node_modules (build:bench uses its tsc), so the plugin `npm ci` above must run first.
       - name: Bench unit tests (no oracle binary)
         run: npm run test:bench
 
       - name: Install Claude Code CLI
-        run: npm i -g @anthropic-ai/claude-code
+        run: npm i -g "@anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}"
 
       - name: Validate the plugin manifests
         run: claude plugin validate plugins/odd-claude

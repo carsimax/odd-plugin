@@ -349,7 +349,7 @@ npm run check   # naming / data-collection guard
 
 `claude plugin test plugins/odd-claude` runs the mod tests (`hooks/register.test.ts`); `npm test` is the main node:test suite. Validate the manifests with `claude plugin validate plugins/odd-claude` and `claude plugin validate .`.
 
-**CI** (`.github/workflows/ci.yml`): on every pull request and push to `main`, on Ubuntu and macOS with Node 20 and 26, it runs `npm ci`, `npm run build` (fails if the committed `dist/` differs from `src/`), `npm test`, `npm run check`, the bench unit tests (`npm run test:bench` at the repo root) and `claude plugin validate plugins/odd-claude`.
+**CI** (`.github/workflows/ci.yml`): on every pull request and push to `main`, on Ubuntu and macOS with Node 20 and 26, it runs `npm ci`, `npm run build` (on Ubuntu / Node 26 it also fails if the committed `dist/` differs from `src/`), `npm test`, `npm run check`, the bench unit tests (`npm run test:bench` at the repo root) and `claude plugin validate plugins/odd-claude` (Claude Code CLI pinned to 2.1.330).
 
 ## License and attribution
 
