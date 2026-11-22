@@ -136,13 +136,13 @@ The mods UX (Phase 5), unchanged in 2.0. Every feature ships a non-mod version t
 | changes | `/odd-changes` pane, refreshed every 5 s | `/odd-claude:changes` text summary |
 | stats | none | `/odd-claude:stats` text |
 | profiles / routing | `agent.spawn` hook rewrites `model` immediately | session context lists the profile and the orchestrator passes `model`; applies from the next session start or `/clear` |
-| quiet | `ui.render` hook draws one summary line | command only stores the flag and says it needs mods |
+| quiet | `ui.render` hook draws one summary line | command only stores the flag; no visible effect |
 | banner | none (same `systemMessage` with or without mods) | same |
 | statusline | none (the `$.ui.status` mod is not shipped) | `setup statusline on` (a statusLine setting, not a mod) |
 
 **Enabling mods.** Mods are gated by Claude Code. Enable them in your Claude Code build/account (see `docs/research/open-questions.md`, Q1) and load the plugin; the `modules` entry in `hooks/hooks.json` points at `hooks/register.ts`. With mods off the plugin loads without errors and only the fallbacks apply. `claude plugin test plugins/odd-claude` runs the mod tests.
 
-**Interactive checks (2026-11-21, Claude Code 2.1.330, mods enabled, `--plugin-dir`, driven through a pseudo-terminal).** Observed: the startup banner is visible as the `SessionStart` `systemMessage` ("odd-claude v2.1.0 · ODD harness for Claude Code …"); `/odd-agents` opens a pane with the subagent table ("No subagents recorded for this session"); `/odd-changes` opens a pane with the changes summary (outside a repository it says so); quiet rendering: with `/odd-claude:quiet on` the Bash result of `seq 1 300` renders as a one-line summary marked quiet, and with quiet off the normal rendering returns (the command's reply text says "needs mods" regardless of whether mods are on, a wording nit); the `odd-status` statusLine rendered against a live payload (model, branch, tokens/s) with an empty stderr. The live payload keys were: `context_window`, `cost`, `cwd`, `effort`, `exceeds_200k_tokens`, `fast_mode`, `model`, `output_style`, `prompt_cache`, `prompt_id`, `rate_limits`, `scratchpad_dir`, `session_id`, `session_name`, `thinking`, `transcript_path`, `version`, `workspace`. Not observed: the live pane auto-refresh every 5 s over time, and `profiles` routing via `agent.spawn`.
+**Interactive checks (2026-11-21, Claude Code 2.1.330, mods enabled, `--plugin-dir`, driven through a pseudo-terminal).** Observed: the startup banner is visible as the `SessionStart` `systemMessage` ("odd-claude v2.1.0 · ODD harness for Claude Code …"); `/odd-agents` opens a pane with the subagent table ("No subagents recorded for this session"); `/odd-changes` opens a pane with the changes summary (outside a repository it says so); quiet rendering: with `/odd-claude:quiet on` the Bash result of `seq 1 300` renders as a one-line summary marked quiet, and with quiet off the normal rendering returns (the command's reply now says: "Quiet rendering is drawn by the ui.render mod; when mods are off (or in -p / safe mode) the setting is stored and has no visible effect."); the `odd-status` statusLine rendered against a live payload (model, branch, tokens/s) with an empty stderr. The live payload keys were: `context_window`, `cost`, `cwd`, `effort`, `exceeds_200k_tokens`, `fast_mode`, `model`, `output_style`, `prompt_cache`, `prompt_id`, `rate_limits`, `scratchpad_dir`, `session_id`, `session_name`, `thinking`, `transcript_path`, `version`, `workspace`. Clean install (2026-11-21, Claude Code 2.1.330, isolated `CLAUDE_CONFIG_DIR`): without the engram marketplace the install warns as above; with the three `claude plugin …` commands in the order above, both plugins were enabled and a session loaded odd-claude with its `SessionStart` context and the `codegraph`, `review` and `peers` MCP servers connected. Not observed: the live pane auto-refresh every 5 s over time, and `profiles` routing via `agent.spawn`.
 
 ## What's in v1.0
 
@@ -230,16 +230,30 @@ Claude Code removes `AskUserQuestion` from every subagent (verified on 2.1.327).
 - Claude Code >= 2.1.323 (the `engines.claude-code` value in `.claude-plugin/plugin.json`)
 - Node >= 20
 - git
-- Optional: the `engram` plugin (declared as a dependency, `engram@engram`) or the `engram` binary; `codegraph`
+- Required: the `engram` plugin (declared in `plugin.json` as `dependencies: ["engram@engram"]`; odd-claude does not load without it) and the `engram` binary its MCP server runs
+- Optional: `codegraph`
 
 `/odd-claude:doctor` reports which of these are present.
 
 ## Install
 
+Add the engram marketplace first (engram is required), then this one:
+
 ```
+/plugin marketplace add Gentleman-Programming/engram
 /plugin marketplace add carsimax/odd-plugin
 /plugin install odd-claude@odd-claude
 ```
+
+The same from a terminal:
+
+```
+claude plugin marketplace add Gentleman-Programming/engram
+claude plugin marketplace add carsimax/odd-plugin
+claude plugin install odd-claude@odd-claude
+```
+
+Without the engram marketplace the install still succeeds but warns `dependency "engram@engram" was not installed … "odd-claude" will not load without it`. With it, the install reports "+ 1 dependency: engram" and both plugins are enabled.
 
 The repository is private: the machine needs GitHub credentials that git can use (for example `gh auth login` or a credential helper) for Claude Code to clone it. Auto-update is off for third-party marketplaces unless you enable it.
 
@@ -283,7 +297,7 @@ claude --plugin-dir plugins/odd-claude
 - `/odd-claude:profiles [list|show|use <balanced|economy|max>|set <role> <model> [effort]|clear]` (R39/R40): a model profile maps each odd-claude agent (`odd-explore`, `odd-verify`, `odd-worker`, `odd-jd-*`, `odd-review-*`) to `{model, effort}` in plugin state (`profiles.json`). The agent files in the plugin cache are never rewritten; their frontmatter `model` stays the default, and with no active profile nothing is routed. Arguments are validated against whitelists (models `haiku`/`sonnet`/`opus`, efforts `low`..`max`). Routing: the session context lists the active profile so the orchestrator passes `model` in the `Agent` tool call (applies from the next session start or `/clear`); with mods enabled an `agent.spawn` hook in `hooks/register.ts` rewrites `model` for `odd-claude:*` agents immediately. That hook only ever continues with `next(...)` (never refuses a spawn, `src/lib/no-deny.spec.ts`). The Agent tool has no `effort` parameter, so effort is stored and shown but not routed.
 - `/odd-claude:changes`: summary of the project's working-tree changes (R46): branch, `git status` entries (modified, staged, deleted, renamed, untracked; capped at 50) and `git diff --stat`. Read-only git with a 5 s timeout, no user text on any command line, never throws (outside a repository it says so). It reads Git, not a per-session record: no PostToolUse recording is added, so the hooks stay as fast as before. With mods enabled, `/odd-changes` opens a pane with the same text, refreshed every 5 s (`hooks/register.ts`, `$.process.run`); it degrades silently when panes or git are unavailable.
 - `/odd-claude:banner [on|off|status]`: startup banner (R45), two plain text lines shown to the user as the `SessionStart` `systemMessage` on a fresh startup (not on resume/clear/compact), so it never enters the model context. ON by default; `ODD_CLAUDE_NO_BANNER=1` or `/odd-claude:banner off` (plugin state `banner.json`) disables it. Visibility of `systemMessage` was not observable in `claude -p` (the hook runs and succeeds there); there is no mod variant, the same message is shown with mods on.
-- `/odd-claude:quiet [on|off|status]`: quiet tool rendering (R51), an optional mod feature. When ON, the mod's `ui.render` hook on `ToolResult` draws long (>10 lines), successful Bash/Read/Grep/Glob results as one summary line (`Bash: 120 lines of output (ctrl+o to expand)`). OFF by default; the flag is plugin state `quiet.json`, read by the mod on every render. Render-only (the model sees the stored result), failed/interrupted/stderr results, expanded rows (ctrl+o), short output and unknown shapes use the default rendering, and any error falls back to `next(e)`. Without mods (off, `-p`, safe mode) the command only stores the flag and says quiet rendering needs mods. Upstream's per-tool config is reduced to this single switch.
+- `/odd-claude:quiet [on|off|status]`: quiet tool rendering (R51), an optional mod feature. When ON, the mod's `ui.render` hook on `ToolResult` draws long (>10 lines), successful Bash/Read/Grep/Glob results as one summary line (`Bash: 120 lines of output (ctrl+o to expand)`). OFF by default; the flag is plugin state `quiet.json`, read by the mod on every render. Render-only (the model sees the stored result), failed/interrupted/stderr results, expanded rows (ctrl+o), short output and unknown shapes use the default rendering, and any error falls back to `next(e)`. Quiet rendering is drawn by the ui.render mod; when mods are off (or in -p / safe mode) the setting is stored and has no visible effect. Upstream's per-tool config is reduced to this single switch.
 - `/odd-claude:peers [allow <session-id>|revoke <session-id>|revoke --all]` (R07): per-session consent for peer messages, typed by you, closed by default. Everything else about peers (tools, delivery, limits, the shell-access limit) is under [Peer orchestrators](#peer-orchestrators-r07).
 - `/odd-claude:status`: shows the current session state, registered hooks and the roadmap position.
 - `/odd-claude:coordinator [on|off|status]`: shows or switches coordinator mode (see above).
@@ -334,6 +348,8 @@ npm run check   # naming / data-collection guard
 `dist/` is committed so the plugin runs without a local `tsc`: **rebuild it (`npm run build`) and commit it with every source change.**
 
 `claude plugin test plugins/odd-claude` runs the mod tests (`hooks/register.test.ts`); `npm test` is the main node:test suite. Validate the manifests with `claude plugin validate plugins/odd-claude` and `claude plugin validate .`.
+
+**CI** (`.github/workflows/ci.yml`): on every pull request and push to `main`, on Ubuntu and macOS with Node 20 and 26, it runs `npm ci`, `npm run build` (fails if the committed `dist/` differs from `src/`), `npm test`, `npm run check`, the bench unit tests (`npm run test:bench` at the repo root) and `claude plugin validate plugins/odd-claude`.
 
 ## License and attribution
 
