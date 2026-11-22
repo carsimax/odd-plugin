@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { createHash } from "node:crypto";
 import { spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
@@ -64,6 +65,9 @@ test("the themes directory, the banner and the statusline skills, CLIs, libs and
 
 test("the `odd` output style stays", () => {
   assert.ok(existsSync(join(root, "output-styles", "odd.md")));
+  // Pinned byte-identical to its content at origin/main. A deliberate edit of odd.md must update this hash.
+  const sha = createHash("sha256").update(readFileSync(join(root, "output-styles", "odd.md"))).digest("hex");
+  assert.equal(sha, "035e61bda43fc8ec14ee1c2b18be664d17ee132972a2ec6e69f5cc5115aab4f8");
 });
 
 test("setup has no statusline subcommand, flag or shim", () => {
@@ -94,4 +98,33 @@ test("the README and the plugin manifest do not offer the removed features", () 
   const readme = read("README.md");
   for (const re of [/\/odd-claude:banner/, /setup statusline/, /statusline on/, /^## Themes/m, /themes\/odd/, /ODD_CLAUDE_NO_BANNER/]) assert.doesNotMatch(readme, re);
   assert.doesNotMatch(read(".claude-plugin", "plugin.json"), /theme/i);
+});
+
+test("setup rejects the removed statusline flags without touching settings (S3)", () => {
+  const dir = mkdtempSync(join(tmpdir(), "odd-simplify-setup-"));
+  try {
+    const st = join(dir, "settings.json");
+    const body = '{\n  "statusLine": {"type":"command","command":"x"}\n}\n';
+    writeFileSync(st, body);
+    for (const args of [["--statusline", "on", "--apply"], ["--replace-statusline"], ["--plugin-root", dir]]) {
+      const r = spawnSync(process.execPath, [join(root, "dist", "cli", "setup.js"), ...args, "--settings", st, "--data-dir", dir], { encoding: "utf8" });
+      assert.equal(r.status, 2, args.join(" "));
+      assert.match(r.stderr, new RegExp(`unknown argument ${args[0]}`));
+      assert.equal(readFileSync(st, "utf8"), body);
+    }
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("SubagentStart/Stop still feed stats through the hook runner (S2, S4)", () => {
+  const dir = mkdtempSync(join(tmpdir(), "odd-simplify-stats-"));
+  try {
+    const env = { ...process.env, CLAUDE_PLUGIN_DATA: dir };
+    const hook = (ev: string, id: string) => spawnSync(process.execPath, [join(root, "dist", "hooks", "run.js"), ev], { input: JSON.stringify({ hook_event_name: ev, session_id: "s1", agent_id: id, agent_type: "odd-claude:odd-worker" }), env, encoding: "utf8" });
+    assert.equal(hook("SubagentStart", "a1").status, 0);
+    assert.equal(hook("SubagentStart", "a2").status, 0);
+    assert.equal(hook("SubagentStop", "a1").status, 0);
+    const r = spawnSync(process.execPath, [join(root, "dist", "cli", "stats.js"), "--session", "s1", "--data-dir", dir], { encoding: "utf8" });
+    assert.equal(r.status, 0);
+    assert.match(r.stdout, /2 subagents \(1 running\)/);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
 });

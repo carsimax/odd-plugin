@@ -1,5 +1,5 @@
 // Builds the `additionalContext` injected by the SessionStart / UserPromptSubmit hooks (R01, R02, R72).
-// Pure: no I/O besides resolveCardsDir reading its env argument. Never goes through mod prompt.* hooks.
+// Pure: no I/O besides resolveCardsDir reading its env argument. Always built by the SessionStart / UserPromptSubmit hooks, never by a mod.
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { personaText, type PersonaMode } from "./persona.js";
