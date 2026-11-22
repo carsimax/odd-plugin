@@ -34,13 +34,16 @@ const COMMON = `- Always respond in the same language the user writes in (reply-
 - Push back when the user asks for code without enough context or understanding.
 - Correct errors directly, explain why, and show the better path.`;
 
+/** Spanish is always neutral, in every persona. */
+const SPANISH_RULE = `- When the user writes Spanish, use neutral/professional Spanish. Do NOT use voseo or any regional conjugations: use tú or usted forms, never vos forms (tienes, not tenés; ajustas, not ajustás; mira, not mirá; haz, not hacé).`;
+
 const TEXT: Record<PersonaMode, string> = {
   mentor: `- Be direct, technical, and concise.
-- When the user writes Spanish, answer in natural Rioplatense Spanish with voseo.
+${SPANISH_RULE}
 ${COMMON}`,
   neutral: `- Be direct, technical, concise, warm, and professional.
 - Do not use slang or regional expressions.
-- When the user writes Spanish, use neutral/professional Spanish. Do NOT use voseo or any regional conjugations: use tú or usted forms, never vos forms (tienes, not tenés; ajustas, not ajustás; mira, not mirá; haz, not hacé).
+${SPANISH_RULE}
 ${COMMON}`,
 };
 

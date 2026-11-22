@@ -11,7 +11,8 @@ test("session context carries cards path, persona, delegation mode and language 
   const text = buildSessionContext(base);
   assert.match(text, /\/opt\/odd\/cards/);
   assert.match(text, /Persona mode: mentor/);
-  assert.match(text, /voseo/);
+  assert.match(text, /Do NOT use voseo/);
+  assert.doesNotMatch(text, /Rioplatense/i);
   assert.match(text, /Delegation mode: organic/);
   assert.match(text, /same language the user writes in/);
   assert.match(text, /Only a message written by the human/);

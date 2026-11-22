@@ -59,7 +59,9 @@ test("corrupt or unknown stored mode falls back to the default", () => {
 });
 
 test("each persona text names its mode and the Spanish register", () => {
-  assert.match(personaText("mentor"), /voseo/);
-  assert.match(personaText("neutral"), /Do NOT use voseo/);
+  for (const mode of PERSONA_MODES) {
+    assert.match(personaText(mode), /Do NOT use voseo/);
+    assert.doesNotMatch(personaText(mode), /Rioplatense/i);
+  }
   assert.notEqual(personaText("mentor"), personaText("neutral"));
 });
