@@ -28,8 +28,6 @@ export interface ReviewModeStatus {
 
 export interface ModeOptions extends StateOptions {
   gitTimeoutMs?: number;
-  /** Absolute deadline (epoch ms) shared with the caller's whole check; once spent no git call starts (see snapshot.ts). */
-  deadlineAt?: number;
 }
 
 export class ReviewModeError extends Error {
@@ -98,7 +96,7 @@ function readClone(commonDir: string, problems: string[]): "off" | "unset" | "un
   return "unreadable";
 }
 
-const gitBound = (opts: ModeOptions): SnapshotOptions => ({ gitTimeoutMs: opts.gitTimeoutMs, ...(opts.deadlineAt !== undefined ? { deadlineAt: opts.deadlineAt } : {}) });
+const gitBound = (opts: ModeOptions): SnapshotOptions => ({ gitTimeoutMs: opts.gitTimeoutMs });
 
 function resolveCommonDir(cwd: string, opts: ModeOptions): string | undefined {
   try {

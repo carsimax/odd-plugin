@@ -33,19 +33,13 @@ export type SnapshotTarget =
 export interface SnapshotOptions {
   /** Per git command wall-clock bound; defaults to DEFAULT_GIT_TIMEOUT_MS. */
   gitTimeoutMs?: number;
-  /**
-   * Absolute deadline (epoch ms) of the whole operation the caller is bounding (the delivery gate's budget). Every git
-   * call gets min(its own bound, time left) and none starts once it has passed (`git_timeout`). Absent: no deadline.
-   */
-  deadlineAt?: number;
 }
 
-/** The per-call bound and the optional shared deadline, as threaded through every git call of an operation. */
-export type Bound = { timeoutMs: number; deadlineAt?: number };
+/** The per-call bound, as threaded through every git call of an operation. */
+export type Bound = { timeoutMs: number };
 
 export function boundOf(options: SnapshotOptions): Bound {
-  const timeoutMs = options.gitTimeoutMs ?? DEFAULT_GIT_TIMEOUT_MS;
-  return options.deadlineAt === undefined ? { timeoutMs } : { timeoutMs, deadlineAt: options.deadlineAt };
+  return { timeoutMs: options.gitTimeoutMs ?? DEFAULT_GIT_TIMEOUT_MS };
 }
 
 export interface RepositoryIdentity {
@@ -141,8 +135,6 @@ export interface GitCall {
   cwd: string;
   args: string[];
   timeoutMs: number;
-  /** Absolute wall-clock deadline (epoch ms) of the whole check; the call gets min(timeoutMs, time left) and never starts once it has passed. */
-  deadlineAt?: number;
   env?: Record<string, string>;
   input?: string | Buffer;
   okExit?: number[];
@@ -155,17 +147,7 @@ export interface GitOut {
 }
 
 export function runGit(call: GitCall): GitOut {
-  let timeout = Math.min(Math.max(call.timeoutMs, 1), MAX_GIT_TIMEOUT_MS);
-  let budgetBound = false;
-  if (call.deadlineAt !== undefined) {
-    const left = call.deadlineAt - Date.now();
-    // the whole-operation budget is a hard deadline: nothing starts once it is spent, and no call outlives it
-    if (!(left >= 1)) throw new SnapshotError("git_timeout", `git ${call.args[0] ?? ""} not started: the time budget is spent`);
-    if (left < timeout) {
-      timeout = left;
-      budgetBound = true;
-    }
-  }
+  const timeout = Math.min(Math.max(call.timeoutMs, 1), MAX_GIT_TIMEOUT_MS);
   const result = spawnSync("git", ["--no-replace-objects", "-C", call.cwd, ...call.args], {
     env: gitEnv(call.env),
     input: call.input,
@@ -179,7 +161,7 @@ export function runGit(call: GitCall): GitOut {
   if (result.error) {
     const code = (result.error as NodeJS.ErrnoException).code;
     if (code === "ENOENT") throw new SnapshotError("git_unavailable", "git executable not found");
-    if (code === "ETIMEDOUT") throw new SnapshotError("git_timeout", `${label} timed out after ${Math.ceil(timeout)}ms${budgetBound ? " (the check's time budget)" : ""}`);
+    if (code === "ETIMEDOUT") throw new SnapshotError("git_timeout", `${label} timed out after ${Math.ceil(timeout)}ms`);
     if (code === "ENOBUFS") throw new SnapshotError("git_output_limit", `${label} output exceeded the deterministic byte limit`);
     throw new SnapshotError("git_failed", `${label} could not run: ${result.error.message}`);
   }
@@ -738,7 +720,7 @@ function buildIndexCandidate(
     }
     const candidateTree = oid(runGit({ cwd: repo.root, args: ["write-tree"], ...bound, env }).stdout, "candidate tree id");
     const proof = untrackedProof(repo, candidateTree, intended, bound);
-    if (projection === "workspace") verifyIntendedFiles(repo, candidateTree, intended, { gitTimeoutMs: bound.timeoutMs, ...(bound.deadlineAt !== undefined ? { deadlineAt: bound.deadlineAt } : {}) });
+    if (projection === "workspace") verifyIntendedFiles(repo, candidateTree, intended, { gitTimeoutMs: bound.timeoutMs });
     return { candidateTree, proof };
   } finally {
     rmSync(scratch, { recursive: true, force: true });

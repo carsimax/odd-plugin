@@ -76,7 +76,7 @@ function readClone(commonDir, problems) {
     problems.push(`clone-local review mode is malformed: ${path}`);
     return "unreadable";
 }
-const gitBound = (opts) => ({ gitTimeoutMs: opts.gitTimeoutMs, ...(opts.deadlineAt !== undefined ? { deadlineAt: opts.deadlineAt } : {}) });
+const gitBound = (opts) => ({ gitTimeoutMs: opts.gitTimeoutMs });
 function resolveCommonDir(cwd, opts) {
     try {
         return resolveRepository(cwd, gitBound(opts)).commonDir;
