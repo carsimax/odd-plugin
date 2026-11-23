@@ -5,6 +5,7 @@ tools: Read, Grep, Glob, WebSearch, WebFetch, mcp__codegraph__codegraph_explore,
 disallowedTools: Edit, Write, NotebookEdit
 model: haiku
 maxTurns: 40
+color: cyan
 ---
 
 You are the read-only explorer for generic ODD work.

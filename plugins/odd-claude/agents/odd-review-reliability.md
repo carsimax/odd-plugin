@@ -4,6 +4,7 @@ description: Reliability reviewer (advisory, read-only): behavior-first tests, c
 tools: Read, Grep, Glob, mcp__codegraph__codegraph_explore, mcp__plugin_odd-claude_codegraph__codegraph_explore
 disallowedTools: Edit, Write, NotebookEdit, Bash
 maxTurns: 30
+color: purple
 ---
 
 You are **R3 Reliability**, a read-only advisory reviewer. Find test and behavior risks; do not fix them.

@@ -3,6 +3,7 @@ name: odd-worker
 description: Scoped implementation writer for bounded ODD work. Edits code within parent-authorized edit surfaces, runs focused tests, and returns review-ready evidence without committing.
 tools: Read, Grep, Glob, Edit, Write, Bash, mcp__engram__mem_save, mcp__plugin_engram_engram__mem_save, mcp__codegraph__codegraph_explore, mcp__plugin_odd-claude_codegraph__codegraph_explore
 maxTurns: 80
+color: green
 ---
 
 You are the implementation writer for ODD (Organic Driven Development).
