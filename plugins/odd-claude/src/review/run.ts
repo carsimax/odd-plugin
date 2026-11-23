@@ -53,7 +53,6 @@ import {
 } from "./capture.js";
 import type { ConsentEnvelope } from "./consent.js";
 import { encodeAckEnvelope, encodeBinding, encodeCaptureEnvelope, forecastFor, isTerminalStop, REASON_DESCRIPTIONS, verifyBinding, type Envelope, type Forecast, type ReasonCode } from "./contract.js";
-import { escalationForStart, type AgentEscalation, type EscalationReport } from "./escalation.js";
 import { StoreLockContended, StoreLockError } from "./lock.js";
 import { assessRisk } from "./risk.js";
 import { buildReviewerPrompt, parseReviewerOutput, runReviewer, type ReviewerPromptInput, type ReviewerRole, type RunOutcome, type RunReviewerOptions } from "./runner.js";
@@ -163,13 +162,6 @@ export interface RunDeps {
   /** Runs one reviewer prompt. Defaults to the isolated `claude -p` runner. */
   runner?: (prompt: string, opts: RunReviewerOptions) => Promise<RunOutcome>;
   riskAssessor?: RiskAssessor;
-  /**
-   * A valid agent escalation for the START of a fresh run. It is applied in memory to the START and recorded (bound to the
-   * identity the START froze) only after the START succeeded; `onEscalation` receives what happened. Never called when the run
-   * does not START.
-   */
-  escalation?: AgentEscalation;
-  onEscalation?: (report: EscalationReport) => void;
   /** Reviewers of a group running at once (default 2). */
   concurrency?: number;
   maxTransitions?: number;
@@ -642,9 +634,8 @@ export async function runReview(input: ReviewRunInput, deps: RunDeps = {}): Prom
             return blocked("correction_lineage_pending", `lineage ${pending.rec.lineage_id} is waiting for its correction (${pending.rec.state}); resume it with lineageId instead of opening a new review`);
           }
           started = true;
-          const esc = escalationForStart(deps.riskAssessor ?? ((snapshot, repository) => assessRisk(snapshot, repository)), deps.escalation);
-          const baseAssessor = deps.riskAssessor ?? ((snapshot, repository) => assessRisk(snapshot, repository));
-          const startWith = (riskAssessor: RiskAssessor) => startReview({
+          const riskAssessor = deps.riskAssessor ?? ((snapshot, repository) => assessRisk(snapshot, repository));
+          const outcome = await startReview({
             cwd: input.cwd,
             target: startTarget,
             ...(input.projection !== undefined ? { projection: input.projection } : {}),
@@ -655,9 +646,6 @@ export async function runReview(input: ReviewRunInput, deps: RunDeps = {}): Prom
             ...(input.requestContextPath !== undefined ? { requestContext: input.requestContextPath } : {}),
             riskAssessor,
           });
-          const settled = await esc.settle(await startWith(esc.assessor), () => startWith(escalationForStart(baseAssessor, undefined).assessor));
-          const outcome = settled.outcome;
-          if (settled.report !== undefined) deps.onEscalation?.(settled.report);
           switch (outcome.status) {
             case "consent_required":
               return finish({ outcome: "consent-required", envelope: outcome.envelope });

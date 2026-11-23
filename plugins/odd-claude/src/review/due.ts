@@ -1,9 +1,8 @@
 // The "unreviewed candidate" decision shared by the Stop settle reminder and the delivery notice: the same candidate
 // the review entry rule would START, and only when the risk assessment says a review is due. Read-only; it may throw
 // (SnapshotError), callers decide what a failure means (both stay silent).
-import { readEscalation } from "./escalation.js";
 import { assessCandidate } from "./risk.js";
-import { resolveRepository, runGit } from "./snapshot.js";
+import { runGit } from "./snapshot.js";
 import type { StartTarget } from "./start.js";
 import { reviewStatus, type StatusEnvelope } from "./status.js";
 
@@ -50,13 +49,11 @@ function findCandidate(root: string): Candidate | undefined {
   return offersStart(committed) ? { target, status: committed } : undefined;
 }
 
-/** The unreviewed candidate of a repository whose review is due (high risk, or an agent escalation bound to this exact candidate), or undefined. */
+/** The unreviewed candidate of a repository whose review is due (high risk), or undefined. */
 export function findDueCandidate(root: string): Candidate | undefined {
   const found = findCandidate(root);
   if (found === undefined) return undefined;
   const assessed = assessCandidate(root, found.target, { gitTimeoutMs: GIT_MS });
   if (assessed.status !== "assessed" || assessed.targetIdentity !== found.status.target_identity) return undefined;
-  if (assessed.reviewDue) return found;
-  // An escalation is bound to the candidate identity: a changed candidate has another identity, so it no longer applies.
-  return readEscalation(resolveRepository(root, { gitTimeoutMs: GIT_MS }).commonDir, assessed.targetIdentity) === undefined ? undefined : found;
+  return assessed.reviewDue ? found : undefined;
 }
