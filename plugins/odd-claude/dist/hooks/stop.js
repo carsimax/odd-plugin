@@ -4,11 +4,8 @@ import { recordAgentStatus } from "../lib/agent-status.js";
 import { logError, updateSessionState } from "../lib/state.js";
 import { shellQuote } from "../review/consent.js";
 import { isGlobalModeOn, readReviewMode } from "../review/mode.js";
-import { assessCandidate } from "../review/risk.js";
-import { resolveRepository, runGit } from "../review/snapshot.js";
-import { reviewStatus } from "../review/status.js";
-/** Per git command bound inside the hook (hooks.json gives the whole hook 30 s). */
-const GIT_MS = 5000;
+import { findDueCandidate, GIT_MS } from "../review/due.js";
+import { resolveRepository } from "../review/snapshot.js";
 /** Candidate identities already reminded about, per session (bounded). */
 const REMINDED_KEY = "rddStopReminded";
 const MAX_REMINDED = 32;
@@ -30,45 +27,6 @@ export function stop(input, opts = {}) {
         logError(`Stop settle: ${err instanceof Error ? err.message : String(err)}`, opts);
         return undefined;
     }
-}
-const offersStart = (s) => s.next_transition.kind === "execute" && s.next_transition.execute?.operation === "review.start";
-/** The committed range a clean worktree would review: the branch upstream, else the remote default branch; one merge base, non-empty. */
-export function committedRangeBase(cwd) {
-    const git = (...args) => {
-        try {
-            return runGit({ cwd, args, timeoutMs: GIT_MS }).stdout.toString("utf8").trim();
-        }
-        catch {
-            return undefined;
-        }
-    };
-    const head = git("rev-parse", "--verify", "HEAD^{commit}");
-    if (!head)
-        return undefined;
-    const fromRef = (ref) => {
-        if (!ref)
-            return undefined;
-        const bases = (git("merge-base", "--all", head, ref) ?? "").split(/\s+/).filter((x) => x !== "");
-        if (bases.length !== 1 || bases[0] === head)
-            return undefined;
-        return Number(git("rev-list", "--count", `${bases[0]}..${head}`)) > 0 ? bases[0] : undefined;
-    };
-    return fromRef(git("rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}")) ?? fromRef(git("symbolic-ref", "--quiet", "refs/remotes/origin/HEAD"));
-}
-function findCandidate(root) {
-    const opts = { gitTimeoutMs: GIT_MS };
-    const workspace = reviewStatus(root, opts);
-    if (offersStart(workspace))
-        return { target: { kind: "current-changes" }, status: workspace };
-    // Only an EMPTY workspace falls back to the committed range; a candidate that is declined, consumed or under review stays silent.
-    if (workspace.next_transition.reason_code !== "not_due")
-        return undefined;
-    const baseRef = committedRangeBase(root);
-    if (baseRef === undefined)
-        return undefined;
-    const target = { kind: "base-diff", baseRef, committedOnly: true };
-    const committed = reviewStatus(root, { ...opts, target });
-    return offersStart(committed) ? { target, status: committed } : undefined;
 }
 /** The plugin root: CLAUDE_PLUGIN_ROOT, else two levels above this module (`<root>/dist/hooks/stop.js`). */
 function pluginRoot(opts) {
@@ -102,11 +60,8 @@ export function settleReminder(input, opts) {
     if (readReviewMode(cwd, { ...opts, gitTimeoutMs: GIT_MS }).effective !== "on")
         return undefined;
     const root = resolveRepository(cwd, { gitTimeoutMs: GIT_MS }).root;
-    const found = findCandidate(root);
+    const found = findDueCandidate(root);
     if (found === undefined)
-        return undefined;
-    const assessed = assessCandidate(root, found.target, { gitTimeoutMs: GIT_MS });
-    if (assessed.status !== "assessed" || !assessed.reviewDue || assessed.targetIdentity !== found.status.target_identity)
         return undefined;
     // Claim the candidate under the session lock before printing: two concurrent Stops cannot both remind.
     let claimed = false;

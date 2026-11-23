@@ -122,15 +122,15 @@ test("accounting: refusals and denials are in-band blocks that carry their way f
   assert.deepEqual([stale.blocks.value!.in_band, stale.model_runs.value], [1, 0]);
 });
 
-test("accounting: a gate denial is one hook command and one in-band block; an allow with RDD off blocks nothing", async () => {
-  const denied = await metrics("gate-push-denied-unreviewed-high-risk");
-  assert.deepEqual([denied.commands_to_completion.value, denied.blocks.value!.in_band, denied.model_runs.value, denied.human_prompts.value], [1, 1, 0, 0]);
-  assert.deepEqual(Object.keys(denied.latency), ["hook.pre_tool_use"]);
+test("accounting: the delivery hook never blocks: one hook command and no block, with RDD on or off, before or after a receipt", async () => {
+  const unreviewed = await metrics("gate-push-denied-unreviewed-high-risk");
+  assert.deepEqual([unreviewed.commands_to_completion.value, blocksTotal(unreviewed.blocks.value!), unreviewed.model_runs.value, unreviewed.human_prompts.value], [1, 0, 0, 0]);
+  assert.deepEqual(Object.keys(unreviewed.latency), ["hook.pre_tool_use"]);
   const off = await metrics("gate-silent-with-rdd-off");
   assert.deepEqual([off.commands_to_completion.value, blocksTotal(off.blocks.value!)], [1, 0]);
   const after = await metrics("gate-push-allowed-after-receipt");
-  assert.equal(after.blocks.value!.in_band, 1, "only the first, unreviewed push is blocked");
-  assert.equal(after.recovery_round_trips.value, 1, "the first success after that block is the recovery");
+  assert.equal(blocksTotal(after.blocks.value!), 0, "neither the unreviewed push nor the one after the receipt is blocked");
+  assert.equal(after.recovery_round_trips.value, 0);
 });
 
 test("accounting: each Stop reminder is an in-band block, a silent Stop is not", async () => {

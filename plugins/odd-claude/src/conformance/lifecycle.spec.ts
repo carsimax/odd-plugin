@@ -7,6 +7,7 @@ import assert from "node:assert/strict";
 import { runHook } from "../hooks/run.js";
 import { isTargetConsumed } from "../review/ack.js";
 import { REVIEW_TOOL_NAMES } from "../review/consent.js";
+import { UNREVIEWED_DELIVERY_NOTICE } from "../review/gate.js";
 import { setReviewMode } from "../review/mode.js";
 import { listLineages, readState } from "../review/store.js";
 import { conformToolBody } from "./envelopes.testkit.js";
@@ -40,7 +41,7 @@ async function scenario(
   }
 }
 
-// ---- the delivery gate and the Stop reminder, as Claude Code would invoke them ----
+// ---- the delivery notice and the Stop reminder, as Claude Code would invoke them ----
 
 const on = (w: World): void => void setReviewMode("enable", "global", w.repo, { dataDir: w.data });
 const off = (w: World): void => void setReviewMode("disable", "global", w.repo, { dataDir: w.data });
@@ -48,18 +49,13 @@ const SILENT = { exitCode: 0, stdout: "" };
 const gate = (w: World, command = "git push") => runHook("PreToolUse", JSON.stringify({ session_id: "s1", cwd: w.repo, tool_name: "Bash", tool_input: { command } }), { dataDir: w.data });
 const stop = (w: World, session = "s1") => runHook("Stop", JSON.stringify({ session_id: session, cwd: w.repo, stop_hook_active: false }), { dataDir: w.data });
 
-function denied(r: { exitCode: number; stdout: string }, why: string): string {
+/** The delivery hook never denies: an unreviewed candidate yields the one advisory notice and nothing else. */
+function noticed(r: { exitCode: number; stdout: string }, why: string): void {
   assert.equal(r.exitCode, 0, why);
-  assert.notEqual(r.stdout, "", `${why}: expected a denial`);
-  const out = JSON.parse(r.stdout);
-  assert.deepEqual(Object.keys(out), ["hookSpecificOutput"]);
-  assert.deepEqual(Object.keys(out.hookSpecificOutput).sort(), ["hookEventName", "permissionDecision", "permissionDecisionReason"]);
-  assert.deepEqual([out.hookSpecificOutput.hookEventName, out.hookSpecificOutput.permissionDecision], ["PreToolUse", "deny"]);
-  const reason = out.hookSpecificOutput.permissionDecisionReason as string;
-  // the reason routes to tools that exist
-  for (const t of reason.match(/\breview_[a-z_]+\b/g) ?? []) assert.ok((REVIEW_TOOL_NAMES as readonly string[]).includes(t), `${why}: the reason names ${t}`);
-  return reason;
+  assert.deepEqual(JSON.parse(r.stdout), { hookSpecificOutput: { hookEventName: "PreToolUse", additionalContext: UNREVIEWED_DELIVERY_NOTICE } }, why);
+  assert.doesNotMatch(r.stdout, /permission|"decision"/i, why);
 }
+/** Nothing is shown (the command just runs). */
 const allowed = (r: { exitCode: number; stdout: string }, why: string): void => assert.deepEqual(r, SILENT, why);
 
 const consumed = (w: World, target: string) => isTargetConsumed(w.commonDir, target).status;
@@ -96,7 +92,7 @@ test("low risk (0 lenses): approved at once, acknowledged once, consumed; no rev
   });
 });
 
-test("medium risk (1 lens): consent, capture of the single slot, acknowledge; the gate does not need it", async () => {
+test("medium risk (1 lens): consent, capture of the single slot, acknowledge; the notice does not need it", async () => {
   await scenario(commitMedium, undefined, async (c, w, fake) => {
     on(w);
     const consent = await relay(c);
@@ -123,15 +119,14 @@ test("medium risk (1 lens): consent, capture of the single slot, acknowledge; th
   });
 });
 
-test("high risk (4 lenses): group capture; the gate denies until the approval is acknowledged, then allows; a new commit is a new candidate", async () => {
+test("high risk (4 lenses): group capture; the notice shows until the review is acknowledged, then not; a new commit is a new candidate", async () => {
   await scenario(commitHigh, undefined, async (c, w, fake) => {
     // RDD off (default): silent whatever the review state is
     allowed(gate(w), "RDD off, unreviewed high risk");
     allowed(stop(w), "RDD off: no Stop reminder");
     on(w);
-    const why = denied(gate(w), "unreviewed high risk");
-    assert.match(why, /review_status/);
-    assert.equal(gate(w, "git status").stdout, "", "only deliveries are gated");
+    noticed(gate(w), "unreviewed high risk");
+    assert.equal(gate(w, "git status").stdout, "", "only deliveries show the notice");
     const reminder = stop(w);
     assert.equal(reminder.exitCode, 0);
     const block = JSON.parse(reminder.stdout);
@@ -147,7 +142,7 @@ test("high risk (4 lenses): group capture; the gate denies until the approval is
     assert.deepEqual(fake.calls().map((x) => x.lens).sort(), ["readability", "reliability", "resilience", "risk"]);
     assert.ok(fake.calls().every((x) => x.role === "lens" && x.args.includes("--tools") && !x.args.includes("--bare")), "isolated reviewer arguments");
     assert.equal(captured.capture.pending_lenses.length, 0);
-    denied(gate(w), "approved but not yet acknowledged is not consumed");
+    assert.doesNotMatch(gate(w).stdout, /permission/, "approved but not yet acknowledged never denies");
 
     await acknowledge(c, w, ack);
     assert.equal(consumed(w, consent.target_identity), "consumed");
@@ -156,7 +151,7 @@ test("high risk (4 lenses): group capture; the gate denies until the approval is
     allowed(stop(w, "s2"), "consumed: nothing to remind");
 
     commitHigh(w, "9.9.9");
-    denied(gate(w), "a new commit is a new candidate");
+    noticed(gate(w), "a new commit is a new candidate");
     off(w);
     allowed(gate(w), "RDD off again");
     assert.equal(lineageDirs(w.commonDir).length, 1);
@@ -174,14 +169,14 @@ test("correction: a severe finding asks for a fix; the validator approves the CO
     assert.deepEqual(asked.correction.allowed_paths, ["a.txt"]);
     assert.equal(asked.correction.attempts_remaining, 1);
     assert.equal(readState(w.commonDir, started.lineage_id).state, "correction_required");
-    denied(gate(w), "a review that found a severe issue does not authorize delivery");
+    assert.doesNotMatch(gate(w).stdout, /permission/, "a severe finding never denies a delivery");
 
     // a second START of the same candidate while the correction is pending must not open another lineage
     assert.equal(errorCode(await c.call("review_start", { ...RANGE })), "correction_lineage_pending");
     assert.equal(lineageDirs(w.commonDir).length, 1);
 
     correctAndCommit(w);
-    denied(gate(w), "corrected but not yet validated");
+    assert.doesNotMatch(gate(w).stdout, /permission/, "corrected but not yet validated never denies");
     const closed = await runToOutcome(c, { lineage_id: started.lineage_id });
     assert.equal(closed.outcome, "closed");
     assert.notEqual(closed.target_identity, original);
@@ -200,10 +195,10 @@ test("correction: a severe finding asks for a fix; the validator approves the CO
   });
 });
 
-test("decline: the explicit decline of that exact candidate lets the gate pass; the next candidate asks again", async () => {
+test("decline: the explicit decline of that exact candidate silences the notice; the next candidate asks again", async () => {
   await scenario(commitHigh, undefined, async (c, w) => {
     on(w);
-    denied(gate(w), "unreviewed");
+    noticed(gate(w), "unreviewed");
     const consent = await relay(c);
     const out = await decline(c, w, consent);
     assert.deepEqual([out.outcome, out.reason_code, out.risk_level], ["declined", "consent_declined", "high"]);
@@ -215,7 +210,7 @@ test("decline: the explicit decline of that exact candidate lets the gate pass; 
     allowed(stop(w), "declined: no reminder");
 
     commitHigh(w, "5.5.5");
-    denied(gate(w), "a new candidate is not covered by the old decline");
+    noticed(gate(w), "a new candidate is not covered by the old decline");
     const again = await relay(c);
     assert.equal(again.action, "consent_required");
     assert.notEqual(again.target_identity, consent.target_identity);

@@ -1,6 +1,19 @@
 # odd-claude
 
-A Claude Code plugin that ports the ODD harness of gentle-shell (MIT) <!-- odd-check: allow --> to Claude Code. **v2.0** adds native receipt-driven review (RDD) on top of **v1.0** (the parity release): the ODD persona, orchestrator cards, agents, skills, native integrations, advisory review and lifecycle hooks. Apart from the RDD delivery gate and Stop settle reminder, which can block only when you turn RDD on (it is off by default), the plugin ships **no deny/ask/block hook** (user decision, v0.5, amended for v2): its hooks only add context. Coordinator mode and the admission rules are prompt text, not enforcement; otherwise the only enforcement is Claude Code's native permission system (see [Permission modes](#permission-modes)). The plugin collects no data and sends nothing anywhere.
+A Claude Code plugin that ports the ODD harness of gentle-shell (MIT) <!-- odd-check: allow --> to Claude Code. **v2.0** adds native receipt-driven review (RDD) on top of **v1.0** (the parity release): the ODD persona, orchestrator cards, agents, skills, native integrations, advisory review and lifecycle hooks. Apart from the RDD Stop settle reminder, which can block only when you turn RDD on (it is off by default), the plugin ships **no deny/ask/block hook** (user decision, v0.5, amended for v2): its hooks only add context. Coordinator mode and the admission rules are prompt text, not enforcement; otherwise the only enforcement is Claude Code's native permission system (see [Permission modes](#permission-modes)). The plugin collects no data and sends nothing anywhere.
+
+## What's new (next release)
+
+The RDD delivery check no longer blocks (`odd/tasks/upstream-v5.md`, following the upstream shell: "warn, never block").
+
+- **Changed:** a `git push` or `gh pr create|merge` with RDD on and an unreviewed candidate now runs, and shows ONE advisory notice ("RDD: this repository has an unreviewed candidate; review it before delivery."). The `PreToolUse` hook never denies, asks or blocks, and any failure (unresolved repository, git error, not a repository) shows nothing.
+- **Removed:** the blocking delivery gate: the committed-range assessment, the fail-closed rules and the `ODD_CLAUDE_GATE_BUDGET_MS` budget variable.
+- **Stays:** the Stop settle reminder, which is now the only thing that can block, and only with RDD on.
+- **Fixed:** an agent escalation now reaches the review-due decision that the Stop reminder and the delivery notice share. `review_assess` (and `review_start` / `review_run` on a fresh START) take `escalate: {"item": 1-6, "reason": "<one line, non-empty, at most 500 UTF-8 bytes>"}`, record it for that exact candidate, and the candidate becomes due. A changed candidate drops it, it can only raise the tier, and on a fresh START it freezes the tier as high. **Breaking for callers:** `escalate` was a boolean on `review_assess`; it is now this object.
+
+Upgrade notes (next release):
+
+- If you relied on RDD to stop a delivery without a receipt, it no longer does: review the candidate before you push (`review_status`), or watch for the notice. Nothing needs to change in your settings; `ODD_CLAUDE_GATE_BUDGET_MS` is ignored if you set it.
 
 ## What's new in 3.0.0
 
@@ -53,23 +66,23 @@ Upgrade notes:
 
 ## What's new in 2.0.0
 
-**Native receipt-driven review (RDD).** A TypeScript review engine ships in the plugin: review tools over MCP, isolated `claude -p` reviewers, a Stop settle reminder and a `git push` / `gh pr` delivery gate. It is **off by default** and has an off switch that always wins. See [Receipt-driven review (RDD)](#receipt-driven-review-rdd).
+**Native receipt-driven review (RDD).** A TypeScript review engine ships in the plugin: review tools over MCP, isolated `claude -p` reviewers, a Stop settle reminder and a `git push` / `gh pr` delivery notice (v2.0 shipped it as a blocking gate; it only warns now, see [What's new (next release)](#whats-new-next-release)). It is **off by default** and has an off switch that always wins. See [Receipt-driven review (RDD)](#receipt-driven-review-rdd).
 
 - New: the `review` MCP server (`review_*` tools), the `review-mode.js` switch CLI, a `PreToolUse` hook on `Bash` in `hooks/hooks.json`.
-- Changed: the "no deny" rule now has a scoped exception: only the RDD delivery gate and Stop settle reminder can block, and only with RDD on (user decision S3, 2026-11-19). Everything else stays advisory.
+- Changed: the "no deny" rule now has a scoped exception: the RDD delivery gate and Stop settle reminder could block, and only with RDD on (user decision S3, 2026-11-19; the delivery gate only warns since the next release). Everything else stays advisory.
 - Not in 2.0.0: recover, reclaim, quarantine and legacy maintenance of the review store, and a few other items (see the [roadmap](../../docs/roadmap.md)). Inter-session peer orchestrators (R07) shipped in 2.1.0: see [Peer orchestrators](#peer-orchestrators-r07).
 - Version 2.0.0 is a major bump because a hook can now deny a command (with RDD on).
 
 ## Receipt-driven review (RDD)
 
-RDD asks a high-risk change to earn a review receipt before it is delivered. It is a native TypeScript engine (state machine, authority store, isolated reviewers, MCP tools, Stop reminder and delivery gate), written for odd-claude from the behaviour of the upstream engine. **It is off by default.** With it off, nothing in this section can block anything, and the review tools still work if you call them.
+RDD asks a high-risk change to earn a review receipt before it is delivered. It is a native TypeScript engine (state machine, authority store, isolated reviewers, MCP tools, Stop reminder and delivery notice), written for odd-claude from the behaviour of the upstream engine. **It is off by default.** With it off, nothing in this section can block anything, and the review tools still work if you call them.
 
 ### Quick path
 
 1. Turn it on: `node dist/cli/review-mode.js enable` (see [Switch](#switch)).
 2. Work as usual. When you stop with an unreviewed high-risk candidate, the `Stop` hook blocks once with a reminder to review it.
 3. Review through the MCP tools: `review_status`, then the `review_start` it offers. Medium and high risk **relay a consent question to you**; nothing starts until you answer.
-4. After the review is approved and acknowledged, `git push` and `gh pr create|merge` pass the delivery gate. Without a receipt for that exact candidate they are denied.
+4. `git push` and `gh pr create|merge` always run. While the candidate is unreviewed, the delivery hook shows one notice; after the review is approved and acknowledged (or declined) it shows nothing.
 
 ### Switch
 
@@ -86,31 +99,20 @@ node dist/cli/review-mode.js enable|disable --scope clone --cwd <repo>    # <git
 | The off switch wins | Any off is off. An unreadable, malformed, oversized or symlinked source fails closed **to off**. |
 | Exit codes | 0 ok, 1 failure, 2 usage. |
 
-Turning it off silences both blockers below. Nothing is sent anywhere.
+Turning it off silences the reminder and the notice below. Nothing is sent anywhere.
 
-### What blocks, and when
+### What blocks, and what only warns
 
-These are the only blocks the plugin can emit (user decision S3, amending the v0.5 "no deny" rule), and only with RDD on. No other hook denies, asks or forces continuation.
+The only block the plugin can emit is the Stop settle reminder (user decision S3, amending the v0.5 "no deny" rule; narrowed by upstream v5 S2), and only with RDD on. No other hook denies, asks or forces continuation.
 
-| Blocker | Event | Fires when | Silent when |
-|---|---|---|---|
-| Settle reminder | `Stop` | An unreviewed candidate is **due** (high risk): the workspace, or the committed range ahead of the upstream/`origin/HEAD` default branch when the workspace is clean. Once per session and candidate, claimed before it prints. | RDD off, `stop_hook_active`, declined, consumed, already under review, low or medium risk, no candidate. |
-| Delivery gate | `PreToolUse` on `Bash` (30 s) | The command is a delivery (below) and its committed range is high risk with no valid receipt and no explicit decline. | RDD off, empty range, low or medium risk, consumed, declined. |
+| Hook | Event | Does | Fires when | Silent when |
+|---|---|---|---|---|
+| Settle reminder (blocks) | `Stop` | One `block` with a reminder to review. | An unreviewed candidate is **due** (high risk, or an agent `escalate` recorded for this exact candidate): the workspace, or the committed range ahead of the upstream/`origin/HEAD` default branch when the workspace is clean. Once per session and candidate, claimed before it prints. | RDD off, `stop_hook_active`, declined, consumed, already under review, low or medium risk, no candidate. |
+| Delivery notice (never blocks) | `PreToolUse` on `Bash` (30 s) | One `additionalContext` notice; the command always runs. | The command names a delivery (`git push`, `gh pr create|merge`) and the same unreviewed, due candidate the Stop reminder would use exists. | RDD off, no candidate, declined, consumed, already under review, low or medium risk, a command that also changes the candidate (`git commit ... && git push`), and any failure (not a repository, git error, unreadable state). |
 
-**Which commands are deliveries.** `git push` (any flags, `git -C <dir> push`, env prefixes, `&&`/`;`/`|` chains, subshells, `bash -c`, `eval`, `$(...)`) and `gh pr create|merge`. Not deliveries: `git push --dry-run`/`-n`, `--delete`/`-d`, quoted text, comments, heredoc bodies and look-alikes such as `git pushx`.
+**Which commands get the notice.** A word match on the command text, as upstream does: `git ... push` and `gh ... pr create|merge`. It only decides whether to read the review status once, so a spurious match costs at most one harmless notice, and a miss (an alias, a script, `$(echo git) push`) shows nothing. It never decides whether the command runs.
 
-**What is checked.** The *committed* range from the merge base with the push target to `HEAD`. The push target is the destination's remote-tracking branch, else the branch upstream, else `origin/HEAD` (for `gh pr`: `origin/<--base>`, else `origin/HEAD`). The workspace and untracked files never count. A validated correction makes the corrected candidate the approved identity.
-
-**Fail-closed rules (RDD on).** The gate denies when:
-
-- the same command line changes the candidate and delivers it (`git commit ... && git push`);
-- the repository cannot be resolved (`cd "$X" && git push`, `GIT_DIR=...`, `--git-dir`), for the session repository, or for the user-wide switch when the session directory is not a repository;
-- no base can be derived;
-- the pushed ref is not `HEAD`, or is `--all`/`--mirror`; a tag counts only if it is `HEAD` or in its history, `--tags` is refused if any local tag is outside it, and `--follow-tags` is assessed as the `HEAD` range;
-- git fails, times out or does not trust the repository (dubious ownership), or the 20 s budget is spent (a hard deadline for the whole check, enforced on every git call and under the hook's 30 s timeout, so a slow git can never turn into a hook timeout that lets the command run; `ODD_CLAUDE_GATE_BUDGET_MS` can only shorten it). When git cannot resolve the repository, the clone-local override is read directly from the nearest `.git` (a linked worktree's `.git` file is followed through `gitdir:` and `commondir`): an off allows, otherwise the user-wide switch decides. A `.git` that cannot be followed is never assumed off;
-- consumption of the target is unknown (unreadable lineage, missing receipt): unknown counts as not consumed.
-
-**Read-only.** Neither blocker starts a review, answers consent or writes authority. Their reasons route you to the review tools and name the real off switch (`review-mode.js disable`).
+**Read-only.** Neither hook starts a review, answers consent or writes authority. The Stop reason routes you to the review tools and names the real off switch (`review-mode.js disable`).
 
 ### Review MCP tools
 
@@ -118,7 +120,7 @@ A stdio server, `dist/mcp/review-server.js`, declared as server `review` in `.mc
 
 | Tool | What it does |
 |---|---|
-| `review_assess` | Read-only: freeze the candidate and classify risk, reasons and changed paths. |
+| `review_assess` | Freeze the candidate and classify risk, reasons and changed paths; starts nothing and creates no lineage; it writes (so it is not annotated read-only) only when `escalate` is given. Optional `escalate` (`{item: 1-6, reason}`: one line, non-empty, at most 500 UTF-8 bytes) makes the candidate due for the Stop reminder and the delivery notice; it is recorded for that exact candidate only, a changed candidate drops it, and it can never lower the tier. `review_start` and `review_run` accept it for a fresh START (frozen tier high). |
 | `review_inspect` | Read-only: lineages of this repository (state, risk, revision), unreadable ones, and the RDD mode. |
 | `review_status` | Read-only status envelope. Follow only its `next_transition`. |
 | `review_start` | Start a review. **Always relays consent** for medium/high risk and creates nothing; low risk is approved at once. |
@@ -135,11 +137,11 @@ Conventions:
 - **Acknowledgement token.** An approval is acknowledged once, with a one-shot token delivered by the capture that approved it. A lost token stops the run as `acknowledgement_token_unavailable`; a second acknowledgement is refused.
 - **Reviewers cost money.** `review_run`, `review_capture` and `review_capture_group` first return a **forecast** and run reviewers only when called again with `reviewer_run_acknowledged: true` and that forecast's `reviewer_run_binding`.
 - **Typed errors.** Inputs are validated against their JSON schema (`invalid_input`; unknown properties, including `__proto__`, are rejected). Failures are tool results with `isError: true` and `{"error":{"code","message",...}}`; results are capped at 256 KiB. A pending correction lineage is never duplicated (`correction_lineage_pending`).
-- **Mode.** The tools work with RDD on or off; the mode only silences the two blockers.
+- **Mode.** The tools work with RDD on or off; the mode only silences the Stop reminder and the delivery notice.
 
 ### Where state lives
 
-`<git-common-dir>/odd-plugin/review-transactions/v2/<lineage>/…`, plus `odd-plugin/` lock files, declines (`odd-plugin/declines/`) and the clone override. It never reads or writes the upstream engine's authority or any other tool's tree. Writes are atomic with a revision check; the store lock is a directory with an owner token and a bounded wait (Node has no `flock`). Hashes use the domain `odd-claude.<domain>/v<N>` over one canonical JSON.
+`<git-common-dir>/odd-plugin/review-transactions/v2/<lineage>/…`, plus `odd-plugin/` lock files, declines (`odd-plugin/declines/`), agent escalations bound to a candidate identity (`odd-plugin/review-escalations.json`, at most 16) and the clone override. It never reads or writes the upstream engine's authority or any other tool's tree. Writes are atomic with a revision check; the store lock is a directory with an owner token and a bounded wait (Node has no `flock`). Hashes use the domain `odd-claude.<domain>/v<N>` over one canonical JSON.
 
 ### Reviewer isolation
 
@@ -147,9 +149,7 @@ Reviewers run as isolated `claude -p` children: `--print --output-format text --
 
 ### Documented limits
 
-- **Lexical gate.** Like the upstream recognizer, the gate reads the command text. Known misses: a delivery through a shell alias or a script, `$(echo git) push`, here-strings, and `gh api`. A command that overrides `safe.directory` is not special-cased (untrusted repositories deny with RDD on).
-- **A workspace review does not authorize a committed range.** The candidate identity includes its kind, so approving the uncommitted workspace does not cover the commits made from it, and there is no "one commit" rule. Review the committed range, or decline it.
-- **`--tags` is conservative.** The remote's tags are unknown, so any local tag outside `HEAD` refuses the push. A name that is both a branch and a tag is read as the tag.
+- **Lexical notice.** The delivery notice reads the command text. Known misses: a delivery through a shell alias or a script, `$(echo git) push`, here-strings, and `gh api`; they show no notice and nothing else changes, because the notice never blocks.
 - **Accepted advisories.** An untracked `.git` file that redirects the repository can only be created by someone who can already write the clone's own override, so it is not defended against.
 - **Locks.** Takeover of a dead lock needs proof of death: the owner must be local and its pid dead. The owner records `host`, a stable random `machine` id (persisted at `${XDG_STATE_HOME:-~/.local/state}/odd-plugin/machine-id`) and a `boot` identity (Linux: boot_id plus pid namespace; macOS: `kern.bootsessionuuid`). It is local by id only when machine id AND boot identity exist on both sides and are equal, so a changed hostname (macOS network changes) no longer blocks it and a container or another host sharing the state directory never counts as local. In every other case (older record, missing id or boot, different ids) the hostname is compared as before, and a changed hostname there is never taken over (fail closed: remove `LOCK` by hand after checking the owner). Two machines with the same hostname sharing a store over a network filesystem remain a limit of the hostname rule. Likewise, a container that mounts the state directory AND has the same hostname as the host falls under the hostname rule (it is treated as local), as two NFS machines sharing a hostname do. A pid reused by another live process is never taken over. A complete claim-exclusivity guarantee needs a no-replace rename (`RENAME_EXCL`/`RENAME_NOREPLACE`), which Node does not expose; the claim protocol narrows the window but cannot close it. Dead `LOCK` directories are reclaimed on the next mutation, not by a read.
 - **Abandoned lineage directory.** A crash in the middle of START can leave an empty lineage directory (or one holding only an `.atomic-*` temp). It is inert (never read as state, reported by `review_inspect` as unreadable, a restart opens a new lineage). The next START sweeps, under the store lock, at most 16 per call of those older than one hour, examining at most 512 old lineage directories per call (a directory that holds a `review-state.json` is live and skipped without using that budget, so live lineages no longer count against that cap; abandoned directories past the first 10000 lineage entries, or behind 512 or more old non-removable directories, are not reached); it never removes a directory with a state, a receipt, a `LOCK` or any other file, never follows a symlink, and read-only tools never sweep.
@@ -174,14 +174,14 @@ Statistics and profiles (Phase 5), unchanged in 2.0. The visual mods, the banner
 
 - **Commands / skills** (`/odd-claude:<name>`): `odd`, `doctor`, `status`, `setup`, `persona`, `coordinator`, `background-subagents`, `scratch`, `stats`, `profiles`, `skill-registry`, `skill-creation`, `skill-creator`, `skill-improver`, `4r-review`, `judgment-day`, `branch-pr`, `chained-pr`, `work-unit-commits`, `issue-creation`, `comment-writer`, `cognitive-doc-design`, `tui-design`, `ui-design`.
 - **Agents** (`odd-claude:<agent>`): `odd-explore`, `odd-verify`, `odd-worker`, `odd-jd-fix`, `odd-jd-judge-a`, `odd-jd-judge-b`, `odd-review-risk`, `odd-review-resilience`, `odd-review-readability`, `odd-review-reliability`.
-- **Hooks** (advisory; only the RDD-gated ones below can block): `SessionStart` (context, scratch dir, title, status file, skill registry, optional codegraph warm-up), `UserPromptSubmit` (context, quota advisory), `PostToolUse` (exploration budget, context backstop), `StopFailure` (quota advisory), `Stop` (status file; empty output unless RDD is on, see [RDD](#receipt-driven-review-rdd)), `PreToolUse` on `Bash` (RDD delivery gate; silent unless RDD is on), `SubagentStart`/`SubagentStop` (record the subagent in session state; silent), `SessionEnd` (scratch cleanup, resume hint, status file).
+- **Hooks** (advisory; only the RDD-gated Stop reminder can block): `SessionStart` (context, scratch dir, title, status file, skill registry, optional codegraph warm-up), `UserPromptSubmit` (context, quota advisory), `PostToolUse` (exploration budget, context backstop), `StopFailure` (quota advisory), `Stop` (status file; empty output unless RDD is on, see [RDD](#receipt-driven-review-rdd)), `PreToolUse` on `Bash` (RDD delivery notice, never blocks; silent unless RDD is on), `SubagentStart`/`SubagentStop` (record the subagent in session state; silent), `SessionEnd` (scratch cleanup, resume hint, status file).
 - **Output style**: `odd`. **Cards**, **support docs** and **sounds assets** (see below).
 - **Not implemented, by user decision (2026-11-18):** R57 (notification sounds; the `assets/sounds/` files are only shipped assets) and R63 (GitHub star prompt). Native RDD shipped in 2.0.0; inter-session peers (R07) shipped in 2.1.0, see [Peer orchestrators](#peer-orchestrators-r07).
-- **No deny, with one scoped exception:** the only blocks the plugin can emit are the Stop settle reminder and the delivery gate (PreToolUse on `git push` / `gh pr`) of [RDD](#receipt-driven-review-rdd), both off by default (see [Permission modes](#permission-modes)).
+- **No deny, with one scoped exception:** the only block the plugin can emit is the Stop settle reminder of [RDD](#receipt-driven-review-rdd), off by default; the delivery check (PreToolUse on `git push` / `gh pr`) only shows a notice (see [Permission modes](#permission-modes)).
 
 ## Lifecycle hooks (v1.0)
 
-All of these are advisory: none returns a block decision, `continue:false` or a deny, and the `Stop` hook output is empty so it never forces continuation, except for the RDD-gated settle reminder and delivery gate described in [Receipt-driven review (RDD)](#receipt-driven-review-rdd) (off by default).
+All of these are advisory: none returns a block decision, `continue:false` or a deny, and the `Stop` hook output is empty so it never forces continuation, except for the RDD-gated settle reminder described in [Receipt-driven review (RDD)](#receipt-driven-review-rdd) (off by default).
 
 - **Quota advisory (R35).** `StopFailure` is fire-and-forget in Claude Code, so the hook only logs and arms one advisory shown on the next prompt (30 min cooldown for exhausted quota, 2 min for transient errors). It includes `--fallback-model` guidance (Anthropic models only; see `cards/quota-recovery.md`).
 - **Session scratch (R56).** A per-session directory `<data>/scratch/<session>` (mode 0700) is created at SessionStart and its path is added to the context; `/odd-claude:scratch` shows it. It is removed at SessionEnd only when it is a real directory whose realpath is exactly `<realroot>/<session>`; symlinks are never followed. Removal first renames the dir to a tombstone `<realroot>/.rm-<pid>-<timestamp>-<session>` and then deletes it; if the process crashes in between, the tombstone stays behind and can accumulate. SessionStart sweeps them: it deletes `.rm-*` entries directly inside the real scratch root that are real directories (never symlinks) and older than 1 hour, at most 200 entries per run.

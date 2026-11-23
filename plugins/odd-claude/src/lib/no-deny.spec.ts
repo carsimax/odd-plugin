@@ -1,8 +1,9 @@
 // User decision (v0.5): the plugin has zero deny/ask/block hooks. Coordinator mode and admission
 // rules exist only as prompt text. This pins that no shipped hook code or config can block a tool.
-// Amended for v2 (S3, 2026-11-19): the ONLY exceptions are the RDD Stop settle reminder (src/hooks/stop.ts) and the
-// RDD delivery gate, a PreToolUse hook on Bash (src/hooks/pre-tool-use.ts + src/review/gate.ts), and only while RDD
-// is on (default off); the last tests of this file pin that scope. Any other hook that emits a deny/decision fails.
+// Amended for v2 (S3, 2026-11-19) and narrowed for upstream v5 (S2): the ONLY exception is the RDD Stop settle
+// reminder (src/hooks/stop.ts), and only while RDD is on (default off). The delivery check (a PreToolUse hook on Bash,
+// src/hooks/pre-tool-use.ts + src/review/gate.ts) never denies: it shows one advisory notice. The last tests of this
+// file pin that scope. Any other hook that emits a deny/decision fails.
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
@@ -29,16 +30,14 @@ function files(dir: string, out: string[] = []): string[] {
 }
 
 test("no source or hook config returns or declares a deny/ask/block decision", () => {
-  // the one permitted construction site of a permission decision (pinned by its own tests below)
-  const gate = join(root, "src", "hooks", "pre-tool-use.ts");
-  const targets = [...files(join(root, "src")).filter((f) => f.endsWith(".ts") && !f.endsWith(".spec.ts") && f !== gate), join(root, "hooks", "hooks.json")];
+  const targets = [...files(join(root, "src")).filter((f) => f.endsWith(".ts") && !f.endsWith(".spec.ts")), join(root, "hooks", "hooks.json")];
   for (const f of targets) {
     const text = readFileSync(f, "utf8");
     assert.doesNotMatch(text, FORBIDDEN, f);
   }
 });
 
-test("hooks.json registers the advisory events plus the RDD delivery gate (PreToolUse on Bash only; never PermissionRequest)", () => {
+test("hooks.json registers the advisory events plus the delivery notice (PreToolUse on Bash only; never PermissionRequest)", () => {
   const cfg = JSON.parse(readFileSync(join(root, "hooks", "hooks.json"), "utf8")) as { hooks: Record<string, { matcher?: string }[]> };
   assert.deepEqual(Object.keys(cfg.hooks).sort(), ["PostToolUse", "PreToolUse", "SessionEnd", "SessionStart", "Stop", "StopFailure", "SubagentStart", "SubagentStop", "UserPromptSubmit"]);
   assert.deepEqual(cfg.hooks.PreToolUse!.map((g) => g.matcher), ["Bash"]);
@@ -189,7 +188,7 @@ test("Stop on a due candidate: empty with RDD off (default, or disabled), exactl
   }
 });
 
-// ---- v2 amendment (S3): the RDD-gated PreToolUse delivery gate is the only other decision the plugin may emit ----
+// ---- upstream v5 (S2): the PreToolUse delivery check never denies; it shows one advisory notice ----
 
 /** A clone with a local bare origin and a feature branch whose committed range (package.json dependency) is high risk. */
 function deliveryRepo(): { dir: string; repo: string } {
@@ -217,28 +216,25 @@ function deliveryRepo(): { dir: string; repo: string } {
   return { dir, repo };
 }
 
-test("only src/hooks/pre-tool-use.ts constructs a permission decision: once, for Bash, from the gate that reads the RDD mode", () => {
+test("no source constructs a permission decision: the delivery check cannot deny", () => {
   const owners: string[] = [];
   for (const f of files(join(root, "src")).filter((f) => f.endsWith(".ts") && !/\.(spec|testkit)\.ts$/.test(f))) {
     if (/permission[A-Z]\w*\s*:/.test(readFileSync(f, "utf8"))) owners.push(f.slice(root.length + 1));
   }
-  assert.deepEqual(owners, [join("src", "hooks", "pre-tool-use.ts")]);
+  assert.deepEqual(owners, []);
   const text = readFileSync(join(root, "src", "hooks", "pre-tool-use.ts"), "utf8");
-  assert.equal(text.match(/permissionDecision\s*:/g)?.length, 1);
   assert.match(text, /input\.tool_name !== "Bash"\) return undefined/);
-  assert.match(text, /verdict\.allowed\) return undefined/);
+  assert.match(text, /additionalContext: notice/);
   assert.doesNotMatch(text, /continue\s*:\s*false|stopReason|\bdecision\s*:/);
-  // the gate reads the mode before it can refuse; a mode that is not "on" is a pass
   const gate = readFileSync(join(root, "src", "review", "gate.ts"), "utf8");
-  assert.match(gate, /readReviewMode\([^)]*\)\.effective === "on"/);
-  assert.match(gate, /if \(!on\) continue;/);
+  assert.match(gate, /readReviewMode\([^)]*\)\.effective !== "on"\) return undefined/);
   assert.doesNotMatch(gate, /permission[A-Z]|"decision"/);
   // every other event goes through the shared dispatcher with its own name
   const cfg = JSON.parse(readFileSync(join(root, "hooks", "hooks.json"), "utf8")) as { hooks: Record<string, { hooks: { command: string }[] }[]> };
   for (const [event, groups] of Object.entries(cfg.hooks)) for (const g of groups) for (const h of g.hooks) assert.match(h.command, new RegExp(`run\\.js" ${event}$`));
 });
 
-test("PreToolUse: silent with RDD off (default or disabled); with RDD on exactly one denial shape, only for a due delivery; no other hook ever denies", () => {
+test("PreToolUse: silent with RDD off (default or disabled); with RDD on a delivery never gets a permission decision, only one additionalContext notice when unreviewed", () => {
   const { dir, repo } = deliveryRepo();
   const data = join(dir, "data");
   try {
@@ -248,8 +244,8 @@ test("PreToolUse: silent with RDD off (default or disabled); with RDD on exactly
     setReviewMode("disable", "global", repo, { dataDir: data });
     assert.deepEqual(pre("git push"), silent);
     setReviewMode("enable", "global", repo, { dataDir: data });
-    // RDD on: non-delivery commands, other tools, dry runs and look-alikes stay silent
-    for (const c of ["ls", "git status", "git push --dry-run", "echo git push", "git pushx", "gh pr view 1", "git branch -D old"]) assert.deepEqual(pre(c), silent, c);
+    // RDD on: non-delivery commands, other tools and look-alikes stay silent
+    for (const c of ["ls", "git status", "echo hi", "git pushx", "gh pr view 1", "git branch -D old", "git commit -m x && git push"]) assert.deepEqual(pre(c), silent, c);
     assert.deepEqual(pre("git push", "Read"), silent);
     // the other events stay advisory even with RDD on and a due range (Stop is covered above)
     for (const event of ["SessionStart", "UserPromptSubmit", "StopFailure", "SessionEnd", "SubagentStart", "SubagentStop", "PostToolUse"]) {
@@ -260,14 +256,16 @@ test("PreToolUse: silent with RDD off (default or disabled); with RDD on exactly
       const out = JSON.parse(r.stdout) as Record<string, unknown>;
       for (const k of ["decision", "continue", "stopReason", "permissionDecision", "reason"]) assert.equal(Object.hasOwn(out, k), false, `${event}: ${k}`);
     }
-    const r = pre("git push origin feature");
-    assert.equal(r.exitCode, 0);
-    const out = JSON.parse(r.stdout) as { hookSpecificOutput: Record<string, unknown> };
-    assert.deepEqual(Object.keys(out), ["hookSpecificOutput"]);
-    assert.deepEqual(Object.keys(out.hookSpecificOutput).sort(), ["hookEventName", "permissionDecision", "permissionDecisionReason"]);
-    assert.equal(out.hookSpecificOutput.permissionDecision, "deny");
-    assert.equal(typeof out.hookSpecificOutput.permissionDecisionReason, "string");
-    assert.doesNotMatch(r.stdout, /"continue"|stopReason|"decision"/);
+    for (const c of ["git push origin feature", "gh pr create --fill", "gh pr merge 1"]) {
+      const r = pre(c);
+      assert.equal(r.exitCode, 0, c);
+      const out = JSON.parse(r.stdout) as { hookSpecificOutput: Record<string, unknown> };
+      assert.deepEqual(Object.keys(out), ["hookSpecificOutput"], c);
+      assert.deepEqual(Object.keys(out.hookSpecificOutput).sort(), ["additionalContext", "hookEventName"], c);
+      assert.equal(out.hookSpecificOutput.hookEventName, "PreToolUse");
+      assert.equal(typeof out.hookSpecificOutput.additionalContext, "string");
+      assert.doesNotMatch(r.stdout, /permission|"continue"|stopReason|"decision"/i, c);
+    }
     setReviewMode("disable", "global", repo, { dataDir: data });
     assert.deepEqual(pre("git push origin feature"), silent); // the switch turns it off again
   } finally {

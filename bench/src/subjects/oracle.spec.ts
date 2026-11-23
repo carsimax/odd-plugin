@@ -138,15 +138,11 @@ test("printed invocations split into arguments the way a shell would", () => {
 
 // ---- what the oracle cannot express, and where it differs ----
 
-test("unsupported: exactly the journeys that need a delivery denial, each with the product's reason", () => {
-  const unsupported = JOURNEY_DEFS.filter((d) => oracleUnsupportedReason(d) !== undefined).map((d) => d.id).sort();
-  assert.deepEqual(unsupported, [
-    "gate-pr-open-allowed-after-receipt", "gate-pr-open-denied-unreviewed", "gate-push-allowed-after-receipt", "gate-push-allowed-when-declined", "gate-push-denied-unreviewed-high-risk",
-    "workspace-review-does-not-authorize-committed-range",
-  ]);
-  for (const d of JOURNEY_DEFS) if (oracleUnsupportedReason(d) !== undefined) assert.match(oracleUnsupportedReason(d)!, /non-deciding.*delivery=unmanaged/);
-  assert.equal(toJourney(byId("gate-push-denied-unreviewed-high-risk"), oracleSubject).unsupported, oracleUnsupportedReason(byId("gate-push-denied-unreviewed-high-risk")));
-  assert.equal(toJourney(byId("gate-silent-with-rdd-off"), oracleSubject).unsupported, undefined);
+test("unsupported: no shared journey needs a delivery denial any more (the delivery hook only warns), so the oracle supports them all", () => {
+  assert.deepEqual(JOURNEY_DEFS.filter((d) => oracleUnsupportedReason(d) !== undefined).map((d) => d.id), []);
+  const denying: JourneyDef = { ...byId("gate-silent-with-rdd-off"), steps: [{ do: { kind: "gateCheck", command: "push" }, expect: { outcome: "deny", gate: "deny", reason: "review_due" } }] };
+  assert.match(oracleUnsupportedReason(denying)!, /non-deciding.*delivery=unmanaged/);
+  assert.equal(toJourney(byId("gate-push-denied-unreviewed-high-risk"), oracleSubject).unsupported, undefined);
 });
 
 test("divergences: the oracle's expected projection differs from the shared one only in the declared steps and in the product's default RDD mode", () => {
@@ -243,11 +239,10 @@ test("oracle accounting: refusals and reminders are in-band blocks; a refused an
 
 // ---- the gate: deny/allow against the real binary ----
 
-test("gate: the deny journeys are unsupported because the real binary never denies; the allow journeys run and pass", { skip }, async () => {
+test("gate: every gate journey expects an allow, so they all run against the real binary and pass", { skip }, async () => {
   for (const id of ["gate-push-denied-unreviewed-high-risk", "gate-pr-open-denied-unreviewed", "gate-push-allowed-after-receipt"]) {
     const row = await run(id);
-    assert.equal(row.status, "unsupported", id);
-    assert.match(row.reason ?? "", /non-deciding/);
+    assert.equal(row.status, "passed", JSON.stringify(row));
   }
   for (const id of ["gate-silent-with-rdd-off", "gate-push-allowed-for-medium-risk-range"]) {
     const row = await run(id);

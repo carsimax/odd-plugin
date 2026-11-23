@@ -1,23 +1,25 @@
-// RDD delivery gate (PreToolUse), Stop reminder and the RDD mode switch. Delivery commands are presented to the gate as data only.
+// RDD delivery check (PreToolUse: never blocks, at most one advisory notice), Stop reminder and the RDD mode switch. Delivery commands are presented to the gate as data only.
 import type { JourneyDef } from "../journey.js";
 import { step } from "./dsl.js";
 
+// Journey ids keep their historical names (the committed baselines under docs/bench key rows by id); since the delivery check
+// only warns, every gate step expects an allow.
 const committedHigh = { change: "high", placement: "committed", origin: true } as const;
 
 export const gateJourneys: JourneyDef[] = [
   {
     id: "gate-push-denied-unreviewed-high-risk",
     refId: "j05-gate-without-any-review",
-    description: "With RDD on, pushing a committed high-risk range nobody reviewed is denied, and the denial names the review route.",
+    description: "With RDD on, pushing a committed high-risk range nobody reviewed is never blocked: the command runs (the hook only adds an advisory notice).",
     fixture: { ...committedHigh, rdd: "on" },
-    steps: [step({ kind: "gateCheck", command: "push" }, { outcome: "deny", gate: "deny", reason: "review_due" })],
+    steps: [step({ kind: "gateCheck", command: "push" }, { outcome: "allow", gate: "allow" })],
   },
   {
     id: "gate-push-allowed-after-receipt",
-    description: "The committed range is reviewed with consent, approved and acknowledged: the push is then allowed.",
+    description: "The push runs before the review (never blocked); the committed range is then reviewed with consent, approved and acknowledged, and the push still runs.",
     fixture: { ...committedHigh, rdd: "on" },
     steps: [
-      step({ kind: "gateCheck", command: "push" }, { outcome: "deny", gate: "deny", reason: "review_due" }),
+      step({ kind: "gateCheck", command: "push" }, { outcome: "allow", gate: "allow" }),
       step({ kind: "start", consent: "granted", target: "committed" }, { outcome: "consented", risk: "high", state: "reviewing", lenses: 4 }),
       step({ kind: "captureAll", verdict: "approve" }, { outcome: "approved", state: "approved", lenses: 4 }),
       step({ kind: "acknowledge" }, { outcome: "acknowledged", state: "burned" }),
@@ -26,38 +28,38 @@ export const gateJourneys: JourneyDef[] = [
   },
   {
     id: "gate-push-allowed-when-declined",
-    description: "The push is denied; the human then declines the review of the committed range, and the decline of that exact candidate lets the push through.",
+    description: "The push runs; the human then declines the review of the committed range, and the push still runs.",
     fixture: { ...committedHigh, rdd: "on" },
     steps: [
-      step({ kind: "gateCheck", command: "push" }, { outcome: "deny", gate: "deny", reason: "review_due" }),
+      step({ kind: "gateCheck", command: "push" }, { outcome: "allow", gate: "allow" }),
       step({ kind: "start", consent: "declined", target: "committed" }, { outcome: "declined", risk: "high", state: "declined" }),
       step({ kind: "gateCheck", command: "push" }, { outcome: "allow", gate: "allow" }),
     ],
   },
   {
     id: "gate-silent-with-rdd-off",
-    description: "With RDD off the gate never blocks, even for an unreviewed high-risk range.",
+    description: "With RDD off the hook never blocks, even for an unreviewed high-risk range.",
     fixture: { ...committedHigh, rdd: "off" },
     steps: [step({ kind: "gateCheck", command: "push" }, { outcome: "allow", gate: "allow" })],
   },
   {
     id: "gate-push-allowed-for-medium-risk-range",
-    description: "With RDD on, only a high-risk range is due: a committed medium-risk range is delivered without a review.",
+    description: "With RDD on, only a high-risk range is due: a committed medium-risk range is delivered without a review (and without a notice).",
     fixture: { change: "medium", placement: "committed", origin: true, rdd: "on" },
     steps: [step({ kind: "gateCheck", command: "push" }, { outcome: "allow", gate: "allow" })],
   },
   {
     id: "gate-pr-open-denied-unreviewed",
-    description: "Opening a pull request for a committed high-risk range nobody reviewed is denied like a push.",
+    description: "Opening a pull request for a committed high-risk range nobody reviewed is never blocked, like a push.",
     fixture: { ...committedHigh, rdd: "on" },
-    steps: [step({ kind: "gateCheck", command: "prOpen" }, { outcome: "deny", gate: "deny", reason: "review_due" })],
+    steps: [step({ kind: "gateCheck", command: "prOpen" }, { outcome: "allow", gate: "allow" })],
   },
   {
     id: "gate-pr-open-allowed-after-receipt",
-    description: "Opening the pull request is denied until the committed range is reviewed, approved and acknowledged; then it is allowed.",
+    description: "Opening the pull request runs before and after the committed range is reviewed, approved and acknowledged.",
     fixture: { ...committedHigh, rdd: "on" },
     steps: [
-      step({ kind: "gateCheck", command: "prOpen" }, { outcome: "deny", gate: "deny", reason: "review_due" }),
+      step({ kind: "gateCheck", command: "prOpen" }, { outcome: "allow", gate: "allow" }),
       step({ kind: "start", consent: "granted", target: "committed" }, { outcome: "consented", risk: "high", state: "reviewing", lenses: 4 }),
       step({ kind: "captureAll", verdict: "approve" }, { outcome: "approved", state: "approved", lenses: 4 }),
       step({ kind: "acknowledge" }, { outcome: "acknowledged", state: "burned" }),
@@ -66,13 +68,13 @@ export const gateJourneys: JourneyDef[] = [
   },
   {
     id: "workspace-review-does-not-authorize-committed-range",
-    description: "Reviewing a different working-tree change does not authorize delivering the committed range: the push is still denied.",
+    description: "Reviewing a different working-tree change does not review the committed range, and the push runs regardless (never blocked).",
     fixture: { ...committedHigh, extraWorkspace: true, rdd: "on" },
     steps: [
       step({ kind: "start", consent: "granted" }, { outcome: "consented", risk: "high", state: "reviewing", lenses: 4 }),
       step({ kind: "captureAll", verdict: "approve" }, { outcome: "approved", state: "approved", lenses: 4 }),
       step({ kind: "acknowledge" }, { outcome: "acknowledged", state: "burned" }),
-      step({ kind: "gateCheck", command: "push" }, { outcome: "deny", gate: "deny", reason: "review_due" }),
+      step({ kind: "gateCheck", command: "push" }, { outcome: "allow", gate: "allow" }),
     ],
   },
   {

@@ -64,14 +64,6 @@ const literal = (args: { name: string; value: string }[] | undefined): Record<st
 const REASONS: Record<string, string> = { correction_lineage_pending: "correction_pending", binding_drift: "binding_drift" };
 const reasonOf = (code: string): string => REASONS[code] ?? code;
 
-function gateReason(text: string): string {
-  if (/has not been reviewed/.test(text)) return "review_due";
-  if (/changes the candidate/.test(text)) return "mixed_chain";
-  if (/cannot be resolved/.test(text)) return "unresolved_directory";
-  if (/no base was found/.test(text)) return "no_base";
-  return "other";
-}
-
 class OddSession implements SubjectSession {
   private events: MetricEvent[] = [];
   /** The consent question the last `start` relayed, and what it was asked about. */
@@ -284,11 +276,10 @@ class OddSession implements SubjectSession {
   }
 
   private async gateCheck(command: "push" | "prOpen"): Promise<NormalizedFacts> {
+    // The delivery hook never denies: the command always runs (at most one advisory notice), so a permission decision is a failure.
     const out = await this.hook("PreToolUse", { session_id: "bench-gate", tool_name: "Bash", tool_input: { command: deliveryCommand(command) } });
-    const decision = out?.hookSpecificOutput?.permissionDecision;
-    if (decision !== "deny") return { outcome: "allow", gate: "allow" };
-    this.block();
-    return { outcome: "deny", gate: "deny", reason: gateReason(String(out?.hookSpecificOutput?.permissionDecisionReason ?? "")) };
+    if (out?.hookSpecificOutput?.permissionDecision !== undefined) throw new Error("the PreToolUse delivery hook returned a permission decision");
+    return { outcome: "allow", gate: "allow" };
   }
 
   private async stopHook(session: string): Promise<NormalizedFacts> {

@@ -24,6 +24,12 @@ import { acknowledge, approveThroughCapture, grant, relay, runToOutcome, status,
 
 // ---- crash driver ----
 
+/** The delivery hook never denies: whatever the review state, the output has no permission decision (a notice at most). */
+function assertNeverDenies(stdout: string, why: string): void {
+  assert.doesNotMatch(stdout, /permission|"decision"/i, why);
+}
+
+
 interface Crash {
   w: World;
   died: boolean;
@@ -379,7 +385,7 @@ test("kill -9 mid-acknowledge at every fs call: receipt first, burn second; a re
   assert.deepEqual([...states].sort(), ["no-receipt/unburned", "receipt/burned", "receipt/unburned"]);
 });
 
-test("kill -9 BETWEEN the receipt write and the burn: the receipt is inert (not consumed, the gate still denies), the same-token retry completes", { timeout: 120_000 }, async () => {
+test("kill -9 BETWEEN the receipt write and the burn: the receipt is inert (not consumed, the delivery hook never denies), the same-token retry completes", { timeout: 120_000 }, async () => {
   const w = keep(makeWorld());
   const fake = keep(makeFakeReviewer());
   commitHigh(w);
@@ -403,13 +409,13 @@ test("kill -9 BETWEEN the receipt write and the burn: the receipt is inert (not 
     assert.equal(isTargetConsumed(crashed.w.commonDir, target).status, "not_consumed");
     setReviewMode("enable", "global", crashed.w.repo, { dataDir: crashed.w.data });
     const push = () => runHook("PreToolUse", JSON.stringify({ session_id: "s", cwd: crashed.w.repo, tool_name: "Bash", tool_input: { command: "git push" } }), { dataDir: crashed.w.data });
-    assert.match(push().stdout, /"permissionDecision":"deny"/, "an inert receipt does not open the gate");
+    assertNeverDenies(push().stdout, "an inert receipt never makes the delivery hook deny");
     await withClient({ fake, world: crashed.w }, async (c) => {
       const done = await acknowledge(c, crashed.w, ack!);
       assert.equal(done.burned, true);
     });
     assert.equal(isTargetConsumed(crashed.w.commonDir, target).status, "consumed");
-    assert.deepEqual(push(), { exitCode: 0, stdout: "" }, "the completed acknowledgement opens the gate");
+    assert.deepEqual(push(), { exitCode: 0, stdout: "" }, "the completed acknowledgement silences the notice");
     const end = assertAuthority(crashed.w, "completed");
     assert.deepEqual([end.lineages.length, end.burned.length, end.receipts.length], [1, 1, 1]);
   } finally {
@@ -417,7 +423,7 @@ test("kill -9 BETWEEN the receipt write and the burn: the receipt is inert (not 
   }
 });
 
-test("the receipt check is what makes `consumed`: a burned lineage whose receipt was removed or altered is never consumed (gate denies)", async () => {
+test("the receipt check is what makes `consumed`: a burned lineage whose receipt was removed or altered is never consumed (the delivery hook never denies)", async () => {
   const w = keep(makeWorld());
   const fake = keep(makeFakeReviewer());
   commitHigh(w);
@@ -438,10 +444,10 @@ test("the receipt check is what makes `consumed`: a burned lineage whose receipt
     const original = readFileSync(receiptFile, "utf8");
     writeFileSync(receiptFile, original.replace(/"candidate_tree":"[0-9a-f]{40}"/, `"candidate_tree":"${"e".repeat(40)}"`));
     assert.notEqual(isTargetConsumed(d.commonDir, target).status, "consumed", "an altered receipt does not verify");
-    assert.match(push().stdout, /"permissionDecision":"deny"/);
+    assertNeverDenies(push().stdout, "altered receipt");
     rmSync(receiptFile);
     assert.notEqual(isTargetConsumed(d.commonDir, target).status, "consumed", "no receipt, no consumption");
-    assert.match(push().stdout, /"permissionDecision":"deny"/);
+    assertNeverDenies(push().stdout, "no receipt");
   } finally {
     d.cleanup();
   }

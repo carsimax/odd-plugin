@@ -74,7 +74,7 @@ for (const c of cases) {
   });
 }
 
-test("PreToolUse and Stop load the gate and the settle engine once the global RDD switch is on", { skip }, () => {
+test("PreToolUse and Stop load the delivery notice and the settle engine once the global RDD switch is on", { skip }, () => {
   const on = (data: string): void => void setReviewMode("enable", "global", projectDir, { dataDir: data });
   const pre = loaded("PreToolUse", { ...base, tool_name: "Bash", tool_input: { command: "git push origin main" } }, on);
   assert.ok(pre.files.includes("review/gate.js"), pre.files.join(", "));

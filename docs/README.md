@@ -10,7 +10,7 @@
 2. Naming: prefix `odd`, plugin namespace `odd-claude:`; never `gentle-` (see below).
 3. No telemetry of any kind. Telemetry-related Claude Code APIs are documented only as capability facts.
 4. Coordinator mode (full delegation) is ON by default (user decision 2026-11-18).
-5. No deny/ask/block hooks; protection relies on Claude Code native permissions (user decision 2026-11-18). Scoped exception for v2 (user decision 2026-11-19): only the RDD delivery gate and Stop settle reminder can block, and only when RDD is turned on (it is off by default).
+5. No deny/ask/block hooks; protection relies on Claude Code native permissions (user decision 2026-11-18). Scoped exception for v2 (user decision 2026-11-19): only the RDD Stop settle reminder can block, and only when RDD is turned on (it is off by default). The delivery check (`git push`, `gh pr`) only warns (upstream v5, S2).
 
 ## Naming convention
 

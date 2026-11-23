@@ -93,7 +93,7 @@ test("runHookLazy fails safe: unknown event, empty stdin and invalid JSON are si
   }
 });
 
-test("runHookLazy keeps a real deny and a real Stop block (global RDD on, high-risk committed range)", async () => {
+test("runHookLazy matches the eager path for the delivery notice and a real Stop block (global RDD on, high-risk committed range)", async () => {
   const dir = realpathSync(mkdtempSync(join(tmpdir(), "odd-lazy-rdd-")));
   try {
     const repo = join(dir, "repo");
@@ -117,13 +117,14 @@ test("runHookLazy keeps a real deny and a real Stop block (global RDD on, high-r
     const env = { CLAUDE_PLUGIN_ROOT: "/r/odd" };
     const delivery = ["git", "push", "origin", "feat"].join(" ");
     const cases: [string, object, string][] = [
-      ["PreToolUse", { session_id: "s1", cwd: repo, tool_name: "Bash", tool_input: { command: delivery } }, "deny"],
+      ["PreToolUse", { session_id: "s1", cwd: repo, tool_name: "Bash", tool_input: { command: delivery } }, "unreviewed candidate"],
       ["Stop", { session_id: "s1", cwd: repo, stop_hook_active: false }, "block"],
     ];
     for (const [event, input, word] of cases) {
       const eager = runHook(event, JSON.stringify(input), { dataDir: a, env });
       const lazy = await runHookLazy(event, JSON.stringify(input), { dataDir: b, env });
-      assert.ok(eager.stdout.includes(word), `${event}: the eager path must ${word}: ${eager.stdout}`);
+      assert.ok(eager.stdout.includes(word), `${event}: the eager path must show ${word}: ${eager.stdout}`);
+      assert.doesNotMatch(eager.stdout, /permissionDecision|deny/, event);
       assert.deepEqual({ ...lazy, stdout: lazy.stdout.replaceAll(b, "<data>") }, { ...eager, stdout: eager.stdout.replaceAll(a, "<data>") }, event);
     }
   } finally {
@@ -150,7 +151,7 @@ test("runHookLazy logs the same handler error as runHook for a non-object stdin 
   }
 });
 
-test("PreToolUse only handles the Bash delivery gate, so skipping it with RDD off drops nothing", () => {
+test("PreToolUse only handles the Bash delivery notice, so skipping it with RDD off drops nothing", () => {
   const raw = JSON.parse(readFileSync(new URL("../../hooks/hooks.json", import.meta.url), "utf8")) as { hooks: Record<string, { matcher?: string }[]> };
   assert.deepEqual(raw.hooks.PreToolUse!.map((e) => e.matcher), ["Bash"]);
   const dir = mkdtempSync(join(tmpdir(), "odd-lazy-"));
