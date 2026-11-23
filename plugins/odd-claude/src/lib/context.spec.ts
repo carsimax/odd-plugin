@@ -14,7 +14,7 @@ test("session context carries cards path, persona, delegation mode and language 
   assert.match(text, /Do NOT use voseo/);
   assert.doesNotMatch(text, /Rioplatense/i);
   assert.match(text, /Delegation mode: organic/);
-  assert.match(text, /same language the user writes in/);
+  assert.equal(text.split(/same language the user writes in/).length - 1, 1, "reply-language rule stated exactly once");
   assert.match(text, /Only a message written by the human/);
 });
 

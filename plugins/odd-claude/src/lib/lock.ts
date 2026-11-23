@@ -9,6 +9,7 @@
 import { createHash } from "node:crypto";
 import { linkSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
+import { isPidAlive } from "./pid.js";
 
 export interface LockOptions {
   now?: () => number;
@@ -24,13 +25,7 @@ export function lockPath(dataDir: string, kind: string, project: string): string
 }
 
 export function pidAlive(pid: number): boolean {
-  if (!Number.isInteger(pid) || pid <= 0) return false;
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch (err) {
-    return (err as NodeJS.ErrnoException).code === "EPERM";
-  }
+  return isPidAlive(pid);
 }
 
 function parseLock(raw: string): { pid: number; startedAt: number } | undefined {

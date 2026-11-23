@@ -97,3 +97,9 @@ for (const [event, extra] of [["UserPromptSubmit", { prompt: "hola" }], ["Sessio
     assert.ok(withMail.files.includes("lib/peers-delivery.js"), withMail.files.join(", "));
   });
 }
+
+// T4: UserPromptSubmit needs only the session-id check and the grant store, not the mailbox module.
+test("UserPromptSubmit does not load lib/peers.js", { skip }, () => {
+  const { files } = loaded("UserPromptSubmit", { ...base, prompt: "hola" });
+  assert.ok(!files.includes("lib/peers.js"), files.join(", "));
+});

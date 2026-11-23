@@ -48,7 +48,6 @@ import { acknowledgeApproved, AckRefusedError } from "./ack.js";
 import { manifestFor, refuterRequestHash, targetedValidationRequestHash, treeDiffPaths } from "./artifact.js";
 import { captureCorrectionResult, captureLensResult, captureRefuterResult, captureValidatorResult, completeReview, planCorrection, previewCorrectionValidation, } from "./capture.js";
 import { encodeAckEnvelope, encodeBinding, encodeCaptureEnvelope, forecastFor, isTerminalStop, REASON_DESCRIPTIONS, verifyBinding } from "./contract.js";
-import { escalationForStart } from "./escalation.js";
 import { StoreLockContended, StoreLockError } from "./lock.js";
 import { assessRisk } from "./risk.js";
 import { buildReviewerPrompt, parseReviewerOutput, runReviewer } from "./runner.js";
@@ -551,9 +550,8 @@ export async function runReview(input, deps = {}) {
                         return blocked("correction_lineage_pending", `lineage ${pending.rec.lineage_id} is waiting for its correction (${pending.rec.state}); resume it with lineageId instead of opening a new review`);
                     }
                     started = true;
-                    const esc = escalationForStart(deps.riskAssessor ?? ((snapshot, repository) => assessRisk(snapshot, repository)), deps.escalation);
-                    const baseAssessor = deps.riskAssessor ?? ((snapshot, repository) => assessRisk(snapshot, repository));
-                    const startWith = (riskAssessor) => startReview({
+                    const riskAssessor = deps.riskAssessor ?? ((snapshot, repository) => assessRisk(snapshot, repository));
+                    const outcome = await startReview({
                         cwd: input.cwd,
                         target: startTarget,
                         ...(input.projection !== undefined ? { projection: input.projection } : {}),
@@ -564,10 +562,6 @@ export async function runReview(input, deps = {}) {
                         ...(input.requestContextPath !== undefined ? { requestContext: input.requestContextPath } : {}),
                         riskAssessor,
                     });
-                    const settled = await esc.settle(await startWith(esc.assessor), () => startWith(escalationForStart(baseAssessor, undefined).assessor));
-                    const outcome = settled.outcome;
-                    if (settled.report !== undefined)
-                        deps.onEscalation?.(settled.report);
                     switch (outcome.status) {
                         case "consent_required":
                             return finish({ outcome: "consent-required", envelope: outcome.envelope });

@@ -9,20 +9,13 @@
 import { createHash } from "node:crypto";
 import { linkSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
+import { isPidAlive } from "./pid.js";
 export function lockPath(dataDir, kind, project) {
     const key = createHash("sha1").update(resolve(project)).digest("hex").slice(0, 16);
     return join(dataDir, "locks", `${kind}-${key}.lock`);
 }
 export function pidAlive(pid) {
-    if (!Number.isInteger(pid) || pid <= 0)
-        return false;
-    try {
-        process.kill(pid, 0);
-        return true;
-    }
-    catch (err) {
-        return err.code === "EPERM";
-    }
+    return isPidAlive(pid);
 }
 function parseLock(raw) {
     try {

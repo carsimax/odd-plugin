@@ -5,13 +5,15 @@
 // (input + cache_creation + cache_read tokens = the prompt the model just saw), or, when no usage line is in
 // the tail, a heuristic of file bytes / 4. The window size is unknown, so only the absolute cap applies.
 import { closeSync, fstatSync, openSync, readSync, statSync } from "node:fs";
-import { updateSessionState, type StateOptions } from "./state.js";
+import { readSessionState, updateSessionState, type StateOptions } from "./state.js";
 
 export const CONTEXT_BACKSTOP_TOKENS = 150_000;
 export const CONTEXT_BACKSTOP_TOKENS_ENV = "ODD_CLAUDE_CONTEXT_BACKSTOP_TOKENS";
 /** Rough tokens-per-byte for the size fallback (the transcript also carries JSON overhead, so it overestimates). */
 export const BYTES_PER_TOKEN = 4;
 const TAIL_BYTES = 512 * 1024;
+/** Once the notice fired only a measured drop (re-arm) matters, so each PostToolUse reads this short tail instead of TAIL_BYTES. */
+const FIRED_TAIL_BYTES = 32 * 1024;
 
 type Env = Readonly<Record<string, string | undefined>>;
 
@@ -20,12 +22,12 @@ export function contextBackstopThreshold(env: Env = process.env): number {
   return Number.isFinite(v) && v > 0 ? v : CONTEXT_BACKSTOP_TOKENS;
 }
 
-function tail(path: string): string | undefined {
+function tail(path: string, max: number = TAIL_BYTES): string | undefined {
   if (!statSync(path).isFile()) return undefined; // a FIFO or device would hang openSync / block reads
   const fd = openSync(path, "r");
   try {
     const size = fstatSync(fd).size;
-    const len = Math.min(size, TAIL_BYTES);
+    const len = Math.min(size, max);
     const buf = Buffer.alloc(len);
     readSync(fd, buf, 0, len, size - len);
     const text = buf.toString("utf8");
@@ -37,8 +39,8 @@ function tail(path: string): string | undefined {
 }
 
 /** Prompt tokens of the last assistant turn in the transcript tail; undefined when none is found. */
-function lastUsageTokens(path: string): number | undefined {
-  const text = tail(path);
+function lastUsageTokens(path: string, max: number = TAIL_BYTES): number | undefined {
+  const text = tail(path, max);
   if (text === undefined) return undefined;
   const lines = text.split("\n");
   for (let i = lines.length - 1; i >= 0; i--) {
@@ -94,9 +96,20 @@ export function checkContextBackstop(
   opts: StateOptions,
 ): string | undefined {
   if (typeof transcriptPath !== "string" || transcriptPath === "") return undefined;
+  const threshold = contextBackstopThreshold(env);
+  if (readSessionState(sessionId, opts).contextBackstop === true) {
+    // Already fired: nothing can notify until a measured drop re-arms it, so read a short tail and skip the size estimate.
+    let tokens: number | undefined;
+    try {
+      tokens = statSync(transcriptPath).isFile() ? lastUsageTokens(transcriptPath, FIRED_TAIL_BYTES) : undefined;
+    } catch {
+      tokens = undefined;
+    }
+    if (tokens !== undefined && tokens < threshold) updateSessionState(sessionId, (s) => (s.contextBackstop === true ? { ...s, contextBackstop: false } : s), opts);
+    return undefined;
+  }
   const m = measureContext(transcriptPath);
   if (!m) return undefined;
-  const threshold = contextBackstopThreshold(env);
   if (m.tokens < threshold) {
     // re-arm only on a measured reading; no write when already disarmed
     if (m.measured) updateSessionState(sessionId, (s) => (s.contextBackstop === true ? { ...s, contextBackstop: false } : s), opts);

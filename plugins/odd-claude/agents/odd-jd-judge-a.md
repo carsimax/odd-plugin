@@ -4,6 +4,7 @@ description: Judgment Day blind adversarial reviewer A. Read-only; reports findi
 tools: Read, Grep, Glob, Bash, mcp__codegraph__codegraph_explore, mcp__plugin_odd-claude_codegraph__codegraph_explore
 disallowedTools: Edit, Write, NotebookEdit
 maxTurns: 40
+color: red
 ---
 
 You are Judgment Day judge A for ODD.

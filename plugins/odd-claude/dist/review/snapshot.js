@@ -15,6 +15,7 @@ import { spawnSync } from "node:child_process";
 import { closeSync, fstatSync, lstatSync, mkdirSync, mkdtempSync, openSync, readdirSync, readFileSync, realpathSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { isAbsolute, join, resolve, sep } from "node:path";
+import { isPidAlive } from "../lib/pid.js";
 import { domainHash } from "./canonical.js";
 export function boundOf(options) {
     return { timeoutMs: options.gitTimeoutMs ?? DEFAULT_GIT_TIMEOUT_MS };
@@ -515,15 +516,7 @@ function makeScratch(repo) {
     }
     throw new SnapshotError("scratch_unavailable", "no writable location for a private review index");
 }
-function processAlive(pid) {
-    try {
-        process.kill(pid, 0);
-        return true;
-    }
-    catch (error) {
-        return error.code === "EPERM";
-    }
-}
+const processAlive = isPidAlive;
 /**
  * Bounded best-effort sweep of private index copies a killed process left behind. Only plain
  * directories we own, named like our scratch, older than STALE_SCRATCH_MS, whose recorded owner

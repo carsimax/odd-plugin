@@ -669,11 +669,6 @@ function scanAddedLines(snapshot: Snapshot, cwd: string, scanStats: Stat[], boun
 // freeze + assess (read-only), for a future review_assess
 // ---------------------------------------------------------------------------------------------
 
-export interface AssessCandidateOptions extends SnapshotOptions {
-  /** Explicit escalation: a review is due whatever the tier. */
-  escalate?: boolean;
-}
-
 export type AssessCandidateResult =
   | { status: "not_due"; reason: "no_changes"; reviewDue: false; kind: SnapshotKind; projection: SnapshotProjection }
   | {
@@ -692,8 +687,8 @@ export type AssessCandidateResult =
       candidateTree: string;
     };
 
-/** Freeze the target (private temp index only) and assess it. Writes no review state; due = high or explicit escalate. */
-export function assessCandidate(cwd: string, target: SnapshotTarget, options: AssessCandidateOptions = {}): AssessCandidateResult {
+/** Freeze the target (private temp index only) and assess it. Writes no review state; due = high. */
+export function assessCandidate(cwd: string, target: SnapshotTarget, options: SnapshotOptions = {}): AssessCandidateResult {
   const frozen = freezeSnapshot(cwd, target, options);
   if (frozen.status === "empty") return { status: "not_due", reason: "no_changes", reviewDue: false, kind: frozen.kind, projection: frozen.projection };
   const a = assessRisk(frozen.snapshot, frozen.repository, options);
@@ -704,7 +699,7 @@ export function assessCandidate(cwd: string, target: SnapshotTarget, options: As
     evidence: a.evidence,
     changedPaths: [...frozen.snapshot.paths],
     changedLines: frozen.snapshot.changedLines,
-    reviewDue: a.risk_level === "high" || options.escalate === true,
+    reviewDue: a.risk_level === "high",
     kind: frozen.snapshot.kind,
     projection: frozen.snapshot.projection,
     targetIdentity: frozen.snapshot.identity,

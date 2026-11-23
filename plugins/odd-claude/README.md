@@ -2,6 +2,43 @@
 
 A Claude Code plugin that ports the ODD harness of gentle-shell (MIT) <!-- odd-check: allow --> to Claude Code. **v2.0** adds native receipt-driven review (RDD) on top of **v1.0** (the parity release): the ODD persona, orchestrator cards, agents, skills, native integrations, advisory review and lifecycle hooks. Apart from the RDD Stop settle reminder, which can block only when you turn RDD on (it is off by default), the plugin ships **no deny/ask/block hook** (user decision, v0.5, amended for v2): its hooks only add context. Coordinator mode and the admission rules are prompt text, not enforcement; otherwise the only enforcement is Claude Code's native permission system (see [Permission modes](#permission-modes)). The plugin collects no data and sends nothing anywhere.
 
+## What's new in 5.0.0
+
+Refinement round (`odd/tasks/refine-v5.md`): the harness leans on native Claude Code capabilities, repeats fewer rules and costs less per event. One change set is breaking, see [Upgrade notes for 5.0.0](#upgrade-notes-for-500).
+
+- **Native leverage:** every agent has a `color` in its frontmatter. After `compact` and `resume`, SessionStart re-injects a short summary of the active feature document (`odd/tasks/*.md` whose header names the current branch: path, header, `S#` IDs, open tasks, last Log entry, at most 2000 characters). `StopFailure`, `SubagentStart` and `SubagentStop` run with `async: true`, so recording no longer blocks the turn. The `status` and `doctor` skills compute their report through `!` dynamic context.
+- **One source per rule:** task size, evidence budget, writer and verifier rules, test-first, allowed edit surfaces, language, coordinator mode and skill paths each live in one place (`output-styles/odd.md` is the index; the session context owns coordinator and language text) and the cards point to it. Stale references were removed. Prompts name the native task tools `TaskCreate`/`TaskUpdate` (`TodoWrite` when they are unavailable).
+- **Lighter hooks:** `UserPromptSubmit` no longer loads the peers, stats or subagents modules (`isValidSessionId` and the transcript path helper moved to small modules), and the context backstop reads a 32 KB transcript tail once its notice has fired.
+- **Review engine:** engine lens reviewers now apply each lens's `## Review rules` charter from `agents/odd-review-<lens>.md` (the same source `4r-review` uses); if the charter cannot be read the run fails closed with `lens_charter_unavailable` (shown as the `reviewer_prompt_unavailable` block). One shared pid liveness probe (`src/lib/pid.ts`) replaces four copies. Agent escalation is removed.
+- **Measured (`npm run measure -- --runs 15`, Node v26.12.1, before = 4.0.0 baseline, after = 5.0.0):**
+
+| Measure | Before | After |
+|---|---|---|
+| Output style (bytes) | 10352 | 10700 |
+| SessionStart context (bytes) | 3360 | 3257 |
+| UserPromptSubmit context (bytes) | 151 | 151 |
+| Frontmatter descriptions (bytes) | 5334 | 5282 |
+| Agent bodies: worker / verify (bytes) | 15825 / 14652 | 15477 / 14209 |
+| SessionStart median/p95 ms (modules) | 80.1/89.9 (21) | 78.0/80.5 (26) |
+| UserPromptSubmit | 86.4/89.1 (15) | 76.5/79.5 (15) |
+| PreToolUse | 79.3/86.0 (7) | 72.4/75.0 (8) |
+| PostToolUse | 75.9/92.5 (10) | 73.5/79.7 (11) |
+| StopFailure | 73.4/77.9 (6) | 73.3/79.5 (7) |
+| Stop | 73.1/75.9 (8) | 73.6/75.9 (9) |
+| SessionEnd | 76.1/107.0 (11) | 75.1/79.1 (13) |
+| SubagentStart | 73.5/76.3 (6) | 76.1/81.5 (7) |
+| SubagentStop | 74.2/77.3 (6) | 79.8/92.3 (7) |
+
+  Latency is process start plus module load and varies a few ms between runs; the output style grew because handoff and synthesis rules now live there once instead of in cards. Per-event cost of the recording hooks no longer blocks the turn (async).
+
+## Upgrade notes for 5.0.0
+
+- **Breaking, no `escalate`:** `review_assess`, `review_start` and `review_run` no longer accept `escalate`; passing it is `invalid_input`. The `escalation` and `escalation_detail` response fields are removed.
+- **`review_assess` is read-only:** it writes nothing. The risk tier is decided by assess alone.
+- **Old store ignored:** a 4.x `<git-common-dir>/odd-plugin/review-escalations.json` is ignored and safe to delete.
+- **`/odd-claude:skill-creation` is removed:** use `/odd-claude:skill-creator`.
+- **More engine findings:** engine lens reviews may report more findings because they now apply the lens charter.
+
 ## What's new in 4.0.0
 
 Alignment with upstream v5 (`odd/tasks/upstream-v5.md`). Two changes are breaking.
@@ -111,7 +148,7 @@ The only block the plugin can emit is the Stop settle reminder (user decision S3
 
 | Hook | Event | Does | Fires when | Silent when |
 |---|---|---|---|---|
-| Settle reminder (blocks) | `Stop` | One `block` with a reminder to review. | An unreviewed candidate is **due** (high risk, or an agent `escalate` recorded for this exact candidate): the workspace, or the committed range ahead of the upstream/`origin/HEAD` default branch when the workspace is clean. Once per session and candidate, claimed before it prints. | RDD off, `stop_hook_active`, declined, consumed, already under review, low or medium risk, no candidate. |
+| Settle reminder (blocks) | `Stop` | One `block` with a reminder to review. | An unreviewed candidate is **due** (high risk): the workspace, or the committed range ahead of the upstream/`origin/HEAD` default branch when the workspace is clean. Once per session and candidate, claimed before it prints. | RDD off, `stop_hook_active`, declined, consumed, already under review, low or medium risk, no candidate. |
 | Delivery notice (never blocks) | `PreToolUse` on `Bash` (30 s) | One `additionalContext` notice; the command always runs. | The command names a delivery (`git push`, `gh pr create|merge`) and the same unreviewed, due candidate the Stop reminder would use exists. | RDD off, no candidate, declined, consumed, already under review, low or medium risk, a command that also changes the candidate (`git commit ... && git push`), and any failure (not a repository, git error, unreadable state). |
 
 **Which commands get the notice.** A word match on the command text, as upstream does: `git ... push` and `gh ... pr create|merge`. It only decides whether to read the review status once, so a spurious match costs at most one harmless notice, and a miss (an alias, a script, `$(echo git) push`) shows nothing. It never decides whether the command runs.
@@ -124,7 +161,7 @@ A stdio server, `dist/mcp/review-server.js`, declared as server `review` in `.mc
 
 | Tool | What it does |
 |---|---|
-| `review_assess` | Freeze the candidate and classify risk, reasons and changed paths; starts nothing and creates no lineage; it writes (so it is not annotated read-only) only when `escalate` is given. Optional `escalate` (`{item: 1-6, reason}`: one line, non-empty, at most 500 UTF-8 bytes) makes the candidate due for the Stop reminder and the delivery notice; it is recorded for that exact candidate only, a changed candidate drops it, and it can never lower the tier. `review_start` and `review_run` accept it for a fresh START (frozen tier high) and record it only after the START succeeded. Each reports `escalation` (`recorded` / `ignored_existing_lineage` / `not_recorded`) and a short `escalation_detail`; an unusable store degrades to `not_recorded` without discarding the assessment or aborting the START. |
+| `review_assess` | Read-only: freeze the candidate and classify risk, reasons and changed paths; starts nothing, creates no lineage and writes nothing. The tier is decided by this assessment alone. |
 | `review_inspect` | Read-only: lineages of this repository (state, risk, revision), unreadable ones, and the RDD mode. |
 | `review_status` | Read-only status envelope. Follow only its `next_transition`. |
 | `review_start` | Start a review. **Always relays consent** for medium/high risk and creates nothing; low risk is approved at once. |
@@ -145,7 +182,7 @@ Conventions:
 
 ### Where state lives
 
-`<git-common-dir>/odd-plugin/review-transactions/v2/<lineage>/…`, plus `odd-plugin/` lock files, declines (`odd-plugin/declines/`), agent escalations bound to a candidate identity (`odd-plugin/review-escalations.json`, at most 16) and the clone override. It never reads or writes the upstream engine's authority or any other tool's tree. Writes are atomic with a revision check; the store lock is a directory with an owner token and a bounded wait (Node has no `flock`). Hashes use the domain `odd-claude.<domain>/v<N>` over one canonical JSON.
+`<git-common-dir>/odd-plugin/review-transactions/v2/<lineage>/…`, plus `odd-plugin/` lock files, declines (`odd-plugin/declines/`) and the clone override. It never reads or writes the upstream engine's authority or any other tool's tree. Writes are atomic with a revision check; the store lock is a directory with an owner token and a bounded wait (Node has no `flock`). Hashes use the domain `odd-claude.<domain>/v<N>` over one canonical JSON.
 
 ### Reviewer isolation
 
@@ -176,9 +213,9 @@ Statistics and profiles (Phase 5), unchanged in 2.0. The visual mods, the banner
 
 ## What's in v1.0
 
-- **Commands / skills** (`/odd-claude:<name>`): `odd`, `doctor`, `status`, `setup`, `persona`, `coordinator`, `background-subagents`, `scratch`, `stats`, `profiles`, `skill-registry`, `skill-creation`, `skill-creator`, `skill-improver`, `4r-review`, `judgment-day`, `branch-pr`, `chained-pr`, `work-unit-commits`, `issue-creation`, `comment-writer`, `cognitive-doc-design`, `tui-design`, `ui-design`.
+- **Commands / skills** (`/odd-claude:<name>`): `odd`, `doctor`, `status`, `setup`, `persona`, `coordinator`, `background-subagents`, `scratch`, `stats`, `profiles`, `skill-registry`, `skill-creator`, `skill-improver`, `4r-review`, `judgment-day`, `branch-pr`, `chained-pr`, `work-unit-commits`, `issue-creation`, `comment-writer`, `cognitive-doc-design`, `tui-design`, `ui-design`.
 - **Agents** (`odd-claude:<agent>`): `odd-explore`, `odd-verify`, `odd-worker`, `odd-jd-fix`, `odd-jd-judge-a`, `odd-jd-judge-b`, `odd-review-risk`, `odd-review-resilience`, `odd-review-readability`, `odd-review-reliability`.
-- **Hooks** (advisory; only the RDD-gated Stop reminder can block): `SessionStart` (context, scratch dir, title, status file, skill registry, optional codegraph warm-up), `UserPromptSubmit` (context, quota advisory), `PostToolUse` (exploration budget, context backstop), `StopFailure` (quota advisory), `Stop` (status file; empty output unless RDD is on, see [RDD](#receipt-driven-review-rdd)), `PreToolUse` on `Bash` (RDD delivery notice, never blocks; silent unless RDD is on), `SubagentStart`/`SubagentStop` (record the subagent in session state; silent), `SessionEnd` (scratch cleanup, resume hint, status file).
+- **Hooks** (advisory; only the RDD-gated Stop reminder can block): `SessionStart` (context, scratch dir, title, status file, skill registry, optional codegraph warm-up; on `compact` and `resume` also a compact summary of the active feature document: the `odd/tasks/*.md` file whose header names the current branch, with its path, header line, `S#` ids, open tasks and last log entry, capped at 2000 characters, nothing when there is no match), `UserPromptSubmit` (context, quota advisory), `PostToolUse` (exploration budget, context backstop), `StopFailure` (quota advisory), `Stop` (status file; empty output unless RDD is on, see [RDD](#receipt-driven-review-rdd)), `PreToolUse` on `Bash` (RDD delivery notice, never blocks; silent unless RDD is on), `SubagentStart`/`SubagentStop` (record the subagent in session state; silent). `SubagentStart`, `SubagentStop` and `StopFailure` run with `async: true` (their output is never used); no hook that injects context is async. There is no `TaskCompleted` hook: Claude Code only lets it block, not add context, `SessionEnd` (scratch cleanup, resume hint, status file).
 - **Output style**: `odd`. **Cards**, **support docs** and **sounds assets** (see below).
 - **Not implemented, by user decision (2026-11-18):** R57 (notification sounds; the `assets/sounds/` files are only shipped assets) and R63 (GitHub star prompt). Native RDD shipped in 2.0.0; inter-session peers (R07) shipped in 2.1.0, see [Peer orchestrators](#peer-orchestrators-r07).
 - **No deny, with one scoped exception:** the only block the plugin can emit is the Stop settle reminder of [RDD](#receipt-driven-review-rdd), off by default; the delivery check (PreToolUse on `git push` / `gh pr`) only shows a notice (see [Permission modes](#permission-modes)).
@@ -199,7 +236,7 @@ All of these are advisory: none returns a block decision, `continue:false` or a 
 - **Persona**: there is one persona, `neutral` (direct, technical, neutral Spanish), and it is always the default. `/odd-claude:persona` shows it; any other mode (including `mentor`) is refused. Spanish replies are always neutral: no voseo or regional forms (tú or usted).
 - **Cards** (`cards/*.md`): orchestrator rules loaded on demand (delegation, tracking, verification, memory, skills, prompts, writer, quota recovery), with tool names mapped to Claude Code (`Agent`, `TodoWrite`, `AskUserQuestion`, `Bash` with `run_in_background`, `Monitor`, worktree tools). See `cards/SOURCES.md`.
 - **Agents** (listed as `odd-claude:<agent>`): `odd-explore` (read-only), `odd-verify` (runs checks), `odd-worker` (scoped writer), `odd-jd-fix`, `odd-jd-judge-a`, `odd-jd-judge-b` (Judgment Day), and the four advisory review lenses `odd-review-risk`, `odd-review-resilience`, `odd-review-readability`, `odd-review-reliability`.
-- **Skills** (`odd-claude:<skill>`): `odd`, `branch-pr`, `chained-pr`, `cognitive-doc-design`, `comment-writer`, `issue-creation`, `judgment-day`, `skill-creator`, `skill-creation`, `skill-improver`, `skill-registry`, `tui-design`, `ui-design`, `work-unit-commits`, `4r-review`, plus the commands `doctor`, `status`, `setup`, `persona`, `background-subagents`, `coordinator`.
+- **Skills** (`odd-claude:<skill>`): `odd`, `branch-pr`, `chained-pr`, `cognitive-doc-design`, `comment-writer`, `issue-creation`, `judgment-day`, `skill-creator`, `skill-improver`, `skill-registry`, `tui-design`, `ui-design`, `work-unit-commits`, `4r-review`, plus the commands `doctor`, `status`, `setup`, `persona`, `background-subagents`, `coordinator`.
 - **Support docs** (`support/`): test-first policy and the `odd/tasks/<feature>.md` format. **Sounds**: `assets/sounds/` (original tones, see its LICENSE).
 
 ### Background subagents
@@ -317,7 +354,7 @@ claude --plugin-dir plugins/odd-claude
 
 ## Commands
 
-- `/odd-claude:doctor`: checks node, git, engram, codegraph, plugin version and data dir; lists what is missing.
+- `/odd-claude:doctor` (and `/odd-claude:status`) compute their report through skill dynamic context (`!` command), so the output is already in the prompt; `/odd-claude:doctor`: checks node, git, engram, codegraph, plugin version and data dir; lists what is missing.
 - `/odd-claude:stats`: local stats for the current session: turns, tokens in/out/cache and per-model split (from the transcript tail, at most the last 8 MiB, garbage lines skipped), subagent count and finished time (from the R09 state) and the exploration counters. The transcript path (`transcript_path` of the hook input) is saved in session state at `SessionStart`/`UserPromptSubmit`; the skill only passes `${CLAUDE_SESSION_ID}`. No cost lookup, no quota endpoint, no network, nothing leaves the machine.
 - `/odd-claude:profiles [list|show|use <balanced|economy|max>|set <role> <model> [effort]|clear]` (R39/R40): a model profile maps each odd-claude agent (`odd-explore`, `odd-verify`, `odd-worker`, `odd-jd-*`, `odd-review-*`) plus the RDD native roles `review-refuter` and `review-validator` to `{model, effort}` in plugin state (`profiles.json`). The agent files in the plugin cache are never rewritten and their frontmatter `model` stays the default. **`balanced` is the default profile**: it applies whenever no profile was chosen (no state, unreadable or unknown state), `clear` returns to it, and an explicitly chosen `economy`, `max` or `custom` still wins. `balanced` (all effort `medium`): `odd-explore` haiku; `odd-worker` sonnet; `odd-verify` opus; `odd-jd-fix` sonnet; `odd-jd-judge-a` opus; `odd-jd-judge-b` sonnet; `odd-review-readability`/`reliability`/`resilience` sonnet; `odd-review-risk` opus; `review-refuter` opus; `review-validator` opus. `odd-explore` is `haiku` in every preset (balanced and max medium effort, economy low); a `set odd-explore <model>` override is still possible. Explorers are cheap, so whenever exploration is warranted the orchestrator launches several `odd-claude:odd-explore` agents in parallel in one message, each on a distinct front (subsystem, layer, or question: callers, implementation, tests, docs/history), each returning a handoff of at most ~2k tokens with `path:line` evidence that the parent merges (one explorer only for a single narrow front). `economy` and `max` give `review-refuter`/`review-validator` the same model as their judges (sonnet/medium and opus/xhigh). Arguments are validated against whitelists (models `haiku`/`sonnet`/`opus`, efforts `low`..`max`). Routing: the session context lists the active profile so the orchestrator passes `model` in the `Agent` tool call (applies from the next session start or `/clear`). The Agent tool has no `effort` parameter, so effort is stored and shown but not routed.
 - `/odd-claude:peers [allow <session-id>|revoke <session-id>|revoke --all]` (R07): per-session consent for peer messages, typed by you, closed by default. Everything else about peers (tools, delivery, limits, the shell-access limit) is under [Peer orchestrators](#peer-orchestrators-r07).

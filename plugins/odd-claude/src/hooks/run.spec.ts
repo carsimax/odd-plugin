@@ -160,3 +160,14 @@ test("hooks.json registers exactly the default handlers via the run.js dispatche
   }
   assert.ok(!JSON.stringify(raw).includes("prompt.compose"));
 });
+
+test("hooks.json runs only the recording hooks (SubagentStart, SubagentStop, StopFailure) async", () => {
+  const raw = JSON.parse(readFileSync(new URL("../../hooks/hooks.json", import.meta.url), "utf8")) as {
+    hooks: Record<string, { hooks: { async?: boolean }[] }[]>;
+  };
+  const asyncEvents = Object.entries(raw.hooks)
+    .filter(([, groups]) => groups.some((g) => g.hooks.some((h) => h.async === true)))
+    .map(([event]) => event)
+    .sort();
+  assert.deepEqual(asyncEvents, ["StopFailure", "SubagentStart", "SubagentStop"]);
+});

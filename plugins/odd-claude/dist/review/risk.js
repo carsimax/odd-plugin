@@ -650,7 +650,7 @@ function scanAddedLines(snapshot, cwd, scanStats, bound) {
     }
     return reasons;
 }
-/** Freeze the target (private temp index only) and assess it. Writes no review state; due = high or explicit escalate. */
+/** Freeze the target (private temp index only) and assess it. Writes no review state; due = high. */
 export function assessCandidate(cwd, target, options = {}) {
     const frozen = freezeSnapshot(cwd, target, options);
     if (frozen.status === "empty")
@@ -663,7 +663,7 @@ export function assessCandidate(cwd, target, options = {}) {
         evidence: a.evidence,
         changedPaths: [...frozen.snapshot.paths],
         changedLines: frozen.snapshot.changedLines,
-        reviewDue: a.risk_level === "high" || options.escalate === true,
+        reviewDue: a.risk_level === "high",
         kind: frozen.snapshot.kind,
         projection: frozen.snapshot.projection,
         targetIdentity: frozen.snapshot.identity,

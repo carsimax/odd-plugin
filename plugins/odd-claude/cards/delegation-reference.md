@@ -4,15 +4,11 @@ Bind this to the parent (main-thread) session only. Read it only when a situatio
 
 ### Language Domain Contract
 
-- The active persona controls direct user/orchestrator conversation only. Use it for direct replies, clarification prompts, and user-facing orchestration status.
-- Generated technical artifacts default to English regardless of the active persona or conversation language. This includes task documents, code comments, UI copy, tests, fixtures, and delegated phase outputs.
-- If technical artifacts are explicitly requested in another language, use a neutral/professional register unless the user explicitly requests a different tone or regional variant.
-- Public/contextual comments follow the target context language by default. Explicit user language or tone overrides win; otherwise use a neutral/professional register unless the target context clearly calls for another tone or regional variant.
-- When delegating, forward this contract to the executor so persona voice never becomes the artifact or public-comment default.
+Artifact language and the persona boundary are in the odd output style (Delegation, Language Boundary). Beyond it: if technical artifacts are explicitly requested in another language, use a neutral/professional register unless the user asks for another tone or regional variant. Public/contextual comments follow the target context language by default; explicit user language or tone wins, otherwise a neutral/professional register. Forward this to the executor so persona voice never becomes the artifact or public-comment default.
 
 ## Claude Code Runtime Overlays
 
-These sections bind generic delegation to Claude Code's runtime, adding routing without changing ODD ownership. The runtime provides the `Agent` tool (subagents, foreground or background), `SendMessage` (continue a subagent), `TodoWrite`/Task tools (visible progress), `AskUserQuestion`, `Bash` with `run_in_background` plus `Monitor` and `TaskStop`, and `EnterWorktree`/`ExitWorktree`. The Pi-only machinery (subagent runner, session subject and work publishing, activity catalogs) has no counterpart here and is not ported.
+These sections bind generic delegation to Claude Code's runtime, adding routing without changing ODD ownership. The runtime provides the `Agent` tool (subagents, foreground or background), `SendMessage` (continue a subagent), the task list tools `TaskCreate`/`TaskUpdate` (`TodoWrite` when they are unavailable; visible progress), `AskUserQuestion`, `Bash` with `run_in_background` plus `Monitor` and `TaskStop`, and `EnterWorktree`/`ExitWorktree`.
 
 ### Subagent-facing English
 
@@ -24,7 +20,7 @@ These rules select execution topology, not the implementation method. Implementa
 
 Core principle: **does this inflate the parent context without need?** If yes, use one bounded worker. If no, do it inline.
 
-Progress is shown through the visible task list (`TodoWrite`): keep it in step with the feature document at task transitions, with no extra model turn and no per-token or per-tool updates. Exclude private prompts, internal instructions and credentials from anything written to the task list or a handoff.
+Progress is shown through the visible task list (`TaskCreate`/`TaskUpdate`): keep it in step with the feature document at task transitions, with no extra model turn and no per-token or per-tool updates. Exclude private prompts, internal instructions and credentials from anything written to the task list or a handoff.
 
 | Action | Direct inline | Delegated direct worker |
 |--------|---------------|-------------------------|
@@ -50,7 +46,7 @@ Once a trigger fires, the parent MUST delegate through the `Agent` tool. Never f
 
 The canonical Writer rule under Delegation Triggers overrides this general runtime preference.
 
-1. **Evidence-budget rule**: when the reading exceeds the evidence budget, launch the closest read-only mapping subagents with fresh context, several in parallel in one message, each on a distinct front (subsystem, layer, or question: callers, implementation, tests, docs/history) with a narrow mapping task that returns a handoff of at most ~2k tokens with `path:line` evidence, then merge them (one only for a single narrow front; the explorer is cheap, so parallel breadth buys deeper context). Route generic exploration first to `odd-claude:odd-explore`; if missing or unusable, use a general-purpose `Agent` with the same read-only mapping task and report the fallback.
+1. **Evidence-budget rule**: as in the odd output style (Delegation, item 2). Route generic exploration first to `odd-claude:odd-explore`; if missing or unusable, use a general-purpose `Agent` with the same read-only mapping task and report the fallback.
 2. **Writer rule**: follow the canonical Writer rule under Delegation Triggers.
 3. **Incident rule**: after wrong `cwd`, accidental repository/worktree mutation, failed merge recovery, confusing test command, or environment workaround, stop and diagnose the incident separately before resuming.
 4. **Context backstop**: when the context advisory fires, pause and delegate the next unit that needs several steps instead of silently continuing monolithically; single small edits stay inline.
