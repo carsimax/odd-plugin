@@ -50,4 +50,4 @@ Return:
 ## References
 
 - `/odd-claude:skill-creator` — normative LLM-first skill style guide.
-- `skills/skill-registry/SKILL.md` — registry refresh and indexing contract.
+- [../skill-registry/SKILL.md](../skill-registry/SKILL.md) — registry refresh and indexing contract.
