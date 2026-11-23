@@ -55,7 +55,7 @@ Use only BLOCKER, CRITICAL, WARNING, or SUGGESTION as severity values. BLOCKER a
 
 ## Fix Boundary
 
-Launch the fix agent with the `Agent` tool, `subagent_type: "odd-claude:odd-jd-fix"`, once per round, as one standalone agent with this exact Markdown shape. No hook enforces this dispatch shape: it is a rule the parent follows. The `## Judgment Day activation` section contains only `User explicitly requested Judgment Day.`. The parent replaces the example ID, frozen ledger hash, row data, and surface with parent-authorized values. The correction batch contains only one round (`1 of 2` or `2 of 2`) and one lowercase SHA-256. The exact frozen finding rows are one JSON object per line, use only the canonical row fields, and exactly match the authorized IDs.
+Launch the fix agent with the `Agent` tool, `subagent_type: "odd-claude:odd-jd-fix"`, once per round, as one standalone agent with this exact Markdown shape. No hook enforces this dispatch shape: it is a rule the parent follows. The `## Judgment Day activation` section contains only `User explicitly requested Judgment Day.`. The parent replaces the example ID, frozen ledger hash, row data, and surface with parent-authorized values. The correction batch contains only one round (`1 of 2` or `2 of 2`) and one lowercase SHA-256 of the canonical compact, sorted-key JSON of the array of the dispatched rows (not of their text; the "Frozen ledger" label covers only those rows). IDs follow `JD-[A-Z][A-Z0-9]*-\d+`, such as `JD-A-001`. The exact frozen finding rows are one JSON object per line, use only the canonical row fields, and exactly match the authorized IDs.
 
 ```markdown
 ## Judgment Day activation
@@ -87,7 +87,7 @@ Judgment Day performs no commit, push, PR creation, release, publication, or ver
 
 ## Output Contract
 
-Return target, frozen finding IDs, fix rounds used, final verification evidence, skill resolution, and terminal judgment. Never claim actor output or a prose ledger is authoritative. Compute the frozen ledger SHA-256 over the frozen rows exactly as they appear in the dispatch (for example `printf '%s\n' <rows> | shasum -a 256`), never by hand.
+Return target, frozen finding IDs, fix rounds used, final verification evidence, skill resolution, and terminal judgment. Never claim actor output or a prose ledger is authoritative. Compute the frozen ledger SHA-256 over the JSON array of the dispatched rows in canonical compact, sorted-key form (for example `printf '%s\n' <rows> | jq -S -c -s -j . | shasum -a 256`), never by hand and never over the row text.
 
 ## References
 

@@ -57,7 +57,7 @@ Do not put `summary`, `skill_resolution`, prose, or orchestration metadata insid
 ```markdown
 You are a surgical Judgment Day fix agent. This is a standalone dispatch.
 
-Use this exact dispatch shape. The `## Judgment Day activation` section contains only `User explicitly requested Judgment Day.`. The parent replaces the example ID, frozen ledger hash, row data, and surface with parent-authorized values. The correction batch contains only one round (`1 of 2` or `2 of 2`) and one lowercase SHA-256. The exact frozen finding rows are one JSON object per line, use only the canonical row fields, and exactly match the authorized IDs.
+Use this exact dispatch shape. The `## Judgment Day activation` section contains only `User explicitly requested Judgment Day.`. The parent replaces the example ID, frozen ledger hash, row data, and surface with parent-authorized values. The correction batch contains only one round (`1 of 2` or `2 of 2`) and one lowercase SHA-256 of the canonical compact, sorted-key JSON of the array of the dispatched rows (not of their text; the "Frozen ledger" label covers only those rows). IDs follow `JD-[A-Z][A-Z0-9]*-\d+`, such as `JD-A-001`. The exact frozen finding rows are one JSON object per line, use only the canonical row fields, and exactly match the authorized IDs.
 
 ## Judgment Day activation
 User explicitly requested Judgment Day.
