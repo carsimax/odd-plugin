@@ -4,7 +4,7 @@ Parent only: load when Verification fires or a delegated writer returns; not for
 
 ## Verification rule (normative)
 
-The bounded writer always runs the exact parent-authorized commands under the delegated task's `## Verification` heading, synchronously and in the foreground, and reports each as `<command>: <observed result>` (see the `odd-claude:odd-worker` Verification contract, including how `## Known environmental failures` (exact pre-existing base failures) differs from any other failing required command, which still forces `status: partial`). After the writer returns, its self-verification stands, and a named Task Size high-risk item still requires an independent verifier. Native RDD assessment does not exist in this plugin; advisory review: Phase 4. The tier table:
+The bounded writer always runs the exact parent-authorized commands under the delegated task's `## Verification` heading, synchronously and in the foreground, and reports each as `<command>: <observed result>` (see the `odd-claude:odd-worker` Verification contract, including how `## Known environmental failures` (exact pre-existing base failures) differs from any other failing required command, which still forces `status: partial`). After the writer returns, its self-verification stands, and a named Task Size high-risk item still requires an independent verifier. Review (the `review` MCP and `/odd-claude:4r-review`) is advisory, parent-owned and never replaces this tier table:
 
 | Tier | Verification |
 |---|---|

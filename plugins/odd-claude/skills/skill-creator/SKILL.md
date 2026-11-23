@@ -1,6 +1,6 @@
 ---
 name: skill-creator
-description: "Trigger: /skill-creation, skill creation, skill creator, create skill, new skill. Create LLM-first skills with valid frontmatter."
+description: "Trigger: skill creation, skill creator, create skill, new skill. Create LLM-first skills with valid frontmatter."
 license: Apache-2.0
 metadata:
   author: odd-claude

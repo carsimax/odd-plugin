@@ -1,6 +1,6 @@
 # Orchestrator — Writer Handoff (lazy-loaded)
 
-Parent (main-thread) session only. Load it when the Writer rule fires or for an explicitly activated Judgment Day fix batch. The Writer rule fires on a named reason (parallel units, the context backstop), never on size alone or a price ratio: a large task without one stays inline. Writer prompts require the Parallel review protocol self-review (`${CLAUDE_PLUGIN_ROOT}/cards/verification.md`). A reason holds only when the launch delivers it:
+Parent (main-thread) session only. Load it when the Writer rule fires or for an explicitly activated Judgment Day fix batch. The Writer rule (odd output style, Delegation item 5) fires on a named reason only. Writer prompts require the Parallel review protocol self-review (`${CLAUDE_PLUGIN_ROOT}/cards/verification.md`). A reason holds only when the launch delivers it:
 
 - **Invariants**: each writer prompt names the existing helpers its unit must reuse for shared state and the invariants they keep; units built in parallel cannot see each other.
 - **Size threshold**: a subagent costs one to two minutes of reading and setup before it writes anything; delegate a unit only when it needs several minutes of work (several files or roughly 100+ changed lines). Several small independent changes are faster inline, one after another.
@@ -25,18 +25,4 @@ A writer never widens its surface; it reports exact candidate paths with reasons
 
 #### Judgment Day fix dispatch
 
-Use `odd-claude:odd-jd-fix` only for an explicitly activated Judgment Day fix batch, never as a lexical or generic-writer fallback. Judgment Day is independent: it neither enables nor replaces ordinary review. Its dispatch has this exact shape: `## Judgment Day activation` contains only `User explicitly requested Judgment Day.`. Replace example values with controller-authorized ones. The correction batch contains only one round (`1 of 2` or `2 of 2`) and one lowercase SHA-256. The exact frozen finding rows are one JSON object per line, use only the canonical row fields, and exactly match the authorized IDs. No hook enforces this shape or the `## Allowed edit surfaces` rule: both are rules the parent follows.
-
-```markdown
-## Judgment Day activation
-User explicitly requested Judgment Day.
-## Exact authorized severe IDs
-- `JD-A-001`
-## Judgment Day correction batch
-Round: 1 of 2.
-Frozen ledger SHA-256: `aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa`
-## Exact frozen finding rows
-{"id":"JD-A-001","lens":"judgment-day","location":"path/to/authorized-file.ts:1","severity":"CRITICAL","status_at_freeze":"open","evidence_class":"deterministic","evidence_claim":"Concrete user-impact claim supported by the frozen location."}
-## Allowed edit surfaces
-path/to/authorized-file.ts
-```
+Use `odd-claude:odd-jd-fix` only for an explicitly activated Judgment Day fix batch, never as a lexical or generic-writer fallback. Judgment Day is independent: it neither enables nor replaces ordinary review. The exact dispatch shape (activation, round, frozen ledger hash, finding rows, `## Allowed edit surfaces`) is defined once in `/odd-claude:judgment-day` (Fix Boundary). No hook enforces it or the `## Allowed edit surfaces` rule: both are rules the parent follows.

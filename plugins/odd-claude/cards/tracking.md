@@ -30,7 +30,7 @@ Before building, validate any consequential premise whose failure would invalida
 
 Test-first is the always-on harness principle (test or framework presence alone does not establish applicability); forward this policy, the applicable exact runner and commands (when available), and any exception rationale on every implementation delegation, refresh it on resume, and record observed evidence or the reason for fallback in the feature document.
 
-Run applicable functional checks per task; a task-list checkbox never triggers a review cycle. Checklists grant no approval; with review on, review the candidate before delivery (delivery only warns about an unreviewed candidate and never blocks). Advisory review: Phase 4.
+Run applicable functional checks per task; a task-list checkbox never triggers a review cycle. Checklists grant no approval; with review on, review the candidate before delivery (delivery only warns about an unreviewed candidate and never blocks). Review is advisory and parent-owned (the `review` MCP and `/odd-claude:4r-review`).
 
 #### Delivery
 
