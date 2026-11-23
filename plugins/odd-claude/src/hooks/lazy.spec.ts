@@ -48,7 +48,7 @@ const inputsFor = (cwd: string): [string, object][] => {
   ];
 };
 
-test("lazy registry registers exactly the events of the eager registry and hooks.json", () => {
+test("lazy registry (the single registry) registers exactly the events of hooks.json; the eager twin follows it", () => {
   const raw = JSON.parse(readFileSync(new URL("../../hooks/hooks.json", import.meta.url), "utf8")) as { hooks: Record<string, unknown> };
   assert.deepEqual(Object.keys(lazyHandlers).sort(), Object.keys(defaultHandlers).sort());
   assert.deepEqual(Object.keys(lazyHandlers).sort(), Object.keys(raw.hooks).sort());

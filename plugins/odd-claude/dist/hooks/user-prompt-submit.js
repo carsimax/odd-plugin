@@ -2,10 +2,10 @@ import { buildPromptAnchor } from "../lib/context.js";
 import { logError } from "../lib/state.js";
 import { recordAgentStatus } from "../lib/agent-status.js";
 import { takeQuotaAdvice } from "../lib/quota.js";
-import { recordTranscriptPath } from "../lib/stats.js";
+import { recordTranscriptPath } from "../lib/transcript-path.js";
 import { resetExploration } from "../lib/exploration-budget.js";
 import { allow, revoke, revokeAll } from "../lib/peer-grants.js";
-import { isValidSessionId } from "../lib/peers.js";
+import { isValidSessionId } from "../lib/session-id.js";
 // Peer consent (R07 P2): only the human's own prompt, trimmed, equal to exactly one of these forms is a grant command.
 const PEER_CMD = /^\/odd-claude:peers (allow|revoke) (\S+)$/;
 /** Handles `/odd-claude:peers allow|revoke <id>` / `revoke --all`; undefined when the prompt is not exactly that. */

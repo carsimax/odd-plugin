@@ -5,6 +5,9 @@ import { join } from "node:path";
 import { logError, resolveDataDir, type StateOptions } from "../lib/state.js";
 import type { HookInput, HookOutput, RunResult } from "./run.js";
 
+/** The registered events: the one list. `lazyHandlers` and the eager `handlers.ts` (tests, tools) are typed over it, so a missing or extra event fails to compile. */
+export type HookEvent = "SessionStart" | "UserPromptSubmit" | "PreToolUse" | "PostToolUse" | "StopFailure" | "Stop" | "SubagentStart" | "SubagentStop" | "SessionEnd";
+
 export type AsyncHandler = (input: HookInput, opts: StateOptions) => Promise<HookOutput | undefined>;
 
 /**
@@ -34,13 +37,13 @@ async function withPeerMail(event: "SessionStart" | "UserPromptSubmit", i: HookI
 }
 
 /**
- * One loader per registered event (the same set as `handlers.ts`; a test pins it against hooks.json).
+ * One loader per registered event (the single registry: `HookEvent` types `handlers.ts` over the same events; a test pins it against hooks.json).
  *
  * PreToolUse and Stop are guarded by the global RDD switch: a clone override can only disable, so with the global switch not on
  * (unset, off, unreadable, corrupt) the gate allows and Stop stays silent whatever the command or the repository (T6). Those two
  * answer without loading the gate, the settle engine and its risk/status/start dependencies; with the switch on, the full handler runs.
  */
-export const lazyHandlers: Record<string, AsyncHandler> = {
+export const lazyHandlers: Record<HookEvent, AsyncHandler> = {
   SessionStart: async (i, o) => withPeerMail("SessionStart", i, (await import("./session-start.js")).sessionStart(i, o), o),
   UserPromptSubmit: async (i, o) => withPeerMail("UserPromptSubmit", i, (await import("./user-prompt-submit.js")).userPromptSubmit(i, o), o),
   PostToolUse: async (i, o) => (await import("./post-tool-use.js")).postToolUse(i, o),
@@ -77,7 +80,7 @@ export const lazyHandlers: Record<string, AsyncHandler> = {
 
 /** `runHook` with lazily loaded handlers: unknown event or any error is silent with exit 0; errors are logged under the data dir. */
 export async function runHookLazy(event: string, stdin: string, opts: StateOptions = {}): Promise<RunResult> {
-  const handler = Object.hasOwn(lazyHandlers, event) ? lazyHandlers[event] : undefined;
+  const handler = Object.hasOwn(lazyHandlers, event) ? lazyHandlers[event as HookEvent] : undefined;
   if (!handler) return { exitCode: 0, stdout: "" };
   try {
     const input = (stdin.trim() === "" ? {} : JSON.parse(stdin)) as HookInput;
