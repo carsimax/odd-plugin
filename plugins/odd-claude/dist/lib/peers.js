@@ -18,6 +18,8 @@ import { closeSync, constants, fstatSync, lstatSync, mkdirSync, openSync, readdi
 import { join } from "node:path";
 import { acquireLock, releaseOwnedLock } from "./lock.js";
 import { atomicWriteFile, resolveDataDir } from "./state.js";
+import { isValidSessionId, PeersError } from "./session-id.js";
+export { isValidSessionId, PeersError };
 export const MAX_MESSAGE_BYTES = 8192;
 export const MIN_REASON_BYTES = 8;
 export const MAX_REASON_BYTES = 512;
@@ -29,19 +31,7 @@ export const RATE_WINDOW_MS = 60_000;
 export const MAX_FILE_BYTES = 128 * 1024;
 const LOCK_STALE_MS = 30_000;
 const LOCK_WAIT_MS = 5_000;
-const SESSION_ID_RE = /^[A-Za-z0-9][A-Za-z0-9-]{7,63}$/;
 const MESSAGE_FILE_RE = /^(\d{10})\.json$/;
-export class PeersError extends Error {
-    code;
-    constructor(code, message) {
-        super(message);
-        this.code = code;
-        this.name = "PeersError";
-    }
-}
-export function isValidSessionId(id) {
-    return typeof id === "string" && SESSION_ID_RE.test(id);
-}
 function requireId(id, what) {
     if (!isValidSessionId(id))
         throw new PeersError("invalid_session_id", `invalid ${what} session id`);

@@ -18,6 +18,9 @@ import { closeSync, constants, fstatSync, lstatSync, mkdirSync, openSync, readdi
 import { join } from "node:path";
 import { acquireLock, releaseOwnedLock } from "./lock.js";
 import { atomicWriteFile, resolveDataDir, type StateOptions } from "./state.js";
+import { isValidSessionId, PeersError, type PeersErrorCode } from "./session-id.js";
+
+export { isValidSessionId, PeersError, type PeersErrorCode };
 
 export const MAX_MESSAGE_BYTES = 8192;
 export const MIN_REASON_BYTES = 8;
@@ -31,27 +34,7 @@ export const MAX_FILE_BYTES = 128 * 1024;
 
 const LOCK_STALE_MS = 30_000;
 const LOCK_WAIT_MS = 5_000;
-const SESSION_ID_RE = /^[A-Za-z0-9][A-Za-z0-9-]{7,63}$/;
 const MESSAGE_FILE_RE = /^(\d{10})\.json$/;
-
-export type PeersErrorCode =
-  | "invalid_session_id"
-  | "invalid_message"
-  | "invalid_reason"
-  | "mailbox_full"
-  | "rate_limited"
-  | "unsafe_path"
-  | "lock_timeout";
-
-export class PeersError extends Error {
-  constructor(
-    public readonly code: PeersErrorCode,
-    message: string,
-  ) {
-    super(message);
-    this.name = "PeersError";
-  }
-}
 
 export interface PeersOptions extends StateOptions {
   /** Injected clock (ms since epoch); defaults to Date.now. */
@@ -87,10 +70,6 @@ interface StoredMessage {
   reason: string;
   message: string;
   accepted_ms: number;
-}
-
-export function isValidSessionId(id: unknown): id is string {
-  return typeof id === "string" && SESSION_ID_RE.test(id);
 }
 
 function requireId(id: unknown, what: string): string {

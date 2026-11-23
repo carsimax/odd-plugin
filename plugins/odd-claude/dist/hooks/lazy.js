@@ -33,7 +33,7 @@ async function withPeerMail(event, i, out, o) {
     }
 }
 /**
- * One loader per registered event (the same set as `handlers.ts`; a test pins it against hooks.json).
+ * One loader per registered event (the single registry: `HookEvent` types `handlers.ts` over the same events; a test pins it against hooks.json).
  *
  * PreToolUse and Stop are guarded by the global RDD switch: a clone override can only disable, so with the global switch not on
  * (unset, off, unreadable, corrupt) the gate allows and Stop stays silent whatever the command or the repository (T6). Those two

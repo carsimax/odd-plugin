@@ -2,10 +2,10 @@ import { buildPromptAnchor } from "../lib/context.js";
 import { logError, type StateOptions } from "../lib/state.js";
 import { recordAgentStatus } from "../lib/agent-status.js";
 import { takeQuotaAdvice } from "../lib/quota.js";
-import { recordTranscriptPath } from "../lib/stats.js";
+import { recordTranscriptPath } from "../lib/transcript-path.js";
 import { resetExploration } from "../lib/exploration-budget.js";
 import { allow, revoke, revokeAll } from "../lib/peer-grants.js";
-import { isValidSessionId } from "../lib/peers.js";
+import { isValidSessionId } from "../lib/session-id.js";
 import type { HookInput, HookOutput } from "./run.js";
 
 // Peer consent (R07 P2): only the human's own prompt, trimmed, equal to exactly one of these forms is a grant command.

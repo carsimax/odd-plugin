@@ -15,7 +15,7 @@
 import { closeSync, constants, fstatSync, lstatSync, mkdirSync, openSync, readFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { acquireLock, releaseOwnedLock } from "./lock.js";
-import { isValidSessionId, PeersError } from "./peers.js";
+import { isValidSessionId, PeersError } from "./session-id.js";
 import { atomicWriteFile, resolveDataDir } from "./state.js";
 /** Most senders one session can allow at a time. */
 export const MAX_GRANTS = 100;
