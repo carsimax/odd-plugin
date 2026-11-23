@@ -111,7 +111,7 @@ The only block the plugin can emit is the Stop settle reminder (user decision S3
 
 | Hook | Event | Does | Fires when | Silent when |
 |---|---|---|---|---|
-| Settle reminder (blocks) | `Stop` | One `block` with a reminder to review. | An unreviewed candidate is **due** (high risk, or an agent `escalate` recorded for this exact candidate): the workspace, or the committed range ahead of the upstream/`origin/HEAD` default branch when the workspace is clean. Once per session and candidate, claimed before it prints. | RDD off, `stop_hook_active`, declined, consumed, already under review, low or medium risk, no candidate. |
+| Settle reminder (blocks) | `Stop` | One `block` with a reminder to review. | An unreviewed candidate is **due** (high risk): the workspace, or the committed range ahead of the upstream/`origin/HEAD` default branch when the workspace is clean. Once per session and candidate, claimed before it prints. | RDD off, `stop_hook_active`, declined, consumed, already under review, low or medium risk, no candidate. |
 | Delivery notice (never blocks) | `PreToolUse` on `Bash` (30 s) | One `additionalContext` notice; the command always runs. | The command names a delivery (`git push`, `gh pr create|merge`) and the same unreviewed, due candidate the Stop reminder would use exists. | RDD off, no candidate, declined, consumed, already under review, low or medium risk, a command that also changes the candidate (`git commit ... && git push`), and any failure (not a repository, git error, unreadable state). |
 
 **Which commands get the notice.** A word match on the command text, as upstream does: `git ... push` and `gh ... pr create|merge`. It only decides whether to read the review status once, so a spurious match costs at most one harmless notice, and a miss (an alias, a script, `$(echo git) push`) shows nothing. It never decides whether the command runs.
@@ -124,7 +124,7 @@ A stdio server, `dist/mcp/review-server.js`, declared as server `review` in `.mc
 
 | Tool | What it does |
 |---|---|
-| `review_assess` | Freeze the candidate and classify risk, reasons and changed paths; starts nothing and creates no lineage; it writes (so it is not annotated read-only) only when `escalate` is given. Optional `escalate` (`{item: 1-6, reason}`: one line, non-empty, at most 500 UTF-8 bytes) makes the candidate due for the Stop reminder and the delivery notice; it is recorded for that exact candidate only, a changed candidate drops it, and it can never lower the tier. `review_start` and `review_run` accept it for a fresh START (frozen tier high) and record it only after the START succeeded. Each reports `escalation` (`recorded` / `ignored_existing_lineage` / `not_recorded`) and a short `escalation_detail`; an unusable store degrades to `not_recorded` without discarding the assessment or aborting the START. |
+| `review_assess` | Read-only: freeze the candidate and classify risk, reasons and changed paths; starts nothing, creates no lineage and writes nothing. The tier is decided by this assessment alone. |
 | `review_inspect` | Read-only: lineages of this repository (state, risk, revision), unreadable ones, and the RDD mode. |
 | `review_status` | Read-only status envelope. Follow only its `next_transition`. |
 | `review_start` | Start a review. **Always relays consent** for medium/high risk and creates nothing; low risk is approved at once. |
@@ -145,7 +145,7 @@ Conventions:
 
 ### Where state lives
 
-`<git-common-dir>/odd-plugin/review-transactions/v2/<lineage>/…`, plus `odd-plugin/` lock files, declines (`odd-plugin/declines/`), agent escalations bound to a candidate identity (`odd-plugin/review-escalations.json`, at most 16) and the clone override. It never reads or writes the upstream engine's authority or any other tool's tree. Writes are atomic with a revision check; the store lock is a directory with an owner token and a bounded wait (Node has no `flock`). Hashes use the domain `odd-claude.<domain>/v<N>` over one canonical JSON.
+`<git-common-dir>/odd-plugin/review-transactions/v2/<lineage>/…`, plus `odd-plugin/` lock files, declines (`odd-plugin/declines/`) and the clone override. It never reads or writes the upstream engine's authority or any other tool's tree. Writes are atomic with a revision check; the store lock is a directory with an owner token and a bounded wait (Node has no `flock`). Hashes use the domain `odd-claude.<domain>/v<N>` over one canonical JSON.
 
 ### Reviewer isolation
 

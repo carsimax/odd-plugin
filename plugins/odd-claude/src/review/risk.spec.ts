@@ -290,7 +290,7 @@ test("assessRisk resolves the repository itself when none is given", () =>
     assert.deepEqual(assessRisk(frozen.snapshot, resolveRepository(repo)), assessRisk(frozen.snapshot, frozen.repository));
   }));
 
-test("assessCandidate: plan-shaped, read-only, due = high or escalate", async () => {
+test("assessCandidate: plan-shaped, read-only, due = high", async () => {
   await withRepo(BASE, (repo) => {
     put(repo, "src/a.ts", 'execSync("ls");\n');
     const before = git(repo, "status", "--porcelain=v1");
@@ -308,14 +308,6 @@ test("assessCandidate: plan-shaped, read-only, due = high or escalate", async ()
     put(repo, "src/a.ts", "export const a = 9;\n");
     const medium = assessCandidate(repo, { kind: "current-changes", projection: "workspace" });
     assert.equal(medium.status === "assessed" && medium.reviewDue, false);
-    const forced = assessCandidate(repo, { kind: "current-changes", projection: "workspace" }, { escalate: true });
-    assert.equal(forced.status === "assessed" && forced.reviewDue, true);
-  });
-  await withRepo(BASE, (repo) => {
-    put(repo, "README.md", "more\n");
-    const low = assessCandidate(repo, { kind: "current-changes", projection: "workspace" }, { escalate: true });
-    assert.equal(low.status === "assessed" && low.risk, "low");
-    assert.equal(low.status === "assessed" && low.reviewDue, true);
   });
   await withRepo(BASE, (repo) => {
     assert.deepEqual(assessCandidate(repo, { kind: "current-changes", projection: "workspace" }), { status: "not_due", reason: "no_changes", reviewDue: false, kind: "current-changes", projection: "workspace" });
