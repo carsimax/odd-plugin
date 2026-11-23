@@ -18,7 +18,7 @@ Use this skill after installing, removing, creating, moving, or renaming skills,
 - Refresh `.atl/skill-registry.md` as a shared disk-only index; do not save session-only runtime rows to the file or Engram.
 - Skip `sdd-*`, `_shared`, and `skill-registry`; deduplicate by skill name, preferring project-level skills over user-level skills.
 - In Claude Code, the effective view is the skill list the session already shows (plugin skills are namespaced `odd-claude:<name>`) plus the on-disk rows of `.atl/skill-registry.md`.
-- Preserve Git-tracked targets during automatic refresh. Deliberate `/skill-registry:refresh` overrides that guard; unchanged rendered bytes remain untouched even on force.
+- Preserve Git-tracked targets during automatic refresh. Deliberate `/odd-claude:skill-registry` overrides that guard; unchanged rendered bytes remain untouched even on force.
 
 ## Decision Gates
 

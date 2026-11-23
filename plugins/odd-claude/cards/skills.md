@@ -42,7 +42,7 @@ Common intent hints, not hard routing:
 
 | User intent                | Skill to check                              |
 | -------------------------- | ------------------------------------------- |
-| PR review / GitHub PR URL  | project review skill, then `pr-review`      |
+| PR review / GitHub PR URL  | a matching project review skill, if any     |
 | Post-ready review comments | `/odd-claude:comment-writer`                |
 | Create/open/prepare PR     | `/odd-claude:branch-pr`                     |
 | Split/stack/large PR       | `/odd-claude:chained-pr`                    |

@@ -65,9 +65,9 @@ test("the themes directory, the banner and the statusline skills, CLIs, libs and
 
 test("the `odd` output style stays", () => {
   assert.ok(existsSync(join(root, "output-styles", "odd.md")));
-  // Pinned byte-identical to its content at origin/main. A deliberate edit of odd.md must update this hash.
+  // Pinned byte-identical to its content after the refine-v5 prompt dedupe (T3). A deliberate edit of odd.md must update this hash.
   const sha = createHash("sha256").update(readFileSync(join(root, "output-styles", "odd.md"))).digest("hex");
-  assert.equal(sha, "035e61bda43fc8ec14ee1c2b18be664d17ee132972a2ec6e69f5cc5115aab4f8");
+  assert.equal(sha, "0d131c8c7d1aaeb6032a6c1dc19b04711bca2f639db469ef5871db2a042b3271");
 });
 
 test("setup has no statusline subcommand, flag or shim", () => {
