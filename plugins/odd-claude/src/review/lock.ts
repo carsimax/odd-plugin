@@ -47,6 +47,7 @@ import { closeSync, constants, fstatSync, fsyncSync, lstatSync, mkdirSync, openS
 import { hostname } from "node:os";
 import { join } from "node:path";
 import { performance } from "node:perf_hooks";
+import { pidState } from "../lib/pid.js";
 import { bootId as processBoot, isBootId } from "./boot-id.js";
 import { isMachineId, machineId as processMachineId } from "./machine-id.js";
 
@@ -153,13 +154,7 @@ function wrap(e: unknown, what: string): Error {
 }
 
 function processDead(pid: number): boolean {
-  if (!Number.isInteger(pid) || pid <= 0) return false;
-  try {
-    process.kill(pid, 0);
-    return false;
-  } catch (e) {
-    return errCode(e) === "ESRCH"; // EPERM = alive; anything else = no proof
-  }
+  return pidState(pid) === "dead"; // EPERM = alive; invalid or any other error = no proof
 }
 
 function newRecord(cfg: Config): StoreLockOwner {
