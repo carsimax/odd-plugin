@@ -21,8 +21,8 @@ Objective: port the v5.0.0 upstream changes chosen by the user (base: gentle-she
 - T5 | S6 | writer | done 3c0b66d — tracking card wording; check skill reference resolution (#6), fix only if affected.
 
 Risk: item 2 (T3 verifier secret handling), item 3 (T1 removes a blocking behaviour users may rely on; requested).
-- T6 | S7 | writer | pending — harden the escalation store and tool paths (a-e).
-- T7 | S8 | writer (after T6) | pending — release 4.0.0.
+- T6 | S7 | writer | done f710fb6 + e36083a — harden the escalation store and tool paths (a-e).
+- T7 | S8 | writer (after T6) | done (release commit) — release 4.0.0.
 
 ## Log
 
@@ -33,3 +33,5 @@ Risk: item 2 (T3 verifier secret handling), item 3 (T1 removes a blocking behavi
 - L5 User decision on the review blocker (verbatim): "Dividir y revisar". 8506f62 was split on branch feat/upstream-v5-split (identical final tree): fdf9079 escalation core (native review APPROVED, lineage review-5e9d0d10406fdd8c, receipt burned, 12 non-blocking advisory findings), 95b7d46 warn-only gate + due.ts + bench (native review stopped again with lens_context_budget_exceeded: the coherent deletion of gate.ts/gate.js/gate.spec.ts is ~3.2k lines and cannot be split meaningfully; left without native review, covered by suite, bench and independent verifier), 3fbc792 deadlineAt cleanup (assess: medium, not due). Each commit: npm test 0 fail; bench 171/171 from 95b7d46. Pre-split state kept at tag backup/upstream-v5-pre-split.
 - L6 Follow-up candidates from the advisory findings: escalation recorded before a START that is then refused (R1-002/R3-005); review_start/review_run may drop an escalation silently when the base assessment is not "assessed" (R4-silent-drop-not-assessed); store failure aborts the assessment instead of degrading (R4-store-failure-coupling); unlocked read-modify-write of the escalation store (R3-004/R4-lost-update-race).
 - L7 User request (verbatim): "TRYabajemos en los pendeites y si, subamos a 4.0"
+- L8 Evidence T6: f710fb6 recorded escalation after a fresh START, degraded store reports not_recorded, lock-serialized RMW, corrupt store preserved; native review APPROVED (lineage review-376726fc50e90201) with 6 advisory findings; follow-up e36083a fixed R4-001/R3-002 (degraded START redone at base tier so the consent answer cannot drift), R4-002/R3-003 (read errors and newer schemas no longer renamed as corrupt), R3-001 (blocked-before-START reports not_recorded), R4-003 (async lock wait); assess e36083a: medium, not due. npm test 1125 (0 fail), check ok, bench 171/171.
+- L9 Evidence T7: version 4.0.0 in marketplace.json, plugin.json, package.json, package-lock.json; status roadmap line; README 4.0.0 sections; version-parity and status specs green; bench 171/171. Push, tag and PR remain the user's decision.
