@@ -219,7 +219,8 @@ test("tools/list names exactly the final review tools, with strict schemas, anno
     assert.doesNotMatch(JSON.stringify(t), new RegExp(["odd", "_review|gen", "tle|tele", "metry"].join(""), "i"));
   }
   const readOnly = tools.filter((t) => t.annotations.readOnlyHint === true).map((t) => t.name);
-  assert.deepEqual(readOnly, ["review_assess", "review_inspect", "review_status"]);
+  // review_assess records an `escalate`, so it is no longer read-only
+  assert.deepEqual(readOnly, ["review_inspect", "review_status"]);
   assert.deepEqual(TOOLS.map((t) => t.name), tools.map((t) => t.name));
 });
 

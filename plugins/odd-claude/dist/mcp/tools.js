@@ -18,6 +18,8 @@ import { completeReview } from "../review/capture.js";
 import { decodeBinding, encodeAckEnvelope, encodeCaptureEnvelope, encodeStartEnvelope } from "../review/contract.js";
 import { consentBinding, REVIEW_CONTRACT, REVIEW_TOOL_NAMES } from "../review/consent.js";
 import { readReviewMode, ReviewModeError } from "../review/mode.js";
+import { decodeEscalation, EscalationStoreError, escalatingAssessor, ESCALATE_SCHEMA_DESCRIPTION, recordEscalation } from "../review/escalation.js";
+import { findLineage } from "../review/lineage.js";
 import { assessCandidate } from "../review/risk.js";
 import { pendingCorrectionLineage, runReview, snapshotTargetFor, validateReviewerOptions, } from "../review/run.js";
 import { resolveRepository, SnapshotError } from "../review/snapshot.js";
@@ -52,6 +54,8 @@ export function errorResult(e) {
         return fail(e.code, e.message);
     if (e instanceof ReviewModeError)
         return fail("mode_error", e.message);
+    if (e instanceof EscalationStoreError)
+        return fail("authority_error", e.message, { detail: e.name });
     if (e instanceof StoreNotFoundError || e instanceof StoreInvalidLineageError)
         return fail("unknown_lineage", e.message);
     if (STORE_ERRORS.some((c) => e instanceof c))
@@ -73,6 +77,13 @@ const LENS_PROPS = {
     lenses: { type: "array", items: { type: "string", minLength: 1, maxLength: 40 }, minItems: 1, maxItems: 4, description: "Explicit pertinent lenses (risk, resilience, readability, reliability), canonical order, no repeats; needs lenses_reason." },
     lenses_reason: { type: "string", minLength: 1, maxLength: 500 },
     locale: { type: "string", minLength: 2, maxLength: 35, pattern: "^[A-Za-z]{2,3}([-_][A-Za-z0-9]{2,8})*$" },
+};
+const ESCALATE_PROP = {
+    type: "object", additionalProperties: false, required: ["item", "reason"], description: ESCALATE_SCHEMA_DESCRIPTION,
+    properties: {
+        item: { type: "integer", minimum: 1, maximum: 6, description: "The Task Size high-risk item (1-6)." },
+        reason: { type: "string", minLength: 1, maxLength: 500, description: "One line, non-empty, at most 500 UTF-8 bytes." },
+    },
 };
 const RUN_PROPS = {
     model: { type: "string", enum: ["fable", "opus", "sonnet", "haiku"], description: "Reviewer model family for every reviewer of this run. Omit it to follow the active model profile per role (balanced by default)." },
@@ -113,6 +124,24 @@ function lensesOf(a) {
     return { ...(lenses !== undefined ? { lenses } : {}), ...(reason !== undefined ? { lensesReason: reason } : {}) };
 }
 const defaultAssessor = (snapshot, repository) => assessRisk(snapshot, repository);
+/** The `escalate` argument: undefined when absent, the decoded escalation, or the reason it is invalid (a string). */
+function escalationOf(a) {
+    return a.escalate === undefined ? undefined : decodeEscalation(a.escalate);
+}
+/**
+ * Records an escalation for the candidate this call is about to START, only when that START is fresh (no live or acknowledged
+ * lineage for the candidate): an existing lineage keeps its frozen tier. Writes nothing for an empty candidate.
+ */
+function recordFreshEscalation(cwd, t, escalation) {
+    const assessed = assessCandidate(cwd, snapshotTargetFor({ target: t.target, projection: t.projection }));
+    if (assessed.status !== "assessed")
+        return;
+    const commonDir = resolveRepository(cwd).commonDir;
+    const existing = findLineage(commonDir, assessed.targetIdentity, assessed.projection);
+    if (existing.live !== undefined || existing.burned !== undefined)
+        return;
+    recordEscalation(commonDir, assessed.targetIdentity, escalation);
+}
 /**
  * START behind the pending-correction guard. A candidate that is the correction of a lineage still in
  * correction_required/validating must not open a second lineage: the pending lineage is returned instead.
@@ -124,6 +153,9 @@ async function guardedStart(a, ctx, consent, expectedTargetIdentity) {
     const l = lensesOf(a);
     if (typeof l === "string")
         return invalid(l);
+    const escalation = escalationOf(a);
+    if (typeof escalation === "string")
+        return invalid(escalation);
     const cwd = cwdOf(a, ctx);
     const pending = pendingCorrectionLineage(cwd, snapshotTargetFor({ target: t.target, projection: t.projection }));
     if (pending !== undefined) {
@@ -135,6 +167,8 @@ async function guardedStart(a, ctx, consent, expectedTargetIdentity) {
             lineage: { lineage_id: r.lineage_id, state: r.state, revision: r.revision, target_identity: r.target_identity, projection: r.projection, risk_level: r.risk_level },
         });
     }
+    if (escalation !== undefined)
+        recordFreshEscalation(cwd, t, escalation);
     const outcome = await startReview({
         cwd,
         target: t.target,
@@ -143,7 +177,7 @@ async function guardedStart(a, ctx, consent, expectedTargetIdentity) {
         consent,
         ...(str(a, "locale") !== undefined ? { locale: str(a, "locale") } : {}),
         ...(expectedTargetIdentity !== undefined ? { expectedTargetIdentity } : {}),
-        riskAssessor: ctx.deps.riskAssessor ?? defaultAssessor,
+        riskAssessor: escalatingAssessor(ctx.deps.riskAssessor ?? defaultAssessor),
     });
     const envelope = encodeStartEnvelope(outcome);
     return outcome.status === "refused" ? fail(outcome.code, outcome.message, { ...(outcome.lineage_id !== undefined ? { lineage_id: outcome.lineage_id } : {}) }) : ok(envelope);
@@ -243,14 +277,20 @@ const writes = { readOnlyHint: false, destructiveHint: false, idempotentHint: fa
 export const TOOLS = [
     {
         name: "review_assess",
-        description: "Read-only: freeze the candidate in a private index and classify its risk (low/medium/high), with the reasons and changed paths. Writes no review state and starts nothing." + NOTE,
-        inputSchema: object({ ...TARGET_PROPS, escalate: { type: "boolean", description: "Treat a review as due whatever the tier." } }),
-        annotations: readOnly,
+        description: "Freeze the candidate in a private index and classify its risk (low/medium/high), with the reasons and changed paths. Starts nothing and creates no review lineage; it never touches the worktree. It writes only when `escalate` is given: it then records the escalation bound to this exact candidate (odd-plugin/review-escalations.json), so the Stop reminder and the delivery notice see the review as due. Without `escalate` it writes nothing." + NOTE,
+        inputSchema: object({ ...TARGET_PROPS, escalate: ESCALATE_PROP }),
+        annotations: writes,
         async run(a, ctx) {
             const t = targetOf(a);
             if (typeof t === "string")
                 return invalid(t);
-            const r = assessCandidate(cwdOf(a, ctx), snapshotTargetFor({ target: t.target, projection: t.projection }), { escalate: bool(a, "escalate") === true });
+            const escalation = escalationOf(a);
+            if (typeof escalation === "string")
+                return invalid(escalation);
+            const cwd = cwdOf(a, ctx);
+            const r = assessCandidate(cwd, snapshotTargetFor({ target: t.target, projection: t.projection }), { escalate: escalation !== undefined });
+            if (escalation !== undefined && r.status === "assessed")
+                recordEscalation(resolveRepository(cwd).commonDir, r.targetIdentity, escalation);
             if (r.status === "not_due")
                 return ok({ outcome: "not_due", reason: r.reason, review_due: false, kind: r.kind, projection: r.projection });
             return ok({
@@ -286,11 +326,12 @@ export const TOOLS = [
     },
     {
         name: "review_start",
-        description: "Start a review of the candidate. It ALWAYS relays consent: a medium/high-risk candidate returns the consent envelope untouched (show it to the human losslessly) and creates nothing; only review_answer_consent, with the human's explicit answer, can grant or decline. A low-risk candidate is approved at once and returns its one-shot acknowledgement. Refuses to open a second lineage while one waits for its correction." + NOTE,
+        description: "Start a review of the candidate. It ALWAYS relays consent: a medium/high-risk candidate returns the consent envelope untouched (show it to the human losslessly) and creates nothing; only review_answer_consent, with the human's explicit answer, can grant or decline. A low-risk candidate is approved at once and returns its one-shot acknowledgement. An `escalate` on a fresh START freezes the tier as high (it is ignored when the candidate already has a lineage). Refuses to open a second lineage while one waits for its correction." + NOTE,
         inputSchema: object({
             ...TARGET_PROPS, ...LENS_PROPS,
             contract: { type: "string", const: REVIEW_CONTRACT },
             target_identity: { type: "string", pattern: SHA_PATTERN, description: "When given (status passes it), the candidate must still have exactly this identity (binding_drift otherwise)." },
+            escalate: ESCALATE_PROP,
         }),
         annotations: writes,
         run: (a, ctx) => guardedStart(a, ctx, "relay", str(a, "target_identity")),
@@ -384,13 +425,19 @@ export const TOOLS = [
     },
     {
         name: "review_run",
-        description: "Drive one review end to end by following status transitions: start, reviewers, capture, acknowledge. It returns a typed outcome: closed, not-due, consent-required (relay the envelope to the human; consent is never answered here), input-required (a correction is needed), forecast (reviewers cost money: call again with reviewer_run_acknowledged and the forecast's reviewer_run_binding), stopped, binding-drift, transition-limit or cancelled. Resume a consented or corrected review with lineage_id." + NOTE,
-        inputSchema: object({ ...TARGET_PROPS, ...LENS_PROPS, lineage_id: { type: "string", pattern: LINEAGE_PATTERN }, ...RUN_PROPS }),
+        description: "Drive one review end to end by following status transitions: start, reviewers, capture, acknowledge. It returns a typed outcome: closed, not-due, consent-required (relay the envelope to the human; consent is never answered here), input-required (a correction is needed), forecast (reviewers cost money: call again with reviewer_run_acknowledged and the forecast's reviewer_run_binding), stopped, binding-drift, transition-limit or cancelled. Resume a consented or corrected review with lineage_id (an `escalate` is ignored then; on a fresh run it freezes the START tier as high)." + NOTE,
+        inputSchema: object({ ...TARGET_PROPS, ...LENS_PROPS, lineage_id: { type: "string", pattern: LINEAGE_PATTERN }, escalate: ESCALATE_PROP, ...RUN_PROPS }),
         annotations: writes,
         async run(a, ctx) {
             const input = runInput(a, ctx);
             if (isResult(input))
                 return input;
+            const escalation = escalationOf(a);
+            if (typeof escalation === "string")
+                return invalid(escalation);
+            // Only a fresh run can START: resuming a lineage ignores the escalation.
+            if (escalation !== undefined && input.lineageId === undefined)
+                recordFreshEscalation(input.cwd, { target: input.target ?? { kind: "current-changes" }, ...(input.projection !== undefined ? { projection: input.projection } : {}) }, escalation);
             return runResult(await runReview(input, runDeps(ctx)));
         },
     },

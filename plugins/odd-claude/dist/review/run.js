@@ -48,6 +48,7 @@ import { acknowledgeApproved, AckRefusedError } from "./ack.js";
 import { manifestFor, refuterRequestHash, targetedValidationRequestHash, treeDiffPaths } from "./artifact.js";
 import { captureCorrectionResult, captureLensResult, captureRefuterResult, captureValidatorResult, completeReview, planCorrection, previewCorrectionValidation, } from "./capture.js";
 import { encodeAckEnvelope, encodeBinding, encodeCaptureEnvelope, forecastFor, isTerminalStop, REASON_DESCRIPTIONS, verifyBinding } from "./contract.js";
+import { escalatingAssessor } from "./escalation.js";
 import { StoreLockContended, StoreLockError } from "./lock.js";
 import { assessRisk } from "./risk.js";
 import { buildReviewerPrompt, parseReviewerOutput, runReviewer } from "./runner.js";
@@ -559,7 +560,7 @@ export async function runReview(input, deps = {}) {
                         consent: "relay",
                         ...(input.locale !== undefined ? { locale: input.locale } : {}),
                         ...(input.requestContextPath !== undefined ? { requestContext: input.requestContextPath } : {}),
-                        riskAssessor: deps.riskAssessor ?? ((snapshot, repository) => assessRisk(snapshot, repository)),
+                        riskAssessor: escalatingAssessor(deps.riskAssessor ?? ((snapshot, repository) => assessRisk(snapshot, repository))),
                     });
                     switch (outcome.status) {
                         case "consent_required":

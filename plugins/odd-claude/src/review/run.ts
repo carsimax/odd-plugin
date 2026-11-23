@@ -53,6 +53,7 @@ import {
 } from "./capture.js";
 import type { ConsentEnvelope } from "./consent.js";
 import { encodeAckEnvelope, encodeBinding, encodeCaptureEnvelope, forecastFor, isTerminalStop, REASON_DESCRIPTIONS, verifyBinding, type Envelope, type Forecast, type ReasonCode } from "./contract.js";
+import { escalatingAssessor } from "./escalation.js";
 import { StoreLockContended, StoreLockError } from "./lock.js";
 import { assessRisk } from "./risk.js";
 import { buildReviewerPrompt, parseReviewerOutput, runReviewer, type ReviewerPromptInput, type ReviewerRole, type RunOutcome, type RunReviewerOptions } from "./runner.js";
@@ -643,7 +644,7 @@ export async function runReview(input: ReviewRunInput, deps: RunDeps = {}): Prom
             consent: "relay",
             ...(input.locale !== undefined ? { locale: input.locale } : {}),
             ...(input.requestContextPath !== undefined ? { requestContext: input.requestContextPath } : {}),
-            riskAssessor: deps.riskAssessor ?? ((snapshot, repository) => assessRisk(snapshot, repository)),
+            riskAssessor: escalatingAssessor(deps.riskAssessor ?? ((snapshot, repository) => assessRisk(snapshot, repository))),
           });
           switch (outcome.status) {
             case "consent_required":
