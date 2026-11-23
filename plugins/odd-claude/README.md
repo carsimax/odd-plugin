@@ -2,6 +2,43 @@
 
 A Claude Code plugin that ports the ODD harness of gentle-shell (MIT) <!-- odd-check: allow --> to Claude Code. **v2.0** adds native receipt-driven review (RDD) on top of **v1.0** (the parity release): the ODD persona, orchestrator cards, agents, skills, native integrations, advisory review and lifecycle hooks. Apart from the RDD Stop settle reminder, which can block only when you turn RDD on (it is off by default), the plugin ships **no deny/ask/block hook** (user decision, v0.5, amended for v2): its hooks only add context. Coordinator mode and the admission rules are prompt text, not enforcement; otherwise the only enforcement is Claude Code's native permission system (see [Permission modes](#permission-modes)). The plugin collects no data and sends nothing anywhere.
 
+## What's new in 5.0.0
+
+Refinement round (`odd/tasks/refine-v5.md`): the harness leans on native Claude Code capabilities, repeats fewer rules and costs less per event. One change set is breaking, see [Upgrade notes for 5.0.0](#upgrade-notes-for-500).
+
+- **Native leverage:** every agent has a `color` in its frontmatter. After `compact` and `resume`, SessionStart re-injects a short summary of the active feature document (`odd/tasks/*.md` whose header names the current branch: path, header, `S#` IDs, open tasks, last Log entry, at most 2000 characters). `StopFailure`, `SubagentStart` and `SubagentStop` run with `async: true`, so recording no longer blocks the turn. The `status` and `doctor` skills compute their report through `!` dynamic context.
+- **One source per rule:** task size, evidence budget, writer and verifier rules, test-first, allowed edit surfaces, language, coordinator mode and skill paths each live in one place (`output-styles/odd.md` is the index; the session context owns coordinator and language text) and the cards point to it. Stale references were removed. Prompts name the native task tools `TaskCreate`/`TaskUpdate` (`TodoWrite` when they are unavailable).
+- **Lighter hooks:** `UserPromptSubmit` no longer loads the peers, stats or subagents modules (`isValidSessionId` and the transcript path helper moved to small modules), and the context backstop reads a 32 KB transcript tail once its notice has fired.
+- **Review engine:** engine lens reviewers now apply each lens's `## Review rules` charter from `agents/odd-review-<lens>.md` (the same source `4r-review` uses); if the charter cannot be read the run fails closed with `lens_charter_unavailable` (shown as the `reviewer_prompt_unavailable` block). One shared pid liveness probe (`src/lib/pid.ts`) replaces four copies. Agent escalation is removed.
+- **Measured (`npm run measure -- --runs 15`, Node v26.12.1, before = 4.0.0 baseline, after = 5.0.0):**
+
+| Measure | Before | After |
+|---|---|---|
+| Output style (bytes) | 10352 | 10700 |
+| SessionStart context (bytes) | 3360 | 3257 |
+| UserPromptSubmit context (bytes) | 151 | 151 |
+| Frontmatter descriptions (bytes) | 5334 | 5282 |
+| Agent bodies: worker / verify (bytes) | 15825 / 14652 | 15477 / 14209 |
+| SessionStart median/p95 ms (modules) | 80.1/89.9 (21) | 78.0/80.5 (26) |
+| UserPromptSubmit | 86.4/89.1 (15) | 76.5/79.5 (15) |
+| PreToolUse | 79.3/86.0 (7) | 72.4/75.0 (8) |
+| PostToolUse | 75.9/92.5 (10) | 73.5/79.7 (11) |
+| StopFailure | 73.4/77.9 (6) | 73.3/79.5 (7) |
+| Stop | 73.1/75.9 (8) | 73.6/75.9 (9) |
+| SessionEnd | 76.1/107.0 (11) | 75.1/79.1 (13) |
+| SubagentStart | 73.5/76.3 (6) | 76.1/81.5 (7) |
+| SubagentStop | 74.2/77.3 (6) | 79.8/92.3 (7) |
+
+  Latency is process start plus module load and varies a few ms between runs; the output style grew because handoff and synthesis rules now live there once instead of in cards. Per-event cost of the recording hooks no longer blocks the turn (async).
+
+## Upgrade notes for 5.0.0
+
+- **Breaking, no `escalate`:** `review_assess`, `review_start` and `review_run` no longer accept `escalate`; passing it is `invalid_input`. The `escalation` and `escalation_detail` response fields are removed.
+- **`review_assess` is read-only:** it writes nothing. The risk tier is decided by assess alone.
+- **Old store ignored:** a 4.x `<git-common-dir>/odd-plugin/review-escalations.json` is ignored and safe to delete.
+- **`/odd-claude:skill-creation` is removed:** use `/odd-claude:skill-creator`.
+- **More engine findings:** engine lens reviews may report more findings because they now apply the lens charter.
+
 ## What's new in 4.0.0
 
 Alignment with upstream v5 (`odd/tasks/upstream-v5.md`). Two changes are breaking.
@@ -176,7 +213,7 @@ Statistics and profiles (Phase 5), unchanged in 2.0. The visual mods, the banner
 
 ## What's in v1.0
 
-- **Commands / skills** (`/odd-claude:<name>`): `odd`, `doctor`, `status`, `setup`, `persona`, `coordinator`, `background-subagents`, `scratch`, `stats`, `profiles`, `skill-registry`, `skill-creation`, `skill-creator`, `skill-improver`, `4r-review`, `judgment-day`, `branch-pr`, `chained-pr`, `work-unit-commits`, `issue-creation`, `comment-writer`, `cognitive-doc-design`, `tui-design`, `ui-design`.
+- **Commands / skills** (`/odd-claude:<name>`): `odd`, `doctor`, `status`, `setup`, `persona`, `coordinator`, `background-subagents`, `scratch`, `stats`, `profiles`, `skill-registry`, `skill-creator`, `skill-improver`, `4r-review`, `judgment-day`, `branch-pr`, `chained-pr`, `work-unit-commits`, `issue-creation`, `comment-writer`, `cognitive-doc-design`, `tui-design`, `ui-design`.
 - **Agents** (`odd-claude:<agent>`): `odd-explore`, `odd-verify`, `odd-worker`, `odd-jd-fix`, `odd-jd-judge-a`, `odd-jd-judge-b`, `odd-review-risk`, `odd-review-resilience`, `odd-review-readability`, `odd-review-reliability`.
 - **Hooks** (advisory; only the RDD-gated Stop reminder can block): `SessionStart` (context, scratch dir, title, status file, skill registry, optional codegraph warm-up; on `compact` and `resume` also a compact summary of the active feature document: the `odd/tasks/*.md` file whose header names the current branch, with its path, header line, `S#` ids, open tasks and last log entry, capped at 2000 characters, nothing when there is no match), `UserPromptSubmit` (context, quota advisory), `PostToolUse` (exploration budget, context backstop), `StopFailure` (quota advisory), `Stop` (status file; empty output unless RDD is on, see [RDD](#receipt-driven-review-rdd)), `PreToolUse` on `Bash` (RDD delivery notice, never blocks; silent unless RDD is on), `SubagentStart`/`SubagentStop` (record the subagent in session state; silent). `SubagentStart`, `SubagentStop` and `StopFailure` run with `async: true` (their output is never used); no hook that injects context is async. There is no `TaskCompleted` hook: Claude Code only lets it block, not add context, `SessionEnd` (scratch cleanup, resume hint, status file).
 - **Output style**: `odd`. **Cards**, **support docs** and **sounds assets** (see below).

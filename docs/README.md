@@ -2,7 +2,7 @@
 
 **odd-claude** ports [gentle-shell](../upstream/gentle-shell) (a Pi-harness distribution, cloned read-only and gitignored under `upstream/gentle-shell`) to Claude Code as a plugin. The upstream repo is the single source of truth for behaviour; these docs capture what Claude Code can host and what is still unknown, as the base for a roadmap.
 
-**Current status:** v4.0.0 is the current release (aligns with upstream v5: the RDD delivery check only warns, agent escalation reaches the Stop reminder and the delivery notice; 3.0.0 was the simplification release that removed the hooks module, the banner, the themes, the statusline and the agents/changes/quiet commands): native receipt-driven review (RDD, off by default) on top of v1.1. v1.2 web tools was dropped by user decision 2026-11-19. Next: peer orchestrators (R07). See [roadmap.md](roadmap.md) and the [RDD section of the plugin README](../plugins/odd-claude/README.md#receipt-driven-review-rdd).
+**Current status:** v5.0.0 is the current release (the refinement round: agent escalation removed so assess alone decides the risk tier, one source per prompt rule, lighter hooks, engine lens reviewers apply the lens charter; 4.0.0 aligned with upstream v5, the RDD delivery check only warns; 3.0.0 was the simplification release that removed the hooks module, the banner, the themes, the statusline and the agents/changes/quiet commands): native receipt-driven review (RDD, off by default) on top of v1.1. v1.2 web tools was dropped by user decision 2026-11-19. Next: peer orchestrators (R07). See [roadmap.md](roadmap.md) and the [RDD section of the plugin README](../plugins/odd-claude/README.md#receipt-driven-review-rdd).
 
 ## Decisions
 
