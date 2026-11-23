@@ -10,6 +10,7 @@ import { closeSync, constants, fstatSync, lstatSync, mkdirSync, openSync, readdi
 import { join } from "node:path";
 import { atomicWriteFile, resolveDataDir, type StateOptions } from "./state.js";
 import { isValidSessionId } from "./peers.js";
+import { isPidAlive } from "./pid.js";
 
 export const MAX_CURRENT_ENTRIES = 50;
 export const CURRENT_STALE_MS = 7 * 24 * 60 * 60 * 1000;
@@ -41,14 +42,7 @@ function ensureDir(path: string): void {
 
 const isPid = (n: unknown): n is number => typeof n === "number" && Number.isInteger(n) && n > 1 && n <= 0x7fffffff;
 
-function alive(pid: number): boolean {
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch (err) {
-    return (err as NodeJS.ErrnoException).code === "EPERM";
-  }
-}
+const alive = isPidAlive;
 
 /** Atomic private (0600) write of the pid entry, then prunes stale entries (older than 7 days, dead pid) and caps the dir at 50. Throws on invalid input or an unsafe dir. */
 export function recordCurrentSession(sessionId: string, pid: number, opts: CurrentOptions = {}): void {

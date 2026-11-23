@@ -15,6 +15,7 @@ import { spawnSync } from "node:child_process";
 import { closeSync, fstatSync, lstatSync, mkdirSync, mkdtempSync, openSync, readdirSync, readFileSync, realpathSync, rmSync, utimesSync, writeFileSync, type Stats } from "node:fs";
 import { tmpdir } from "node:os";
 import { isAbsolute, join, resolve, sep } from "node:path";
+import { isPidAlive } from "../lib/pid.js";
 import { domainHash } from "./canonical.js";
 
 export type SnapshotProjection = "workspace" | "staged";
@@ -583,14 +584,7 @@ function makeScratch(repo: RepositoryIdentity): string {
   throw new SnapshotError("scratch_unavailable", "no writable location for a private review index");
 }
 
-function processAlive(pid: number): boolean {
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch (error) {
-    return (error as NodeJS.ErrnoException).code === "EPERM";
-  }
-}
+const processAlive = isPidAlive;
 
 /**
  * Bounded best-effort sweep of private index copies a killed process left behind. Only plain
