@@ -7,6 +7,7 @@ import { dirname, join } from "node:path";
 import {
   REVIEWER_ARGUMENTS,
   buildReviewerPrompt,
+  readLensCharter,
   classifyFailure,
   parseReviewerOutput,
   redactExcerpt,
@@ -64,6 +65,47 @@ function promptInput(r: Repo, over: Partial<ReviewerPromptInput> = {}): Reviewer
 }
 
 // ---- prompt ----
+
+const AGENTS_DIR = join(import.meta.dirname, "..", "..", "agents");
+const LENSES = ["risk", "resilience", "readability", "reliability"] as const;
+
+test("the lens prompt carries the charter of agents/odd-review-<lens>.md verbatim, and only the rules, not the agent output contract", () => {
+  const r = makeRepo();
+  for (const lens of LENSES) {
+    const agent = readFileSync(join(AGENTS_DIR, `odd-review-${lens}.md`), "utf8");
+    const rules = /^## Review rules\n([\s\S]*?)^## /m.exec(agent)![1]!.trim();
+    assert.ok(rules.length > 100, lens);
+    const built = buildReviewerPrompt(promptInput(r, { lens, subject: { subject_hash: SUBJECT_HASH, lens } }));
+    assert.ok(built.ok, lens);
+    assert.ok(built.prompt.includes(rules), `charter of ${lens}`);
+    assert.ok(!built.prompt.includes("\"review_result\""), "the agent envelope never leaks into the engine contract");
+    assert.equal(readLensCharter(lens), rules);
+  }
+});
+
+test("a missing, unreadable or rule-less agent file fails the lens prompt closed with lens_charter_unavailable", () => {
+  const r = makeRepo();
+  const dir = track(mkdtempSync(join(tmpdir(), "odd-agents-")));
+  const missing = buildReviewerPrompt(promptInput(r, { agentsDir: dir }));
+  assert.ok(!missing.ok);
+  assert.equal(missing.code, "lens_charter_unavailable");
+  mkdirSync(join(dir, "odd-review-risk.md")); // a directory: unreadable as a file
+  assert.equal((buildReviewerPrompt(promptInput(r, { agentsDir: dir })) as { code: string }).code, "lens_charter_unavailable");
+  rmSync(join(dir, "odd-review-risk.md"), { recursive: true });
+  writeFileSync(join(dir, "odd-review-risk.md"), "---\nname: x\n---\n\n## Review rules\n\n## Output contract\nx\n");
+  assert.equal((buildReviewerPrompt(promptInput(r, { agentsDir: dir })) as { code: string }).code, "lens_charter_unavailable");
+  const unknown = buildReviewerPrompt(promptInput(r, { lens: "nope", agentsDir: AGENTS_DIR }));
+  assert.ok(!unknown.ok);
+  assert.equal(unknown.code, "lens_charter_unavailable");
+  assert.equal(readLensCharter("risk", dir), undefined);
+});
+
+test("refuter and validator prompts carry no lens charter", () => {
+  const r = makeRepo();
+  const built = buildReviewerPrompt(promptInput(r, { role: "refuter", agentsDir: join(tmpdir(), "does-not-exist") }));
+  assert.ok(built.ok);
+  assert.ok(!built.prompt.includes("Lens charter"));
+});
 
 test("prompt is built from the frozen trees only: editing the working tree after the freeze yields the identical prompt", () => {
   const r = makeRepo();
