@@ -43,7 +43,7 @@ test("status with state: session id from env wins over latest", () => {
     assert.match(text, /odd-claude 0\.1\.0/);
     assert.match(text, /session: a \(env\)/);
     assert.match(text, /hooks: SessionStart/);
-    assert.match(text, /roadmap: v4\.0: upstream v5 alignment shipped/);
+    assert.match(text, /roadmap: v5\.0: refinement round shipped/);
   });
 });
 
