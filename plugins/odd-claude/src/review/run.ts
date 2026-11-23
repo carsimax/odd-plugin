@@ -643,7 +643,8 @@ export async function runReview(input: ReviewRunInput, deps: RunDeps = {}): Prom
           }
           started = true;
           const esc = escalationForStart(deps.riskAssessor ?? ((snapshot, repository) => assessRisk(snapshot, repository)), deps.escalation);
-          const outcome = await startReview({
+          const baseAssessor = deps.riskAssessor ?? ((snapshot, repository) => assessRisk(snapshot, repository));
+          const startWith = (riskAssessor: RiskAssessor) => startReview({
             cwd: input.cwd,
             target: startTarget,
             ...(input.projection !== undefined ? { projection: input.projection } : {}),
@@ -652,10 +653,11 @@ export async function runReview(input: ReviewRunInput, deps: RunDeps = {}): Prom
             consent: "relay",
             ...(input.locale !== undefined ? { locale: input.locale } : {}),
             ...(input.requestContextPath !== undefined ? { requestContext: input.requestContextPath } : {}),
-            riskAssessor: esc.assessor,
+            riskAssessor,
           });
-          const escalationReport = esc.settle(outcome);
-          if (escalationReport !== undefined) deps.onEscalation?.(escalationReport);
+          const settled = await esc.settle(await startWith(esc.assessor), () => startWith(escalationForStart(baseAssessor, undefined).assessor));
+          const outcome = settled.outcome;
+          if (settled.report !== undefined) deps.onEscalation?.(settled.report);
           switch (outcome.status) {
             case "consent_required":
               return finish({ outcome: "consent-required", envelope: outcome.envelope });

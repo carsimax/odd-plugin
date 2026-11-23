@@ -10,6 +10,8 @@ import { runHook } from "../hooks/run.js";
 import { ReviewServer, type Response } from "../mcp/review-server.js";
 import type { ToolDeps } from "../mcp/tools.js";
 import { setReviewMode } from "../review/mode.js";
+import { consentBinding } from "../review/consent.js";
+import { chmodSync } from "node:fs";
 import { UNREVIEWED_DELIVERY_NOTICE } from "../review/gate.js";
 
 const ENV = (() => {
@@ -315,13 +317,21 @@ test("an unusable escalation store (a directory) degrades: review_assess keeps i
     assert.ok(a.body.escalation_detail.length <= 300);
     const s = await call("review_start", { escalate: ESC });
     assert.equal(s.isError, false, "START is not aborted");
-    assert.equal(s.body.action, "consent_required");
-    assert.equal(s.body.risk_level, "high", "the START still freezes the escalated tier");
+    assert.equal(s.body.action, "closed");
+    assert.equal(s.body.risk_level, "low", "an escalation that cannot be persisted is not applied: START runs at the base tier");
     assert.equal(s.body.escalation, "not_recorded");
     assert.match(s.body.escalation_detail, /escalation/i);
-    const r = await call("review_run", { escalate: ESC });
-    assert.equal(r.isError, false);
-    assert.equal(r.body.escalation, "not_recorded");
+    const g = fx();
+    try {
+      on(g);
+      mkdirSync(STORE(g), { recursive: true });
+      const r = await server(g)("review_run", { escalate: ESC });
+      assert.equal(r.isError, false);
+      assert.equal(r.body.escalation, "not_recorded");
+      assert.equal(r.body.outcome, "closed");
+    } finally {
+      g.cleanup();
+    }
     assert.equal(lstatSync(STORE(f)).isDirectory(), true, "the directory is untouched");
     assert.deepEqual(readdirSync(STORE(f)), []);
     assert.deepEqual(readdirSync(join(f.commonDir, "odd-plugin")).filter((n) => n.startsWith("review-escalations")), ["review-escalations.json"], "no temp, lock or corrupt files");
@@ -421,7 +431,7 @@ test("two processes recording different candidates at once keep both entries (th
       const i = Number(process.argv[1]);
       while (Date.now() < ${startAt}) { /* spin to start together */ }
       try {
-        recordEscalation(${JSON.stringify(f.commonDir)}, "sha256:" + String(i).padStart(64, "0"), { item: 1, reason: "r" + i });
+        await recordEscalation(${JSON.stringify(f.commonDir)}, "sha256:" + String(i).padStart(64, "0"), { item: 1, reason: "r" + i });
       } catch (e) { process.stderr.write(String(e)); process.exit(3); }
     `;
     const codes = await Promise.all(
@@ -490,6 +500,92 @@ test("review_assess is not annotated read-only: it records an escalation", async
     const tool = (res.result as { tools: { name: string; description: string; annotations: Record<string, unknown> }[] }).tools.find((t) => t.name === "review_assess")!;
     assert.equal(tool.annotations.readOnlyHint, false);
     assert.doesNotMatch(tool.description, /^Read-only/);
+  } finally {
+    f.cleanup();
+  }
+});
+
+test("degraded store end to end: whatever tier START reports, answering consent proceeds consistently (the frozen authority carries the tier, not the store)", async () => {
+  for (const mode of ["dir", "busy"] as const) {
+    const f = fx();
+    try {
+      on(f);
+      mkdirSync(join(f.commonDir, "odd-plugin"), { recursive: true });
+      if (mode === "dir") mkdirSync(STORE(f));
+      else writeFileSync(`${STORE(f)}.lock`, JSON.stringify({ pid: process.pid, startedAt: Date.now() }));
+      const call = server(f);
+      const s = await call("review_start", { escalate: ESC });
+      assert.equal(s.isError, false, mode);
+      assert.equal(s.body.escalation, "not_recorded", mode);
+      if (s.body.action === "consent_required") {
+        const answer = await call("review_answer_consent", {
+          target_identity: s.body.target_identity, consent: "granted", consent_binding: consentBinding(s.body.target_identity, undefined),
+        });
+        assert.equal(answer.isError, false, `${mode}: ${JSON.stringify(answer.body)}`);
+        assert.equal(answer.body.risk_level, s.body.risk_level, `${mode}: the granted answer freezes the tier START reported`);
+      } else {
+        assert.equal(s.body.risk_level, "low", `${mode}: without a persisted escalation START runs at the base tier`);
+        assert.equal(s.body.action, "closed");
+      }
+    } finally {
+      f.cleanup();
+    }
+  }
+});
+
+test("a store from another schema version is never renamed away: not_recorded, the file is untouched", async () => {
+  const f = fx();
+  try {
+    on(f);
+    mkdirSync(join(f.commonDir, "odd-plugin"), { recursive: true });
+    const future = JSON.stringify({ schema: "odd-claude.review-escalations/v2", entries: [] });
+    writeFileSync(STORE(f), future);
+    const a = await server(f)("review_assess", { escalate: ESC });
+    assert.equal(a.isError, false);
+    assert.equal(a.body.escalation, "not_recorded");
+    assert.match(a.body.escalation_detail, /schema|version/i);
+    assert.equal(readFileSync(STORE(f), "utf8"), future);
+    assert.deepEqual(readdirSync(join(f.commonDir, "odd-plugin")), ["review-escalations.json"]);
+    assert.deepEqual(push(f), SILENT);
+  } finally {
+    f.cleanup();
+  }
+});
+
+test("a store that cannot be read (EACCES) is never renamed away: not_recorded, the file is untouched", async (t) => {
+  if (process.getuid?.() === 0) return t.skip("root can read a mode 000 file");
+  const f = fx();
+  try {
+    on(f);
+    mkdirSync(join(f.commonDir, "odd-plugin"), { recursive: true });
+    const valid = JSON.stringify({ schema: "odd-claude.review-escalations/v1", entries: [] });
+    writeFileSync(STORE(f), valid);
+    chmodSync(STORE(f), 0o000);
+    const a = await server(f)("review_assess", { escalate: ESC });
+    assert.equal(a.isError, false);
+    assert.equal(a.body.escalation, "not_recorded");
+    assert.match(a.body.escalation_detail, /EACCES|read/i);
+    assert.deepEqual(readdirSync(join(f.commonDir, "odd-plugin")), ["review-escalations.json"], "not renamed");
+    chmodSync(STORE(f), 0o600);
+    assert.equal(readFileSync(STORE(f), "utf8"), valid);
+  } finally {
+    try { chmodSync(STORE(f), 0o600); } catch { /* absent */ }
+    f.cleanup();
+  }
+});
+
+test("review_run on a candidate with a live lineage and no lineage_id reports ignored_existing_lineage", async () => {
+  const f = fx();
+  try {
+    on(f);
+    const call = server(f);
+    // a high-risk candidate, consented, then driven to correction_required is heavy; use the pending guard directly:
+    // a first START of the escalated candidate + granted consent opens a lineage in a reviewing state
+    const s = await call("review_start", { escalate: ESC });
+    await call("review_answer_consent", { target_identity: s.body.target_identity, consent: "granted", consent_binding: consentBinding(s.body.target_identity, undefined) });
+    // the same candidate with a live lineage and no lineage_id: no fresh START; a lineage really exists
+    const r = await call("review_run", { escalate: ESC });
+    assert.equal(r.body.escalation ?? r.body.error?.escalation, "ignored_existing_lineage");
   } finally {
     f.cleanup();
   }

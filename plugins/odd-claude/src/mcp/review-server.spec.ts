@@ -635,6 +635,21 @@ async function toCorrection(f: Fx): Promise<{ call: (n: string, a?: Record<strin
   return { call, lineage, prompts };
 }
 
+test("an escalate on a call blocked by a lineage waiting for its correction reports not_recorded, not ignored_existing_lineage", async () => {
+  await withFx(async (f) => {
+    const { call } = await toCorrection(f);
+    writeFileSync(join(f.repo, "a.txt"), "one\nTWO\nthree\nfour\nfive\nsix\n");
+    const esc = { item: 3, reason: "touches the dependency policy" };
+    for (const tool of ["review_start", "review_run"]) {
+      const r = await call(tool, { escalate: esc });
+      assert.equal(errorCode(r), "correction_lineage_pending", tool);
+      assert.equal(r.body.error.escalation, "not_recorded", tool);
+      assert.ok(typeof r.body.error.escalation_detail === "string" && r.body.error.escalation_detail.length > 0, tool);
+    }
+    assert.equal(existsSync(join(f.commonDir, "odd-plugin", "review-escalations.json")), false);
+  });
+});
+
 test("duplicate-lineage guard: a direct review_start / review_answer_consent while the lineage waits for its correction returns the pending lineage", async () => {
   await withFx(async (f) => {
     const { call, lineage } = await toCorrection(f);

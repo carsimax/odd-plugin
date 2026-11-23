@@ -54,37 +54,45 @@ export function decodeEscalation(value) {
     return { item, reason };
 }
 const pathFor = (commonDir) => join(commonDir, "odd-plugin", "review-escalations.json");
-/** Never throws: an I/O error other than "absent" is reported as corrupt (the store cannot be trusted). */
+/** Never throws. */
 function loadStore(commonDir) {
     const path = pathFor(commonDir);
     let size;
+    let raw;
     try {
         const st = lstatSync(path);
         if (!st.isFile())
-            return { kind: "corrupt" };
+            return { kind: "unreadable", code: "ENOTFILE" };
         size = st.size;
-    }
-    catch (e) {
-        return e.code === "ENOENT" ? { kind: "absent" } : { kind: "corrupt" };
-    }
-    try {
         if (size > MAX_FILE_BYTES)
             return { kind: "corrupt" };
-        const parsed = JSON.parse(readFileSync(path, "utf8"));
-        if (parsed === null || typeof parsed !== "object" || parsed.schema !== ESCALATION_SCHEMA || !Array.isArray(parsed.entries))
-            return { kind: "corrupt" };
-        const out = [];
-        for (const e of parsed.entries) {
-            const o = e;
-            const d = decodeEscalation({ item: o?.item, reason: o?.reason });
-            if (typeof d !== "string" && typeof o.target_identity === "string" && SHA_RE.test(o.target_identity))
-                out.push({ target_identity: o.target_identity, ...d });
-        }
-        return { kind: "ok", entries: out };
+        raw = readFileSync(path, "utf8");
+    }
+    catch (e) {
+        const code = e.code;
+        return code === "ENOENT" ? { kind: "absent" } : { kind: "unreadable", code: code ?? "error" };
+    }
+    let parsed;
+    try {
+        parsed = JSON.parse(raw);
     }
     catch {
         return { kind: "corrupt" };
     }
+    if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed) || typeof parsed.schema !== "string")
+        return { kind: "corrupt" };
+    if (parsed.schema !== ESCALATION_SCHEMA)
+        return { kind: "foreign" };
+    if (!Array.isArray(parsed.entries))
+        return { kind: "corrupt" };
+    const out = [];
+    for (const e of parsed.entries) {
+        const o = e;
+        const d = decodeEscalation({ item: o?.item, reason: o?.reason });
+        if (typeof d !== "string" && typeof o?.target_identity === "string" && SHA_RE.test(o.target_identity))
+            out.push({ target_identity: o.target_identity, ...d });
+    }
+    return { kind: "ok", entries: out };
 }
 function readEntries(commonDir) {
     const loaded = loadStore(commonDir);
@@ -95,14 +103,12 @@ export function readEscalation(commonDir, targetIdentity) {
     const found = readEntries(commonDir).find((e) => e.target_identity === targetIdentity);
     return found === undefined ? undefined : { item: found.item, reason: found.reason };
 }
-function sleepSync(ms) {
-    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
-}
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 /**
  * Records (replaces) the escalation of one candidate identity; keeps only the newest MAX_ENTRIES. Atomic and serialized across
  * processes. Throws EscalationStoreError and writes nothing when the store is unusable or the lock cannot be taken in time.
  */
-export function recordEscalation(commonDir, targetIdentity, escalation) {
+export async function recordEscalation(commonDir, targetIdentity, escalation) {
     if (!SHA_RE.test(targetIdentity))
         throw new RangeError("target identity must be sha256:<64 hex>");
     const dir = join(commonDir, "odd-plugin");
@@ -131,10 +137,14 @@ export function recordEscalation(commonDir, targetIdentity, escalation) {
         while (!(locked = acquireLock(lock, process.pid, { staleMs: LOCK_STALE_MS, proofOfDeathOnly: true }))) {
             if (Date.now() >= deadline)
                 throw new EscalationStoreError("the escalation store is busy (its lock could not be taken in time); the escalation was not recorded");
-            sleepSync(3 + Math.random() * 5);
+            await sleep(3 + Math.random() * 5);
         }
         const result = {};
         const loaded = loadStore(commonDir);
+        if (loaded.kind === "unreadable")
+            throw new EscalationStoreError(`the escalation store cannot be read (${loaded.code}); it was left untouched and the escalation was not recorded`);
+        if (loaded.kind === "foreign")
+            throw new EscalationStoreError("the escalation store has another schema version (a newer plugin wrote it?); it was left untouched and the escalation was not recorded");
         if (loaded.kind === "corrupt") {
             const kept = `review-escalations.json.corrupt-${Date.now()}-${process.pid}`;
             renameSync(path, join(dir, kept));
@@ -157,9 +167,9 @@ export function recordEscalation(commonDir, targetIdentity, escalation) {
 }
 const report = (escalation, detail) => ({ escalation, ...(detail !== undefined ? { escalation_detail: detail.slice(0, 300) } : {}) });
 /** Records for a tool call (review_assess) and reports the outcome; never throws. */
-export function recordAndReport(commonDir, targetIdentity, escalation) {
+export async function recordAndReport(commonDir, targetIdentity, escalation) {
     try {
-        const r = recordEscalation(commonDir, targetIdentity, escalation);
+        const r = await recordEscalation(commonDir, targetIdentity, escalation);
         return report("recorded", r.preservedCorrupt !== undefined ? `the previous escalation store was corrupt and was preserved as ${r.preservedCorrupt}` : undefined);
     }
     catch (e) {
@@ -172,10 +182,14 @@ export const NO_FRESH_START_DETAIL = "no fresh START was offered for this candid
  * already has a live or burned lineage is left alone) and remembers that identity; nothing is written. `settle(outcome)`
  * then records it, bound to that exact identity, only when the START succeeded in a way the escalation matters (a consent
  * envelope for the candidate), and reports what happened. A refused START records nothing.
+ *
+ * The tier of a later consent answer is re-derived from the STORE (escalatingAssessor), not carried by the consent envelope.
+ * So an escalation that could not be persisted must not leave a consent envelope frozen at the escalated tier: `settle` then
+ * calls `restart` (the same START with the plain assessor) and returns ITS outcome, at the base tier, with `not_recorded`.
  */
 export function escalationForStart(base, escalation) {
     if (escalation === undefined)
-        return { assessor: escalatingAssessor(base), settle: () => undefined };
+        return { assessor: escalatingAssessor(base), settle: async (outcome) => ({ outcome }) };
     let frozen;
     const assessor = async (snapshot, repository) => {
         frozen = { identity: snapshot.identity, commonDir: repository.commonDir };
@@ -184,7 +198,7 @@ export function escalationForStart(base, escalation) {
             return escalatingAssessor(base)(snapshot, repository);
         return escalatingAssessor(base, escalation)(snapshot, repository);
     };
-    const settle = (outcome) => {
+    const classify = async (outcome) => {
         switch (outcome.status) {
             case "not_due":
                 return report("not_recorded", "there is no candidate to bind the escalation to (no changes)");
@@ -199,8 +213,16 @@ export function escalationForStart(base, escalation) {
                     ? report("ignored_existing_lineage", `candidate already has review lineage ${outcome.result.lineage_id}: the escalation was ignored and its frozen tier kept`)
                     : report("not_recorded", "the review started without needing the escalation; it was not recorded");
             case "consent_required":
-                return frozen === undefined ? report("not_recorded", "the candidate identity was not frozen; the escalation was not recorded") : recordAndReport(frozen.commonDir, frozen.identity, escalation);
+                return frozen === undefined ? report("not_recorded", "the candidate identity was not frozen; the escalation was not recorded") : await recordAndReport(frozen.commonDir, frozen.identity, escalation);
         }
+    };
+    const settle = async (outcome, restart) => {
+        const report = await classify(outcome);
+        if (outcome.status === "consent_required" && report.escalation === "not_recorded") {
+            const plain = await restart();
+            return { outcome: plain, report: { ...report, escalation_detail: `${report.escalation_detail ?? ""} The START was redone at the base tier.`.trim().slice(0, 300) } };
+        }
+        return { outcome, report };
     };
     return { assessor, settle };
 }

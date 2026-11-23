@@ -128,6 +128,16 @@ function escalationOf(a) {
     return a.escalate === undefined ? undefined : decodeEscalation(a.escalate);
 }
 const notRecorded = (detail) => ({ escalation: "not_recorded", escalation_detail: detail });
+/** A fresh review_run that never reached its START: a lineage really exists only when the outcome names one and the run was not blocked. */
+function noStartReport(out) {
+    if (out.outcome === "not-due")
+        return notRecorded("there is no candidate to bind the escalation to (no changes)");
+    if (out.outcome === "blocked")
+        return notRecorded(`the run was blocked before a START (${out.code}); the escalation was not recorded`);
+    if (out.lineage_id !== undefined)
+        return { escalation: "ignored_existing_lineage", escalation_detail: NO_FRESH_START_DETAIL };
+    return notRecorded("no START happened in this run; the escalation was not recorded");
+}
 /**
  * START behind the pending-correction guard. A candidate that is the correction of a lineage still in
  * correction_required/validating must not open a second lineage: the pending lineage is returned instead.
@@ -156,7 +166,7 @@ async function guardedStart(a, ctx, consent, expectedTargetIdentity) {
         });
     }
     const esc = escalationForStart(ctx.deps.riskAssessor ?? defaultAssessor, escalation);
-    const outcome = await startReview({
+    const startWith = (riskAssessor) => startReview({
         cwd,
         target: t.target,
         ...(t.projection !== undefined ? { projection: t.projection } : {}),
@@ -164,9 +174,11 @@ async function guardedStart(a, ctx, consent, expectedTargetIdentity) {
         consent,
         ...(str(a, "locale") !== undefined ? { locale: str(a, "locale") } : {}),
         ...(expectedTargetIdentity !== undefined ? { expectedTargetIdentity } : {}),
-        riskAssessor: esc.assessor,
+        riskAssessor,
     });
-    const report = esc.settle(outcome) ?? {};
+    const settled = await esc.settle(await startWith(esc.assessor), () => startWith(escalationForStart(ctx.deps.riskAssessor ?? defaultAssessor, undefined).assessor));
+    const outcome = settled.outcome;
+    const report = settled.report ?? {};
     const envelope = encodeStartEnvelope(outcome);
     return outcome.status === "refused" ? fail(outcome.code, outcome.message, { ...(outcome.lineage_id !== undefined ? { lineage_id: outcome.lineage_id } : {}), ...report }) : ok({ ...envelope, ...report });
 }
@@ -278,7 +290,7 @@ export const TOOLS = [
                 return invalid(escalation);
             const cwd = cwdOf(a, ctx);
             const r = assessCandidate(cwd, snapshotTargetFor({ target: t.target, projection: t.projection }), { escalate: escalation !== undefined });
-            const report = escalation === undefined ? {} : r.status === "assessed" ? { ...recordAndReport(resolveRepository(cwd).commonDir, r.targetIdentity, escalation) } : { ...notRecorded("there is no candidate to bind the escalation to (no changes)") };
+            const report = escalation === undefined ? {} : r.status === "assessed" ? { ...(await recordAndReport(resolveRepository(cwd).commonDir, r.targetIdentity, escalation)) } : { ...notRecorded("there is no candidate to bind the escalation to (no changes)") };
             if (r.status === "not_due")
                 return ok({ outcome: "not_due", reason: r.reason, review_due: false, kind: r.kind, projection: r.projection, ...report });
             return ok({
@@ -432,7 +444,7 @@ export const TOOLS = [
             }
             let report;
             const out = await runReview(input, runDeps(ctx, { escalation, onEscalation: (r) => { report = r; } }));
-            return runResult(out, { ...(report ?? (out.outcome === "not-due" ? notRecorded("there is no candidate to bind the escalation to (no changes)") : { escalation: "ignored_existing_lineage", escalation_detail: NO_FRESH_START_DETAIL })) });
+            return runResult(out, { ...(report ?? noStartReport(out)) });
         },
     },
 ];
