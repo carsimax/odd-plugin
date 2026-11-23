@@ -12,10 +12,12 @@ import { revokeAll } from "../lib/peer-grants.js";
 import { isValidSessionId } from "../lib/peers.js";
 import { recordCurrentSession } from "../lib/peers-session.js";
 import { recordTranscriptPath } from "../lib/stats.js";
+import { activeFeatureDocSummary } from "../lib/feature-doc.js";
 /**
  * Records the session start in state (when a session id and data dir exist) and injects the
  * odd-claude context (persona, delegation mode, cards dir, reply-language rule) as additionalContext.
- * Runs for every source (startup, resume, clear, compact).
+ * Runs for every source (startup, resume, clear, compact). On compact and resume it also appends a compact summary of the active
+ * feature document (the odd/tasks file naming the current branch), so the work state survives the compaction; fail-soft.
  */
 export function sessionStart(input, opts = {}) {
     if (typeof input.session_id === "string" && input.session_id !== "") {
@@ -67,12 +69,14 @@ export function sessionStart(input, opts = {}) {
     const extraLines = typeof input.cwd === "string" && input.cwd !== ""
         ? runSessionIntegrations(input.cwd, realIntegrationDeps(env.HOME || homedir(), env, (m) => logError(m, opts), opts)).extraLines
         : [];
-    const additionalContext = buildSessionContext({
+    const baseContext = buildSessionContext({
         persona: readPersona(opts),
         delegationMode: readDelegationMode(opts),
         cardsDir: resolveCardsDir(env),
         backgroundSubagents: readBackgroundSubagents(opts),
         extraLines: [...scratchLines, ...extraLines, ...[profileContextLine(opts)].filter((l) => l !== undefined)],
     });
+    const reinject = (input.source === "compact" || input.source === "resume") && typeof input.cwd === "string" && input.cwd !== "" ? activeFeatureDocSummary(input.cwd) : undefined;
+    const additionalContext = reinject ? `${baseContext}\n\n${reinject}` : baseContext;
     return { hookSpecificOutput: { hookEventName: "SessionStart", additionalContext }, terminalSequence: titleSequence(typeof input.cwd === "string" ? input.cwd : undefined) };
 }
