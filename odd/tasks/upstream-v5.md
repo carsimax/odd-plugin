@@ -9,6 +9,8 @@ Objective: port the v5.0.0 upstream changes chosen by the user (base: gentle-she
 - **S4** Port item chosen verbatim: "Verificador omite sensibles (#3)" — "odd-verify excluye .env/claves/auth.json del scratch y los reporta." Upstream: gentle-shell a92ff44bb "fix(verifier): skip and report tracked sensitive files instead of refusing", b02abaf25, 0cbbdd448 (`assets/agents/gentle-ai-verify.md`). Target: `plugins/odd-claude/agents/odd-verify.md:52` scratch-copy rule.
 - **S5** Port item chosen verbatim: "JD: IDs y preimagen del hash (#4)" — "Texto en odd-jd-fix y skill judgment-day." Upstream: gentle-shell 8364ff723 "docs(jd-fix-agent): state the dispatch hash preimage and ID grammar", 8d74168e7 (`assets/agents/jd-fix-agent.md`, `skills/judgment-day/SKILL.md`, `skills/judgment-day/references/prompts-and-formats.md`).
 - **S6** Port item chosen verbatim: "Wording de tracking (#5) + verificar #6" — "Ajuste de cards/tracking.md y comprobar la resolución de referencias de skills." Upstream: gentle-shell 5a7fb0e20, e3b72d623 (`assets/orchestrator-tracking.md`); #6 = 2307c5cd8 "fix(skills): resolve skill references relative to the skill directory".
+- **S7** User request (verbatim): "TRYabajemos en los pendeites y si, subamos a 4.0". Pending items (from L6, native review advisory findings of fdf9079): (a) R1-002/R3-005 an escalation is recorded before a START that is then refused; (b) R4-silent-drop-not-assessed review_start/review_run may drop a valid escalation silently when the base assessment is not "assessed"; (c) R3-003 a valid escalation ignored because a lineage exists gives no signal in the response; (d) R4-store-failure-coupling an unusable escalation store discards the assessment / aborts START instead of degrading; (e) R3-004/R4-lost-update-race unlocked read-modify-write of the escalation store, and a corrupt store is silently overwritten.
+- **S8** Release version 4.0.0 (user: "si, subamos a 4.0"), following the files touched by release commit ee23887 "chore(release): 3.0.0".
 
 ## Tasks
 
@@ -19,6 +21,8 @@ Objective: port the v5.0.0 upstream changes chosen by the user (base: gentle-she
 - T5 | S6 | writer | done 3c0b66d — tracking card wording; check skill reference resolution (#6), fix only if affected.
 
 Risk: item 2 (T3 verifier secret handling), item 3 (T1 removes a blocking behaviour users may rely on; requested).
+- T6 | S7 | writer | pending — harden the escalation store and tool paths (a-e).
+- T7 | S8 | writer (after T6) | pending — release 4.0.0.
 
 ## Log
 
@@ -28,3 +32,4 @@ Risk: item 2 (T3 verifier secret handling), item 3 (T1 removes a blocking behavi
 - L4 Native review (RDD on): assess over ee23887..HEAD -> risk high, reviewDue true. Review of 8506f62 (base 3c0b66d) stopped with lens_context_budget_exceeded (no authority created). Pending human decision: split 8506f62 into smaller reviewable commits, or deliver without native review. Version bump (breaking -> 4.0.0) not done: release is a separate decision.
 - L5 User decision on the review blocker (verbatim): "Dividir y revisar". 8506f62 was split on branch feat/upstream-v5-split (identical final tree): fdf9079 escalation core (native review APPROVED, lineage review-5e9d0d10406fdd8c, receipt burned, 12 non-blocking advisory findings), 95b7d46 warn-only gate + due.ts + bench (native review stopped again with lens_context_budget_exceeded: the coherent deletion of gate.ts/gate.js/gate.spec.ts is ~3.2k lines and cannot be split meaningfully; left without native review, covered by suite, bench and independent verifier), 3fbc792 deadlineAt cleanup (assess: medium, not due). Each commit: npm test 0 fail; bench 171/171 from 95b7d46. Pre-split state kept at tag backup/upstream-v5-pre-split.
 - L6 Follow-up candidates from the advisory findings: escalation recorded before a START that is then refused (R1-002/R3-005); review_start/review_run may drop an escalation silently when the base assessment is not "assessed" (R4-silent-drop-not-assessed); store failure aborts the assessment instead of degrading (R4-store-failure-coupling); unlocked read-modify-write of the escalation store (R3-004/R4-lost-update-race).
+- L7 User request (verbatim): "TRYabajemos en los pendeites y si, subamos a 4.0"

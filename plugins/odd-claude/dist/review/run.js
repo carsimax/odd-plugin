@@ -48,7 +48,7 @@ import { acknowledgeApproved, AckRefusedError } from "./ack.js";
 import { manifestFor, refuterRequestHash, targetedValidationRequestHash, treeDiffPaths } from "./artifact.js";
 import { captureCorrectionResult, captureLensResult, captureRefuterResult, captureValidatorResult, completeReview, planCorrection, previewCorrectionValidation, } from "./capture.js";
 import { encodeAckEnvelope, encodeBinding, encodeCaptureEnvelope, forecastFor, isTerminalStop, REASON_DESCRIPTIONS, verifyBinding } from "./contract.js";
-import { escalatingAssessor } from "./escalation.js";
+import { escalationForStart } from "./escalation.js";
 import { StoreLockContended, StoreLockError } from "./lock.js";
 import { assessRisk } from "./risk.js";
 import { buildReviewerPrompt, parseReviewerOutput, runReviewer } from "./runner.js";
@@ -551,6 +551,7 @@ export async function runReview(input, deps = {}) {
                         return blocked("correction_lineage_pending", `lineage ${pending.rec.lineage_id} is waiting for its correction (${pending.rec.state}); resume it with lineageId instead of opening a new review`);
                     }
                     started = true;
+                    const esc = escalationForStart(deps.riskAssessor ?? ((snapshot, repository) => assessRisk(snapshot, repository)), deps.escalation);
                     const outcome = await startReview({
                         cwd: input.cwd,
                         target: startTarget,
@@ -560,8 +561,11 @@ export async function runReview(input, deps = {}) {
                         consent: "relay",
                         ...(input.locale !== undefined ? { locale: input.locale } : {}),
                         ...(input.requestContextPath !== undefined ? { requestContext: input.requestContextPath } : {}),
-                        riskAssessor: escalatingAssessor(deps.riskAssessor ?? ((snapshot, repository) => assessRisk(snapshot, repository))),
+                        riskAssessor: esc.assessor,
                     });
+                    const escalationReport = esc.settle(outcome);
+                    if (escalationReport !== undefined)
+                        deps.onEscalation?.(escalationReport);
                     switch (outcome.status) {
                         case "consent_required":
                             return finish({ outcome: "consent-required", envelope: outcome.envelope });

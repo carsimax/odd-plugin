@@ -18,8 +18,7 @@ import { completeReview } from "../review/capture.js";
 import { decodeBinding, encodeAckEnvelope, encodeCaptureEnvelope, encodeStartEnvelope } from "../review/contract.js";
 import { consentBinding, REVIEW_CONTRACT, REVIEW_TOOL_NAMES, type ReviewToolName } from "../review/consent.js";
 import { readReviewMode, ReviewModeError, type ModeOptions } from "../review/mode.js";
-import { decodeEscalation, EscalationStoreError, escalatingAssessor, ESCALATE_SCHEMA_DESCRIPTION, recordEscalation, type AgentEscalation } from "../review/escalation.js";
-import { findLineage } from "../review/lineage.js";
+import { decodeEscalation, EscalationStoreError, escalationForStart, ESCALATE_SCHEMA_DESCRIPTION, NO_FRESH_START_DETAIL, recordAndReport, type AgentEscalation, type EscalationReport } from "../review/escalation.js";
 import { assessCandidate } from "../review/risk.js";
 import {
   pendingCorrectionLineage, runReview, snapshotTargetFor, validateReviewerOptions, type ReviewRunInput, type ReviewRunOutcome, type RunDeps,
@@ -172,18 +171,7 @@ function escalationOf(a: Args): AgentEscalation | undefined | string {
   return a.escalate === undefined ? undefined : decodeEscalation(a.escalate);
 }
 
-/**
- * Records an escalation for the candidate this call is about to START, only when that START is fresh (no live or acknowledged
- * lineage for the candidate): an existing lineage keeps its frozen tier. Writes nothing for an empty candidate.
- */
-function recordFreshEscalation(cwd: string, t: { target: StartTarget; projection?: Projection }, escalation: AgentEscalation): void {
-  const assessed = assessCandidate(cwd, snapshotTargetFor({ target: t.target, projection: t.projection }));
-  if (assessed.status !== "assessed") return;
-  const commonDir = resolveRepository(cwd).commonDir;
-  const existing = findLineage(commonDir, assessed.targetIdentity, assessed.projection);
-  if (existing.live !== undefined || existing.burned !== undefined) return;
-  recordEscalation(commonDir, assessed.targetIdentity, escalation);
-}
+const notRecorded = (detail: string): EscalationReport => ({ escalation: "not_recorded", escalation_detail: detail });
 
 /**
  * START behind the pending-correction guard. A candidate that is the correction of a lineage still in
@@ -198,16 +186,18 @@ async function guardedStart(a: Args, ctx: ToolContext, consent: StartInput["cons
   if (typeof escalation === "string") return invalid(escalation);
   const cwd = cwdOf(a, ctx);
   const pending = pendingCorrectionLineage(cwd, snapshotTargetFor({ target: t.target, projection: t.projection }));
+  const noStart = escalation !== undefined ? notRecorded("no review was started; the escalation was not recorded") : {};
   if (pending !== undefined) {
     if ("unreadable" in pending) {
-      return fail("authority_error", `lineage ${pending.unreadable} cannot be read safely; no new review is opened until it is repaired`, { lineage_id: pending.unreadable });
+      return fail("authority_error", `lineage ${pending.unreadable} cannot be read safely; no new review is opened until it is repaired`, { lineage_id: pending.unreadable, ...noStart });
     }
     const r = pending.rec;
     return fail("correction_lineage_pending", `lineage ${r.lineage_id} is waiting for its correction (${r.state}); resume it with review_run and lineage_id instead of opening a new review`, {
       lineage: { lineage_id: r.lineage_id, state: r.state, revision: r.revision, target_identity: r.target_identity, projection: r.projection, risk_level: r.risk_level },
+      ...noStart,
     });
   }
-  if (escalation !== undefined) recordFreshEscalation(cwd, t, escalation);
+  const esc = escalationForStart(ctx.deps.riskAssessor ?? defaultAssessor, escalation);
   const outcome = await startReview({
     cwd,
     target: t.target,
@@ -216,14 +206,15 @@ async function guardedStart(a: Args, ctx: ToolContext, consent: StartInput["cons
     consent,
     ...(str(a, "locale") !== undefined ? { locale: str(a, "locale")! } : {}),
     ...(expectedTargetIdentity !== undefined ? { expectedTargetIdentity } : {}),
-    riskAssessor: escalatingAssessor(ctx.deps.riskAssessor ?? defaultAssessor),
+    riskAssessor: esc.assessor,
   });
+  const report = esc.settle(outcome) ?? {};
   const envelope = encodeStartEnvelope(outcome);
-  return outcome.status === "refused" ? fail(outcome.code, outcome.message, { ...(outcome.lineage_id !== undefined ? { lineage_id: outcome.lineage_id } : {}) }) : ok(envelope);
+  return outcome.status === "refused" ? fail(outcome.code, outcome.message, { ...(outcome.lineage_id !== undefined ? { lineage_id: outcome.lineage_id } : {}), ...report }) : ok({ ...envelope, ...report });
 }
 
 /** A run outcome as a tool result: blocked / binding-drift are typed errors, every other outcome is a normal result. */
-function runResult(out: ReviewRunOutcome): ToolResult {
+function runResult(out: ReviewRunOutcome, report: Record<string, unknown> = {}): ToolResult {
   if (out.outcome === "blocked") {
     return fail(out.code, out.message, {
       ...(out.detail !== undefined ? { detail: out.detail } : {}),
@@ -231,10 +222,11 @@ function runResult(out: ReviewRunOutcome): ToolResult {
       ...(out.slot !== undefined ? { slot: out.slot } : {}),
       ...(out.status_after !== undefined ? { status_after: out.status_after } : {}),
       ...(out.lineage_id !== undefined ? { lineage_id: out.lineage_id } : {}),
+      ...report,
     });
   }
-  if (out.outcome === "binding-drift") return fail("binding_drift", out.message, { ...(out.field !== undefined ? { field: out.field } : {}), ...(out.lineage_id !== undefined ? { lineage_id: out.lineage_id } : {}) });
-  return ok(out);
+  if (out.outcome === "binding-drift") return fail("binding_drift", out.message, { ...(out.field !== undefined ? { field: out.field } : {}), ...(out.lineage_id !== undefined ? { lineage_id: out.lineage_id } : {}), ...report });
+  return ok({ ...out, ...report });
 }
 
 function runInput(a: Args, ctx: ToolContext, extra: Partial<ReviewRunInput> = {}): ReviewRunInput | ToolResult {
@@ -315,7 +307,7 @@ const writes = { readOnlyHint: false, destructiveHint: false, idempotentHint: fa
 export const TOOLS: readonly ToolDefinition[] = [
   {
     name: "review_assess",
-    description: "Freeze the candidate in a private index and classify its risk (low/medium/high), with the reasons and changed paths. Starts nothing and creates no review lineage; it never touches the worktree. It writes only when `escalate` is given: it then records the escalation bound to this exact candidate (odd-plugin/review-escalations.json), so the Stop reminder and the delivery notice see the review as due. Without `escalate` it writes nothing." + NOTE,
+    description: "Freeze the candidate in a private index and classify its risk (low/medium/high), with the reasons and changed paths. Starts nothing and creates no review lineage; it never touches the worktree. It writes only when `escalate` is given: it then records the escalation bound to this exact candidate (odd-plugin/review-escalations.json), so the Stop reminder and the delivery notice see the review as due; the response carries `escalation` (recorded | not_recorded) and `escalation_detail`, and an unusable store never discards the assessment. Without `escalate` it writes nothing." + NOTE,
     inputSchema: object({ ...TARGET_PROPS, escalate: ESCALATE_PROP }),
     annotations: writes,
     async run(a, ctx) {
@@ -325,9 +317,11 @@ export const TOOLS: readonly ToolDefinition[] = [
       if (typeof escalation === "string") return invalid(escalation);
       const cwd = cwdOf(a, ctx);
       const r = assessCandidate(cwd, snapshotTargetFor({ target: t.target, projection: t.projection }), { escalate: escalation !== undefined });
-      if (escalation !== undefined && r.status === "assessed") recordEscalation(resolveRepository(cwd).commonDir, r.targetIdentity, escalation);
-      if (r.status === "not_due") return ok({ outcome: "not_due", reason: r.reason, review_due: false, kind: r.kind, projection: r.projection });
+      const report: Record<string, unknown> =
+        escalation === undefined ? {} : r.status === "assessed" ? { ...recordAndReport(resolveRepository(cwd).commonDir, r.targetIdentity, escalation) } : { ...notRecorded("there is no candidate to bind the escalation to (no changes)") };
+      if (r.status === "not_due") return ok({ outcome: "not_due", reason: r.reason, review_due: false, kind: r.kind, projection: r.projection, ...report });
       return ok({
+        ...report,
         outcome: "assessed", risk_level: r.risk, review_due: r.reviewDue, reasons: r.reasons, evidence: r.evidence.slice(0, 50), ...(r.focusLens !== undefined ? { focus_lens: r.focusLens } : {}),
         kind: r.kind, projection: r.projection, target_identity: r.targetIdentity, base_tree: r.baseTree, candidate_tree: r.candidateTree,
         changed_lines: r.changedLines, changed_paths: r.changedPaths.slice(0, MAX_PATHS), changed_paths_total: r.changedPaths.length, changed_paths_truncated: r.changedPaths.length > MAX_PATHS,
@@ -360,7 +354,7 @@ export const TOOLS: readonly ToolDefinition[] = [
   {
     name: "review_start",
     description:
-      "Start a review of the candidate. It ALWAYS relays consent: a medium/high-risk candidate returns the consent envelope untouched (show it to the human losslessly) and creates nothing; only review_answer_consent, with the human's explicit answer, can grant or decline. A low-risk candidate is approved at once and returns its one-shot acknowledgement. An `escalate` on a fresh START freezes the tier as high (it is ignored when the candidate already has a lineage). Refuses to open a second lineage while one waits for its correction." + NOTE,
+      "Start a review of the candidate. It ALWAYS relays consent: a medium/high-risk candidate returns the consent envelope untouched (show it to the human losslessly) and creates nothing; only review_answer_consent, with the human's explicit answer, can grant or decline. A low-risk candidate is approved at once and returns its one-shot acknowledgement. An `escalate` on a fresh START freezes the tier as high (it is recorded only after the START succeeded; it is ignored when the candidate already has a lineage). The response reports it as `escalation`: recorded | ignored_existing_lineage | not_recorded, plus `escalation_detail`; an unusable store never aborts the START. Refuses to open a second lineage while one waits for its correction." + NOTE,
     inputSchema: object({
       ...TARGET_PROPS, ...LENS_PROPS,
       contract: { type: "string", const: REVIEW_CONTRACT },
@@ -471,7 +465,7 @@ export const TOOLS: readonly ToolDefinition[] = [
   {
     name: "review_run",
     description:
-      "Drive one review end to end by following status transitions: start, reviewers, capture, acknowledge. It returns a typed outcome: closed, not-due, consent-required (relay the envelope to the human; consent is never answered here), input-required (a correction is needed), forecast (reviewers cost money: call again with reviewer_run_acknowledged and the forecast's reviewer_run_binding), stopped, binding-drift, transition-limit or cancelled. Resume a consented or corrected review with lineage_id (an `escalate` is ignored then; on a fresh run it freezes the START tier as high)." + NOTE,
+      "Drive one review end to end by following status transitions: start, reviewers, capture, acknowledge. It returns a typed outcome: closed, not-due, consent-required (relay the envelope to the human; consent is never answered here), input-required (a correction is needed), forecast (reviewers cost money: call again with reviewer_run_acknowledged and the forecast's reviewer_run_binding), stopped, binding-drift, transition-limit or cancelled. Resume a consented or corrected review with lineage_id (an `escalate` is ignored then and the response says `escalation: ignored_existing_lineage`; on a fresh run it freezes the START tier as high and is recorded only after the START succeeded: `escalation` recorded | ignored_existing_lineage | not_recorded, plus `escalation_detail`)." + NOTE,
     inputSchema: object({ ...TARGET_PROPS, ...LENS_PROPS, lineage_id: { type: "string", pattern: LINEAGE_PATTERN }, escalate: ESCALATE_PROP, ...RUN_PROPS }),
     annotations: writes,
     async run(a, ctx) {
@@ -479,9 +473,14 @@ export const TOOLS: readonly ToolDefinition[] = [
       if (isResult(input)) return input;
       const escalation = escalationOf(a);
       if (typeof escalation === "string") return invalid(escalation);
-      // Only a fresh run can START: resuming a lineage ignores the escalation.
-      if (escalation !== undefined && input.lineageId === undefined) recordFreshEscalation(input.cwd, { target: input.target ?? { kind: "current-changes" }, ...(input.projection !== undefined ? { projection: input.projection } : {}) }, escalation);
-      return runResult(await runReview(input, runDeps(ctx)));
+      // Only a fresh run can START: resuming a lineage ignores the escalation. The escalation is recorded only after the START succeeded.
+      if (escalation === undefined) return runResult(await runReview(input, runDeps(ctx)));
+      if (input.lineageId !== undefined) {
+        return runResult(await runReview(input, runDeps(ctx)), { ...({ escalation: "ignored_existing_lineage", escalation_detail: `the run resumes lineage ${input.lineageId}: the escalation applies to a fresh START only and was ignored` } satisfies EscalationReport) });
+      }
+      let report: EscalationReport | undefined;
+      const out = await runReview(input, runDeps(ctx, { escalation, onEscalation: (r) => { report = r; } }));
+      return runResult(out, { ...(report ?? (out.outcome === "not-due" ? notRecorded("there is no candidate to bind the escalation to (no changes)") : { escalation: "ignored_existing_lineage", escalation_detail: NO_FRESH_START_DETAIL })) });
     },
   },
 ];

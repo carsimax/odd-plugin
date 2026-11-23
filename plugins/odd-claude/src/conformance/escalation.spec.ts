@@ -2,8 +2,8 @@
 // the public interface: the review MCP tools (ReviewServer) and the hooks (runHook), over a real temp repository.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { spawnSync } from "node:child_process";
-import { existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { spawn, spawnSync } from "node:child_process";
+import { existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { runHook } from "../hooks/run.js";
@@ -300,25 +300,183 @@ test("garbage in the escalation store is ignored: the delivery notice and the St
   }
 });
 
-test("an unusable escalation store (a directory) fails review_assess cleanly, writes nothing and leaves the hooks silent", async () => {
+test("an unusable escalation store (a directory) degrades: review_assess keeps its assessment, review_start and review_run still start, all report not_recorded, nothing is written", async () => {
   const f = fx();
   try {
     on(f);
     mkdirSync(STORE(f), { recursive: true });
     const call = server(f);
-    for (const tool of ["review_assess", "review_start", "review_run"]) {
-      const e = errorOf(await call(tool, { escalate: ESC }));
-      assert.equal(e.code, "authority_error", tool);
-      assert.match(e.message, /escalation/i);
-      assert.ok(e.message.length < 500);
-    }
+    const a = await call("review_assess", { escalate: ESC });
+    assert.equal(a.isError, false);
+    assert.equal(a.body.outcome, "assessed");
+    assert.equal(a.body.risk_level, "low");
+    assert.equal(a.body.escalation, "not_recorded");
+    assert.match(a.body.escalation_detail, /escalation/i);
+    assert.ok(a.body.escalation_detail.length <= 300);
+    const s = await call("review_start", { escalate: ESC });
+    assert.equal(s.isError, false, "START is not aborted");
+    assert.equal(s.body.action, "consent_required");
+    assert.equal(s.body.risk_level, "high", "the START still freezes the escalated tier");
+    assert.equal(s.body.escalation, "not_recorded");
+    assert.match(s.body.escalation_detail, /escalation/i);
+    const r = await call("review_run", { escalate: ESC });
+    assert.equal(r.isError, false);
+    assert.equal(r.body.escalation, "not_recorded");
     assert.equal(lstatSync(STORE(f)).isDirectory(), true, "the directory is untouched");
     assert.deepEqual(readdirSync(STORE(f)), []);
-    assert.deepEqual(readdirSync(join(f.commonDir, "odd-plugin")), ["review-escalations.json"], "no temp or other state");
+    assert.deepEqual(readdirSync(join(f.commonDir, "odd-plugin")).filter((n) => n.startsWith("review-escalations")), ["review-escalations.json"], "no temp, lock or corrupt files");
     assert.deepEqual(push(f), SILENT);
+    // without escalate the tools still work and carry no escalation field
+    const plain = await call("review_assess", {});
+    assert.equal(plain.isError, false);
+    assert.equal("escalation" in plain.body, false);
+  } finally {
+    f.cleanup();
+  }
+});
+
+test("a refused START leaves no escalation: binding_drift reports not_recorded, the store is absent and the hooks stay silent", async () => {
+  const f = fx();
+  try {
+    on(f);
+    const call = server(f);
+    const wrong = `sha256:${"0".repeat(64)}`;
+    const e = errorOf(await call("review_start", { escalate: ESC, target_identity: wrong }));
+    assert.equal(e.code, "binding_drift");
+    assert.equal((e as any).escalation, "not_recorded");
+    assert.match((e as any).escalation_detail, /refused|not started/i);
+    assert.equal(existsSync(STORE(f)), false, "nothing recorded");
     assert.deepEqual(stop(f), SILENT);
-    // without escalate the tools still work
-    assert.equal((await call("review_assess", {})).isError, false);
+    assert.deepEqual(push(f), SILENT);
+  } finally {
+    f.cleanup();
+  }
+});
+
+test("an escalation that cannot be bound to a candidate says so: an empty candidate is not_recorded on every tool", async () => {
+  const f = fx();
+  try {
+    on(f);
+    git(f.repo, "checkout", "-q", "--", ".");
+    const call = server(f);
+    const a = await call("review_assess", { escalate: ESC });
+    assert.equal(a.body.outcome, "not_due");
+    assert.equal(a.body.escalation, "not_recorded");
+    assert.match(a.body.escalation_detail, /no changes|candidate/i);
+    const s = await call("review_start", { escalate: ESC });
+    assert.equal(s.isError, false);
+    assert.equal(s.body.outcome, "not_due");
+    assert.equal(s.body.escalation, "not_recorded");
+    const r = await call("review_run", { escalate: ESC });
+    assert.equal(r.body.outcome, "not-due");
+    assert.equal(r.body.escalation, "not_recorded");
+    assert.equal(existsSync(STORE(f)), false);
+  } finally {
+    f.cleanup();
+  }
+});
+
+test("the escalation field: recorded on success; ignored_existing_lineage when a lineage exists or review_run resumes one", async () => {
+  const f = fx();
+  const g = fx();
+  try {
+    on(f);
+    const call = server(f);
+    const a = await call("review_assess", { escalate: ESC });
+    assert.equal(a.body.escalation, "recorded");
+    assert.equal(a.body.escalation_detail, undefined);
+    const s = await call("review_start", { escalate: ESC });
+    assert.equal(s.body.action, "consent_required");
+    assert.equal(s.body.escalation, "recorded");
+    // a candidate with a live lineage: the escalation is ignored and says so
+    const first = await server(g)("review_start", {});
+    assert.equal(first.body.risk_level, "low");
+    const again = await server(g)("review_start", { escalate: ESC });
+    assert.equal(again.body.action, "replayed");
+    assert.equal(again.body.risk_level, "low");
+    assert.equal(again.body.escalation, "ignored_existing_lineage");
+    assert.match(again.body.escalation_detail, /lineage/i);
+    assert.deepEqual(again.body.risk_reasons.filter((x: any) => x.code === "agent_escalation"), [], "the frozen lineage reasons are not rewritten");
+    assert.equal(existsSync(STORE(g)), false, "an ignored escalation is not stored");
+    const resumed = await server(g)("review_run", { lineage_id: first.body.lineage_id, escalate: ESC });
+    assert.equal(resumed.body.escalation, "ignored_existing_lineage");
+    assert.equal(existsSync(STORE(g)), false);
+    const noEscalate = await server(g)("review_start", {});
+    assert.equal("escalation" in noEscalate.body, false);
+  } finally {
+    f.cleanup();
+    g.cleanup();
+  }
+});
+
+test("two processes recording different candidates at once keep both entries (the store is serialized by a lock)", async () => {
+  const f = fx();
+  try {
+    mkdirSync(join(f.commonDir, "odd-plugin"), { recursive: true });
+    const mod = new URL("../review/escalation.js", import.meta.url).href;
+    const startAt = Date.now() + 1500;
+    const N = 8;
+    const code = `
+      import { recordEscalation } from ${JSON.stringify(mod)};
+      const i = Number(process.argv[1]);
+      while (Date.now() < ${startAt}) { /* spin to start together */ }
+      try {
+        recordEscalation(${JSON.stringify(f.commonDir)}, "sha256:" + String(i).padStart(64, "0"), { item: 1, reason: "r" + i });
+      } catch (e) { process.stderr.write(String(e)); process.exit(3); }
+    `;
+    const codes = await Promise.all(
+      Array.from({ length: N }, (_, i) => new Promise<number | null>((resolve) => {
+        const c = spawn(process.execPath, ["--input-type=module", "-e", code, String(i)], { stdio: "ignore" });
+        c.on("close", resolve);
+      })),
+    );
+    assert.deepEqual(codes, Array(N).fill(0));
+    const { readEscalation } = await import("../review/escalation.js");
+    for (let i = 0; i < N; i++) assert.deepEqual(readEscalation(f.commonDir, `sha256:${String(i).padStart(64, "0")}`), { item: 1, reason: `r${i}` }, `entry ${i}`);
+    assert.deepEqual(readdirSync(join(f.commonDir, "odd-plugin")), ["review-escalations.json"], "the lock and temp files are gone");
+  } finally {
+    f.cleanup();
+  }
+});
+
+test("a lock that cannot be taken reports not_recorded instead of blocking", async () => {
+  const f = fx();
+  try {
+    on(f);
+    mkdirSync(join(f.commonDir, "odd-plugin"), { recursive: true });
+    // held by a live process (this one): never stale by age
+    writeFileSync(`${STORE(f)}.lock`, JSON.stringify({ pid: process.pid, startedAt: Date.now() }));
+    const a = await server(f)("review_assess", { escalate: ESC });
+    assert.equal(a.isError, false);
+    assert.equal(a.body.risk_level, "low");
+    assert.equal(a.body.escalation, "not_recorded");
+    assert.match(a.body.escalation_detail, /lock|busy/i);
+    assert.equal(existsSync(STORE(f)), false);
+  } finally {
+    f.cleanup();
+  }
+});
+
+test("a corrupt store is preserved, never silently overwritten: it is renamed once to review-escalations.json.corrupt-<timestamp> and a fresh store is written", async () => {
+  const f = fx();
+  try {
+    on(f);
+    mkdirSync(join(f.commonDir, "odd-plugin"), { recursive: true });
+    writeFileSync(STORE(f), "{garbage");
+    // reads stay silent
+    assert.deepEqual(push(f), SILENT);
+    const a = await server(f)("review_assess", { escalate: ESC });
+    assert.equal(a.body.escalation, "recorded");
+    assert.match(a.body.escalation_detail, /corrupt/i);
+    const names = readdirSync(join(f.commonDir, "odd-plugin")).sort();
+    const kept = names.filter((n) => /^review-escalations\.json\.corrupt-\d+/.test(n));
+    assert.equal(kept.length, 1, names.join());
+    assert.equal(readFileSync(join(f.commonDir, "odd-plugin", kept[0]!), "utf8"), "{garbage");
+    assert.deepEqual(names.filter((n) => !kept.includes(n)), ["review-escalations.json"]);
+    assert.equal(JSON.parse(stop(f).stdout).decision, "block");
+    // a second write finds a valid store: nothing more is preserved
+    await server(f)("review_assess", { escalate: { item: 2, reason: "again" } });
+    assert.equal(readdirSync(join(f.commonDir, "odd-plugin")).filter((n) => n.includes(".corrupt-")).length, 1);
   } finally {
     f.cleanup();
   }
