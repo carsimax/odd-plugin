@@ -40,11 +40,13 @@ Discovery order:
 
 Common intent hints, not hard routing:
 
-| User intent                | Skill to check                              |
-| -------------------------- | ------------------------------------------- |
-| PR review / GitHub PR URL  | a matching project review skill, if any     |
-| Post-ready review comments | `/odd-claude:comment-writer`                |
-| Create/open/prepare PR     | `/odd-claude:branch-pr`                     |
-| Split/stack/large PR       | `/odd-claude:chained-pr`                    |
+| User intent                                                | Skill to check                          |
+| ---------------------------------------------------------- | --------------------------------------- |
+| PR review / GitHub PR URL                                  | a matching project review skill, if any |
+| Post-ready review comments                                 | `/odd-claude:comment-writer`            |
+| Create/open/prepare PR                                     | `/odd-claude:branch-pr`                 |
+| Bug / failing test / unexpected behavior                   | `/odd-claude:systematic-debugging`      |
+| Review feedback to act on (PR comments, reviewer findings) | `/odd-claude:receiving-review`          |
+| Split/stack/large PR                                       | `/odd-claude:chained-pr`                |
 
 Keep this lightweight: loading a skill should improve the immediate task, not force extra ceremony.

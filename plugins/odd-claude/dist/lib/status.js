@@ -1,6 +1,6 @@
 // Read-only status (R38 status semantics): plugin, data dir, session state, hooks, roadmap.
 import { listSessionIds, readSessionState } from "./state.js";
-export const ROADMAP_PHASE = "v5.0: refinement round shipped";
+export const ROADMAP_PHASE = "v5.1: rule hardening and debugging skills shipped";
 export function collectStatus(deps) {
     const dataDir = deps.env.CLAUDE_PLUGIN_DATA || null;
     let id = null;

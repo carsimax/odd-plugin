@@ -23,3 +23,6 @@ Ideas adapted in our own words (MIT); short phrases may echo the originals.
 |---|---|---|
 | obra/superpowers | MIT, Copyright (c) 2025 Jesse Vincent | skills/odd Completion gate; agents/odd-worker test-first excuse table | <!-- odd-check: allow -->
 | addyosmani/agent-skills | MIT, Copyright (c) 2025 Addy Osmani | verification handoff without the writer's claim; never-weaken rule | <!-- odd-check: allow -->
+| obra/superpowers | MIT, Copyright (c) 2025 Jesse Vincent | skills/systematic-debugging/ (from systematic-debugging with root-cause-tracing, defense-in-depth, condition-based-waiting) | <!-- odd-check: allow -->
+| obra/superpowers | MIT, Copyright (c) 2025 Jesse Vincent | skills/receiving-review/ (from receiving-code-review) | <!-- odd-check: allow -->
+| addyosmani/agent-skills | MIT, Copyright (c) 2025 Addy Osmani | skills/systematic-debugging/ (from debugging-and-error-recovery) | <!-- odd-check: allow -->
