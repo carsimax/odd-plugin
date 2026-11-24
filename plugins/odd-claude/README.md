@@ -2,6 +2,14 @@
 
 A Claude Code plugin that ports the ODD harness of gentle-shell (MIT) <!-- odd-check: allow --> to Claude Code. **v2.0** adds native receipt-driven review (RDD) on top of **v1.0** (the parity release): the ODD persona, orchestrator cards, agents, skills, native integrations, advisory review and lifecycle hooks. Apart from the RDD Stop settle reminder, which can block only when you turn RDD on (it is off by default), the plugin ships **no deny/ask/block hook** (user decision, v0.5, amended for v2): its hooks only add context. Coordinator mode and the admission rules are prompt text, not enforcement; otherwise the only enforcement is Claude Code's native permission system (see [Permission modes](#permission-modes)). The plugin collects no data and sends nothing anywhere.
 
+## What's new in 5.1.0
+
+Rule hardening and two debugging skills. No breaking changes.
+
+- **Rule hardening (`odd/tasks/harden-rules.md`):** the `odd` skill has a completion gate: no completion, fix or pass claim without evidence observed this turn (claim / requires / not-enough table and red flags). The worker has a test-first excuse table and a never-weaken rule (no deleting, skipping or loosening tests to reach green unless the spec authorizes it). The verifier no longer receives the writer's success claims, only the artifact, the contract and the writer's reported commands and output, and treats an unauthorized weakening as a blocker.
+- **New skills (`odd/tasks/debug-feedback.md`):** `/odd-claude:systematic-debugging` (no fix before an observed root cause; reproduce, localize, one hypothesis at a time, regression test seen failing first) and `/odd-claude:receiving-review` (read all items, clarify, verify each against the code, then accept, push back with evidence or ask). The worker's bug-fix rule: root cause first; after three failed attempts, counting the first fix, return `partial`.
+- **Context cost:** `output-styles/odd.md` is unchanged; all new rules load on demand (skills, agents, cards). Techniques adapted from obra/superpowers and addyosmani/agent-skills (MIT), see `cards/SOURCES.md`. <!-- odd-check: allow -->
+
 ## What's new in 5.0.0
 
 Refinement round (`odd/tasks/refine-v5.md`): the harness leans on native Claude Code capabilities, repeats fewer rules and costs less per event. One change set is breaking, see [Upgrade notes for 5.0.0](#upgrade-notes-for-500).

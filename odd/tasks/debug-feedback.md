@@ -14,10 +14,12 @@ Runner: `npm test` + `npm run check` inside `plugins/odd-claude`; `dist/` is com
   - (e) hints in `cards/skills.md`, both README skill lists, and MIT attribution rows in `cards/SOURCES.md`.
   - (f) a structural spec pinning (a)-(e).
   - (g) `output-styles/odd.md` stays unchanged.
+- **S4** User request (verbatim): "Sí, 5.1.0 y PR" — release 5.1.0 bundling harden-rules (#56) and this package.
 
 ## Tasks
 
 - T1 | S2,S3a-g | worker | done — commit.
+- T2 | S4 | worker | done — commit.
 
 ## Log
 
@@ -26,3 +28,4 @@ Runner: `npm test` + `npm run check` inside `plugins/odd-claude`; `dist/` is com
 - L3: T1 done. RED: new `debug-feedback.spec.ts` before the content: 18 tests, 1 pass, 17 fail. GREEN: spec 18/18. `npm test` 1154 tests, 1152 pass, 0 fail, 1 skipped; `npm run check` check-naming ok. Fix on the way: `skills/*/SKILL.md` references to `.md` paths must resolve inside the skill dir, so the Completion gate is referenced by name, not path.
 - L4: Independent verification of T1: B1 (spec caught 2 of 23 single-rule deletions), advisories A1 (license MIT), A2 (no-fix qualifier), A3 (authorized suite), A4 (one item at a time within the correction batch), A5 (count the first fix), A6 (in-thread `gh api` reply line: accepted as-is, mandated and short).
 - L5: Correction batch applied (B1, A1-A5). Spec rewritten with `pin()` (each phrase occurs exactly once in its file): 27 tests. Mutation probe in an OS-temp scratch copy deleting each pinned phrase one at a time: 51 pins, 51 caught. Evidence: `npm test` and `npm run check` below in the worker return.
+- L6: user request: "Sí, 5.1.0 y PR". T2 done: 5.0.0 -> 5.1.0 in marketplace.json, plugin.json, package.json, package-lock.json; ROADMAP_PHASE "v5.1: rule hardening and debugging skills shipped"; docs/README.md, docs/roadmap.md, plugin README "What's new in 5.1.0". RED: status.spec updated first, `npm test` 1163 tests, 1160 pass, 1 fail (status session id from env). GREEN: `npm test` 1163 tests, 1161 pass, 0 fail, 1 skipped; `npm run check` check-naming ok; `claude plugin validate plugins/odd-claude` passed with warnings; only `dist/lib/status.js` changed under dist/; no 5.0.0 left in manifests.
