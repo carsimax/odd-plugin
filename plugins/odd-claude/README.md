@@ -2,6 +2,14 @@
 
 A Claude Code plugin that ports the ODD harness of gentle-shell (MIT) <!-- odd-check: allow --> to Claude Code. **v2.0** adds native receipt-driven review (RDD) on top of **v1.0** (the parity release): the ODD persona, orchestrator cards, agents, skills, native integrations, advisory review and lifecycle hooks. Apart from the RDD Stop settle reminder, which can block only when you turn RDD on (it is off by default), the plugin ships **no deny/ask/block hook** (user decision, v0.5, amended for v2): its hooks only add context. Coordinator mode and the admission rules are prompt text, not enforcement; otherwise the only enforcement is Claude Code's native permission system (see [Permission modes](#permission-modes)). The plugin collects no data and sends nothing anywhere.
 
+## What's new (next release)
+
+Session retrospective and pressure-tested skills. No breaking changes.
+
+- **`/odd-claude:retro` (`odd/tasks/retro-pressure.md`):** on-demand retrospective of a session. A local, read-only digest (`node dist/cli/retro.js [--json]`) lists, with transcript line numbers, human prompts, tool errors, repeated reads, edits and commands, subagent launches and compactions; the skill then judges it against the ODD rules and proposes harness changes (proposals only). Prompt and tool-result content is never printed and nothing leaves the machine.
+- **Pressure testing in `skill-creator` and `skill-improver`:** a discipline skill runs a RED baseline (stacked pressures such as time, sunk cost, authority, economic, exhaustion, social, pragmatic, run by a fresh subagent without the skill), then GREEN (same scenario with the skill) and REFACTOR (a counter for each new rationalization, retest). See `skills/skill-creator/references/pressure-testing.md`.
+- **Context cost:** `output-styles/odd.md` is unchanged; everything loads on demand. Techniques adapted from obra/superpowers (MIT), see `cards/SOURCES.md`. <!-- odd-check: allow -->
+
 ## What's new in 5.1.0
 
 Rule hardening and two debugging skills. No breaking changes.
@@ -221,7 +229,7 @@ Statistics and profiles (Phase 5), unchanged in 2.0. The visual mods, the banner
 
 ## What's in v1.0
 
-- **Commands / skills** (`/odd-claude:<name>`): `odd`, `doctor`, `status`, `setup`, `persona`, `coordinator`, `background-subagents`, `scratch`, `stats`, `profiles`, `skill-registry`, `skill-creator`, `skill-improver`, `4r-review`, `judgment-day`, `branch-pr`, `chained-pr`, `work-unit-commits`, `issue-creation`, `comment-writer`, `systematic-debugging`, `receiving-review`, `cognitive-doc-design`, `tui-design`, `ui-design`.
+- **Commands / skills** (`/odd-claude:<name>`): `odd`, `doctor`, `status`, `setup`, `persona`, `coordinator`, `background-subagents`, `scratch`, `stats`, `profiles`, `skill-registry`, `skill-creator`, `skill-improver`, `4r-review`, `judgment-day`, `branch-pr`, `chained-pr`, `work-unit-commits`, `issue-creation`, `comment-writer`, `systematic-debugging`, `receiving-review`, `retro`, `cognitive-doc-design`, `tui-design`, `ui-design`.
 - **Agents** (`odd-claude:<agent>`): `odd-explore`, `odd-verify`, `odd-worker`, `odd-jd-fix`, `odd-jd-judge-a`, `odd-jd-judge-b`, `odd-review-risk`, `odd-review-resilience`, `odd-review-readability`, `odd-review-reliability`.
 - **Hooks** (advisory; only the RDD-gated Stop reminder can block): `SessionStart` (context, scratch dir, title, status file, skill registry, optional codegraph warm-up; on `compact` and `resume` also a compact summary of the active feature document: the `odd/tasks/*.md` file whose header names the current branch, with its path, header line, `S#` ids, open tasks and last log entry, capped at 2000 characters, nothing when there is no match), `UserPromptSubmit` (context, quota advisory), `PostToolUse` (exploration budget, context backstop), `StopFailure` (quota advisory), `Stop` (status file; empty output unless RDD is on, see [RDD](#receipt-driven-review-rdd)), `PreToolUse` on `Bash` (RDD delivery notice, never blocks; silent unless RDD is on), `SubagentStart`/`SubagentStop` (record the subagent in session state; silent). `SubagentStart`, `SubagentStop` and `StopFailure` run with `async: true` (their output is never used); no hook that injects context is async. There is no `TaskCompleted` hook: Claude Code only lets it block, not add context, `SessionEnd` (scratch cleanup, resume hint, status file).
 - **Output style**: `odd`. **Cards**, **support docs** and **sounds assets** (see below).
@@ -244,7 +252,7 @@ All of these are advisory: none returns a block decision, `continue:false` or a 
 - **Persona**: there is one persona, `neutral` (direct, technical, neutral Spanish), and it is always the default. `/odd-claude:persona` shows it; any other mode (including `mentor`) is refused. Spanish replies are always neutral: no voseo or regional forms (tú or usted).
 - **Cards** (`cards/*.md`): orchestrator rules loaded on demand (delegation, tracking, verification, memory, skills, prompts, writer, quota recovery), with tool names mapped to Claude Code (`Agent`, `TodoWrite`, `AskUserQuestion`, `Bash` with `run_in_background`, `Monitor`, worktree tools). See `cards/SOURCES.md`.
 - **Agents** (listed as `odd-claude:<agent>`): `odd-explore` (read-only), `odd-verify` (runs checks), `odd-worker` (scoped writer), `odd-jd-fix`, `odd-jd-judge-a`, `odd-jd-judge-b` (Judgment Day), and the four advisory review lenses `odd-review-risk`, `odd-review-resilience`, `odd-review-readability`, `odd-review-reliability`.
-- **Skills** (`odd-claude:<skill>`): `odd`, `branch-pr`, `chained-pr`, `cognitive-doc-design`, `comment-writer`, `issue-creation`, `judgment-day`, `skill-creator`, `skill-improver`, `skill-registry`, `systematic-debugging`, `receiving-review`, `tui-design`, `ui-design`, `work-unit-commits`, `4r-review`, plus the commands `doctor`, `status`, `setup`, `persona`, `background-subagents`, `coordinator`.
+- **Skills** (`odd-claude:<skill>`): `odd`, `branch-pr`, `chained-pr`, `cognitive-doc-design`, `comment-writer`, `issue-creation`, `judgment-day`, `skill-creator`, `skill-improver`, `skill-registry`, `systematic-debugging`, `receiving-review`, `retro`, `tui-design`, `ui-design`, `work-unit-commits`, `4r-review`, plus the commands `doctor`, `status`, `setup`, `persona`, `background-subagents`, `coordinator`.
 - **Support docs** (`support/`): test-first policy and the `odd/tasks/<feature>.md` format. **Sounds**: `assets/sounds/` (original tones, see its LICENSE).
 
 ### Background subagents

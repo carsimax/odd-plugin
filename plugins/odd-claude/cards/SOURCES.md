@@ -26,3 +26,5 @@ Ideas adapted in our own words (MIT); short phrases may echo the originals.
 | obra/superpowers | MIT, Copyright (c) 2025 Jesse Vincent | skills/systematic-debugging/ (from systematic-debugging with root-cause-tracing, defense-in-depth, condition-based-waiting) | <!-- odd-check: allow -->
 | obra/superpowers | MIT, Copyright (c) 2025 Jesse Vincent | skills/receiving-review/ (from receiving-code-review) | <!-- odd-check: allow -->
 | addyosmani/agent-skills | MIT, Copyright (c) 2025 Addy Osmani | skills/systematic-debugging/ (from debugging-and-error-recovery) | <!-- odd-check: allow -->
+| obra/superpowers | MIT, Copyright (c) 2025 Jesse Vincent | skills/retro/ and src/lib/retro.ts (from diagnosing-superpowers) | <!-- odd-check: allow -->
+| obra/superpowers | MIT, Copyright (c) 2025 Jesse Vincent | skills/skill-creator/references/pressure-testing.md and assets/pressure-scenario.md (from writing-skills with references/testing-skills-with-subagents.md and references/bulletproofing.md) | <!-- odd-check: allow -->
