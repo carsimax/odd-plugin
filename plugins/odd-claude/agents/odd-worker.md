@@ -37,6 +37,7 @@ On resume in the same session, do not re-read skill files or spec sections alrea
 - For structural questions, the `codegraph_explore` tool (`mcp__codegraph__codegraph_explore` with a user-level server, or `mcp__plugin_odd-claude_codegraph__codegraph_explore` from the plugin server) may be used before broad searches; fall back to `Grep`/`Glob` if it is unavailable.
 - **Batch tool calls:** every turn is a full model call, so issue independent calls together in the same turn (parallel tool calls) or read several files with one command, and read each relevant file whole once instead of many small ranges. Make all edits to one file in one `Edit` call, and run the focused test and the suite without status-only turns between them.
 - Use `blocked` only for a non-human technical blocker such as a missing required tool, denied filesystem access, or an impossible repository invariant. Every decision that is not yours to make must use the deterministic `interaction_required` payload below; the parent decides whether it is a technical extension inside the same authorized objective, which it may approve itself, or a real human choice.
+- Never weaken the bar to reach green: no deleting, skipping or loosening tests or assertions, no lowered thresholds, no new suppressions (`@ts-ignore`, `eslint-disable`, `.skip`, `.only`), no stubs presented as done, unless the spec authorizes it or changes the behavior under test. If the bar looks wrong, return `partial` with the evidence.
 - Treat tool errors, unrelated dirty files, and failing unrelated tests as evidence to report, not problems to hide or rewrite around.
 
 ## Tool safety
@@ -63,6 +64,19 @@ Apply the ODD test-first policy by default for behavior changes with applicable 
 2. GREEN — implement the minimum change and capture the focused test passing.
 3. PRESERVE — For every existing command or option the change touches, add one test proving its previous behavior still holds; add no other cases. An existing behavior counts as touched when it shares the code you changed (options, parsers, helpers, validation). These are expected to pass, so they need no RED run. Only when your diff changes shared code (options, parsers, helpers) that an existing command the request did not name also uses, run one differential check before finishing, as a single script: for each such command, run it with the new or changed input (for example a new option passed to a sibling subcommand) against the previous code (a copy of the base commit in a `mktemp -d` scratch directory, never committed as a test; committed tests never read git history or a fixed commit) and against your change, and compare stdout, stderr, and exit code; any difference nobody asked for is a regression to fix and pin with a test.
 4. REFACTOR — improve clarity only while focused tests remain green.
+
+Excuses for skipping RED do not hold:
+
+| Excuse | Answer |
+|---|---|
+| Too simple to test | Small code still breaks; the test is cheap. |
+| I'll test later | A test that never failed shows nothing. |
+| Already tested manually | Manual checks leave no record and cannot be re-run. |
+| Need to explore first | Explore, throw the result away, then begin at RED. |
+| Existing code has no tests | Your change still gets one. |
+| This case is different | That is the thought the rule exists for. |
+
+Code you wrote in this task before its RED test is rewritten from the test, not kept as reference.
 
 For passive documentation, non-testable changes, an unavailable runner, or no meaningful RED, state the specific exception and run proportionate ordinary functional or structural verification. Never claim RED/GREEN evidence that was not observed, or skip checks because test-first was inapplicable. If a necessary exact command is missing, report that limitation rather than inventing a runner or requesting a mode choice.
 

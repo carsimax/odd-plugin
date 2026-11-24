@@ -14,3 +14,12 @@ Each card is a port of an upstream asset (MIT). Provenance lives here only, so t
 | cards/verification.md | upstream/gentle-shell/assets/orchestrator-verification.md | <!-- odd-check: allow -->
 | cards/writer.md | upstream/gentle-shell/assets/orchestrator-writer.md | <!-- odd-check: allow -->
 | cards/full-delegation.md | upstream/gentle-shell/assets/orchestrator-full-delegation.md + orchestrator-full-delegation-card.md | <!-- odd-check: allow -->
+
+## Technique sources
+
+Ideas adapted in our own words (MIT); short phrases may echo the originals.
+
+| Upstream | License | Used in |
+|---|---|---|
+| obra/superpowers | MIT, Copyright (c) 2025 Jesse Vincent | skills/odd Completion gate; agents/odd-worker test-first excuse table | <!-- odd-check: allow -->
+| addyosmani/agent-skills | MIT, Copyright (c) 2025 Addy Osmani | verification handoff without the writer's claim; never-weaken rule | <!-- odd-check: allow -->
