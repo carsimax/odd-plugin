@@ -19,12 +19,14 @@ Runner: `npm test` + `npm run check` inside `plugins/odd-claude`; `dist/` is com
   - (e) Both SKILL.md files stay within the skill-creator body budget (max 1000 tokens).
   - (f) A structural spec pinning (a)-(d) (the `pin()` style of `src/lib/debug-feedback.spec.ts`).
 - **S5** Parent design notes for wiring (not user words): `cards/skills.md` hint row for `/odd-claude:retro`; both skill lists in `plugins/odd-claude/README.md` and a "What's new (next release)" entry for both units; MIT attribution rows in `cards/SOURCES.md` (obra/superpowers: `diagnosing-superpowers` -> `skills/retro/` and `src/lib/retro.ts`; `writing-skills` with `references/testing-skills-with-subagents.md` and `references/bulletproofing.md` -> `skills/skill-creator/references/pressure-testing.md`); `output-styles/odd.md` stays unchanged; `.atl/skill-registry.md` refreshed for the new skill.
+- **S6** User request (verbatim): "PR y 5.2.0" — release 5.2.0.
 
 ## Tasks
 
 - T1 | S2,S3a-d | worker | done — commit.
 - T2 | S2,S4a-f | worker | done — commit.
 - T3 | S5 | worker | done — commit.
+- T4 | S6 | worker | done — commit.
 
 ## Log
 
@@ -35,3 +37,4 @@ Runner: `npm test` + `npm run check` inside `plugins/odd-claude`; `dist/` is com
 - L5: T1 done. Worker RED: `build:test` TS2307 (missing `./retro.js`, `../cli/retro.js`) and ENOENT on `skills/retro/SKILL.md`. Shared tail reader, line cap and `cleanText` moved to `src/lib/transcript-tail.ts` (stats behavior and spec unchanged). Parent review correction batch: C1 line numbers were relative to the tail when truncated, now absolute (prefix newlines streamed in 1 MB chunks, `firstLine` reported); C2 the skill runs the stats CLI for cost and time; C3 exact bounded read `sed -n 'Np' "<path>" | cut -c1-500`. RED of the correction batch was not observed by the parent (the worker's second report was not delivered).
 - L6: T3 done: `cards/skills.md` hint row, README skill lists and "What's new (next release)", two MIT rows in `cards/SOURCES.md`, `.atl/skill-registry.md` row (gitignored); NOTICE has no superpowers entries, unchanged; `output-styles/odd.md` unchanged.
 - L7: Parent closure checks 2026-11-24: `npm test` 1196 tests, 1194 pass, 0 fail, 1 skipped, 1 todo; `npm run check` check-naming ok; `claude plugin validate plugins/odd-claude` passed with warnings. Risk: none (additive read-only local CLI and skills; no contract changed).
+- L8: T4 done (release 5.2.0). RED: after updating status.spec.ts (2 assertions) to "v5.2: session retro and skill pressure tests shipped", `npm test` failed on "status with state: session id from env wins over latest" (and the roadmapPhase test) against the old source. GREEN: after status.ts and `npm run build` (dist/lib/status.js), `npm test` 1196 tests, 1194 pass, 0 fail, 1 skipped, 1 todo; `npm run check` check-naming ok; `claude plugin validate .` passed with warnings; `grep 5.1.0` in the four manifests: no matches. Versions bumped to 5.2.0 in marketplace.json, plugin.json, package.json, package-lock.json; README "What's new in 5.2.0"; docs/README.md and docs/roadmap.md entries.
