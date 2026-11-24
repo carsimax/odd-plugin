@@ -2,56 +2,16 @@
 // Differences: upstream reads Pi session entries and prices them; a Claude Code hook gets no usage API, so the
 // numbers come from the transcript JSONL (`transcript_path` in hook input), persisted per session in the state
 // file so the CLI can find it. Local only: no cost lookup, no quota endpoint, no network. Every read is bounded.
-import { closeSync, fstatSync, openSync, readSync, statSync } from "node:fs";
 import { formatDuration } from "./subagents.js";
 import { readSessionState } from "./state.js";
 import { recordTranscriptPath, validPath } from "./transcript-path.js";
-export { recordTranscriptPath };
-/** Only the tail of a transcript is read: a long session never costs more than this. */
-export const STATS_TAIL_BYTES = 8 * 1024 * 1024;
-/** A single line above this is skipped unparsed (a huge tool result, not a usage record). */
-export const STATS_MAX_LINE_BYTES = 2 * 1024 * 1024;
+import { cleanText, readTail, STATS_MAX_LINE_BYTES, STATS_TAIL_BYTES } from "./transcript-tail.js";
+export { recordTranscriptPath, STATS_MAX_LINE_BYTES, STATS_TAIL_BYTES };
 const MAX_MODELS = 8;
-/** Strips escape sequences, control and bidi characters: transcript text is never trusted. */
-function cleanText(s) {
-    if (typeof s !== "string")
-        return "";
-    return (s
-        // eslint-disable-next-line no-control-regex
-        .replace(/\u001b\][^\u0007\u001b]*(?:\u0007|\u001b\\)?/g, "")
-        // eslint-disable-next-line no-control-regex
-        .replace(/\u001b\[[0-?]*[ -/]*[@-~]?/g, "")
-        // eslint-disable-next-line no-control-regex
-        .replace(/[\u0000-\u001f\u007f-\u009f\u200e\u200f\u061c\u2028\u2029\u202a-\u202e\u2066-\u2069]/g, "")
-        .trim());
-}
 const count = (v) => (typeof v === "number" && Number.isFinite(v) && v > 0 ? v : 0);
 export function readTranscriptPath(sessionId, opts = {}) {
     const p = readSessionState(sessionId, opts).transcriptPath;
     return validPath(p) ? p : undefined;
-}
-function readTail(path) {
-    if (!statSync(path).isFile())
-        return undefined; // a FIFO or device would hang
-    const fd = openSync(path, "r");
-    try {
-        const size = fstatSync(fd).size;
-        const len = Math.min(size, STATS_TAIL_BYTES);
-        const buf = Buffer.alloc(len);
-        let got = 0;
-        while (got < len) {
-            const n = readSync(fd, buf, got, len - got, size - len + got);
-            if (n <= 0)
-                break;
-            got += n;
-        }
-        const text = buf.subarray(0, got).toString("utf8");
-        // A tail read can start mid-line: drop the partial first line.
-        return { text: size > len ? text.slice(text.indexOf("\n") + 1) : text, truncated: size > len, bytes: got };
-    }
-    finally {
-        closeSync(fd);
-    }
 }
 /** Token totals from the transcript tail; undefined when it cannot be read. Never throws. */
 export function collectTranscriptStats(path) {

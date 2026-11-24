@@ -40,6 +40,7 @@ Do not create a skill for a one-off task, generic documentation, or rules that b
 | Longer explanation or edge cases | Add `skills/{skill-name}/references/` |
 | Existing skill covers it | Update the existing skill instead |
 | Skill affects delegation discovery | Ensure trigger words appear in `description` |
+| Discipline skill (new or edited) | Run the RED baseline before writing and the GREEN/REFACTOR retest before reporting done |
 
 ## Execution Steps
 
@@ -70,7 +71,8 @@ metadata:
 
 6. Write sections in this order: Activation Contract, Hard Rules, Decision Gates, Execution Steps, Output Contract, References.
 7. If this is a packaged plugin skill, place it under the plugin's `skills/` directory so it is namespaced automatically, and run `claude plugin validate`.
-8. Refresh or document the skill registry update path.
+8. Pressure-test a discipline skill (rules an agent is tempted to bypass): follow [references/pressure-testing.md](references/pressure-testing.md) with [assets/pressure-scenario.md](assets/pressure-scenario.md). Skip for pure reference skills.
+9. Refresh or document the skill registry update path.
 
 ## Output Contract
 
@@ -78,6 +80,7 @@ Return:
 - Files created or modified.
 - Whether this created a new skill or updated an existing one.
 - Any supporting `assets/` or `references/` files added.
+- Pressure-test scenarios run and their results, or why testing did not apply.
 - Whether package verification or skill registry refresh is needed.
 
 ## References

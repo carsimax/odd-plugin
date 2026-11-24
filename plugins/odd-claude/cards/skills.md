@@ -47,6 +47,7 @@ Common intent hints, not hard routing:
 | Create/open/prepare PR                                     | `/odd-claude:branch-pr`                 |
 | Bug / failing test / unexpected behavior                   | `/odd-claude:systematic-debugging`      |
 | Review feedback to act on (PR comments, reviewer findings) | `/odd-claude:receiving-review`          |
+| Session went wrong / retrospective / transcript analysis | `/odd-claude:retro`                     |
 | Split/stack/large PR                                       | `/odd-claude:chained-pr`                |
 
 Keep this lightweight: loading a skill should improve the immediate task, not force extra ceremony.
