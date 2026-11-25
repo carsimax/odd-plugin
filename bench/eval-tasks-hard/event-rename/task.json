@@ -1,0 +1,13 @@
+{
+  "id": "event-rename",
+  "kind": "refactor",
+  "size": "large",
+  "difficulty": "multi-step",
+  "prompt": "Product wants clearer event names: the `order.created` event must be called `order.placed` from now on (`order.shipped` and `order.cancelled` stay as they are). Rename it everywhere in the project so the app keeps behaving exactly as before under the new name, and update the existing tests and docs.",
+  "grade": "node --test hidden/acceptance/ hidden/regression/",
+  "checks": {
+    "acceptance": "node --test hidden/acceptance/",
+    "regression": "node --test hidden/regression/"
+  },
+  "timeout_s": 900
+}

@@ -1,0 +1,13 @@
+{
+  "id": "duration-report",
+  "kind": "feature",
+  "size": "large",
+  "difficulty": "regression-trap",
+  "prompt": "In the build report and its summary, durations of an hour or more are hard to read: 3723 seconds shows as `62m 03s`. Show them with hours, like `1h 02m 03s` (minutes and seconds stay zero-padded to two digits, so exactly one hour is `1h 00m 00s`). Durations under an hour must look exactly as they do today.",
+  "grade": "node --test hidden/acceptance/ hidden/regression/",
+  "checks": {
+    "acceptance": "node --test hidden/acceptance/",
+    "regression": "node --test hidden/regression/"
+  },
+  "timeout_s": 900
+}

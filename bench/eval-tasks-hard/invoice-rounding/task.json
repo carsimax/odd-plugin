@@ -1,0 +1,13 @@
+{
+  "id": "invoice-rounding",
+  "kind": "bugfix",
+  "size": "large",
+  "difficulty": "regression-trap",
+  "prompt": "Finance reports that some invoice amounts are off by one cent. For example a line with unit price 1.005 and quantity 1 comes out as 1.00 and should be 1.01, and a unit price of 0.145 comes out as 0.14 instead of 0.15. Prices are written with up to three decimals and every amount must round half up to cents. Find the cause and fix it.",
+  "grade": "node --test hidden/acceptance/ hidden/regression/",
+  "checks": {
+    "acceptance": "node --test hidden/acceptance/",
+    "regression": "node --test hidden/regression/"
+  },
+  "timeout_s": 900
+}

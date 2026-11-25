@@ -1,0 +1,13 @@
+{
+  "id": "text-table",
+  "kind": "feature",
+  "size": "large",
+  "difficulty": "precise-spec",
+  "prompt": "Implement renderTable in src/table.js as described in docs/SPEC.md. The helpers in src/ are already there and tested; use them where they fit. Add tests for it under test/.",
+  "grade": "node --test hidden/acceptance/ hidden/regression/",
+  "checks": {
+    "acceptance": "node --test hidden/acceptance/",
+    "regression": "node --test hidden/regression/"
+  },
+  "timeout_s": 900
+}

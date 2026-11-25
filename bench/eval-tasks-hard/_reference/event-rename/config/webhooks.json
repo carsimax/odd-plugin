@@ -1,0 +1,4 @@
+{
+  "order.placed": ["https://hooks.example.com/orders", "https://erp.example.com/inbound"],
+  "order.shipped": ["https://hooks.example.com/orders"]
+}

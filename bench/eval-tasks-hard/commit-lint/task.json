@@ -1,0 +1,13 @@
+{
+  "id": "commit-lint",
+  "kind": "feature",
+  "size": "large",
+  "difficulty": "precise-spec",
+  "prompt": "Implement lintCommit in src/lint.js following docs/SPEC.md; the rest of the package (message parsing and character counting) already exists. Add tests under test/.",
+  "grade": "node --test hidden/acceptance/ hidden/regression/",
+  "checks": {
+    "acceptance": "node --test hidden/acceptance/",
+    "regression": "node --test hidden/regression/"
+  },
+  "timeout_s": 900
+}

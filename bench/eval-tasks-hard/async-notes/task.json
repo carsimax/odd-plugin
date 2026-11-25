@@ -1,0 +1,13 @@
+{
+  "id": "async-notes",
+  "kind": "refactor",
+  "size": "large",
+  "difficulty": "multi-step",
+  "prompt": "We are moving note storage to a remote backend, so the Store interface has to become asynchronous: get, set, has, delete and keys must all return promises. Make that change in src/store.js and update everything that uses the store (services, commands, CLI) so the whole app works with an async store, then update the existing tests accordingly.",
+  "grade": "node --test hidden/acceptance/ hidden/regression/",
+  "checks": {
+    "acceptance": "node --test hidden/acceptance/",
+    "regression": "node --test hidden/regression/"
+  },
+  "timeout_s": 900
+}
