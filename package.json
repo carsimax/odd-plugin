@@ -8,6 +8,7 @@
     "build:bench": "plugins/odd-claude/node_modules/.bin/tsc -p bench/tsconfig.json",
     "test:bench": "npm run build:bench && node --test bench/dist/*.spec.js bench/dist/*/*.spec.js",
     "bench": "npm run build:bench --silent && node bench/dist/cli.js",
+    "eval": "npm run build:bench --silent && node bench/dist/eval/cli.js",
     "bench:hooks": "npm run build:bench --silent && node bench/dist/hookstart.js",
     "check": "npm --prefix plugins/odd-claude run check"
   }
