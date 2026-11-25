@@ -12,13 +12,16 @@ Runner: `npm run build:bench && node --test bench/dist/eval/*.spec.js`; tasks: `
 
 ## Tasks
 
-- T1 | S3 | worker | pending — 6 hard tasks + references + naive overlays + selfcheck; done when: parent re-runs `node bench/eval-tasks-hard/selfcheck.mjs` and every task shows shipped-fails, reference-passes, naive-trips.
-- T2 | S4 | worker | pending — named grade checks in runner and report (test-first); done when: eval specs RED then GREEN and the pilot tasks (no `checks`) still produce the same record shape.
-- T3 | S5 | parent | pending — smoke 1 run per arm on one hard task; done when: 3 valid records with checks and cost, isolation re-verified.
-- T4 | S5 | parent+worker | pending — 54-run measurement and `docs/eval/hard-<date>.md`; done when: 54 records (or budget stop reported) and the report committed.
+- T1 | S3 | worker | done — 6 hard tasks + references + naive overlays + selfcheck; done when: parent re-runs `node bench/eval-tasks-hard/selfcheck.mjs` and every task shows shipped-fails, reference-passes, naive-trips.
+- T2 | S4 | worker | done — named grade checks in runner and report (test-first); done when: eval specs RED then GREEN and the pilot tasks (no `checks`) still produce the same record shape.
+- T3 | S5 | parent | done — smoke 1 run per arm on one hard task; done when: 3 valid records with checks and cost, isolation re-verified.
+- T4 | S5 | parent+worker | done — 54-run measurement and `docs/eval/hard-<date>.md`; done when: 54 records (or budget stop reported) and the report committed.
 
 Risk: item 2 (unattended sessions with edit and shell permissions inside temp dirs), item 6 (task difficulty and trap validity are only partly testable; the naive overlay is the proof).
 
 ## Log
 
 - L1: user request (verbatim): "vamos con la siguiente medicion"; choices in S2. Context: pilot (4309b76) showed 100% pass in every arm; coord-on +81% cost vs none.
+- L2: T1 done (fbb6377): selfcheck re-run by parent: all 6 tasks ok (shipped fails acceptance, reference passes all, naive passes acceptance and fails regression). T2 done (8d82255): parent re-ran eval specs 42/42.
+- L3: smoke on invoice-rounding: 3/3 valid, all passed acceptance and regression; none $0.19, coord-off $0.34, coord-on $0.53; isolation re-verified.
+- L4: measurement: 54 runs, USD 18.98; 5 runs hit an API outage (10 api_retry, 21:17-21:33Z) and were re-run (5/5 passed); effective (reruns replacing the errored runs): every arm 18/18 on acceptance and regression, cost mean none 0.268, coord-on 0.455 (+70%), coord-off 0.407 (+52%), tokens +148%/+78%, recorded (outage counted): 16/18, 17/18, 16/18; ceiling effect again; report `docs/eval/hard-2026-11-25.md`; isolation re-verified (settings hash, data dir list; real hooks.log has no eval references).
