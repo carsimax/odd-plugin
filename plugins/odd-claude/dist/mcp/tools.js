@@ -81,10 +81,31 @@ const RUN_PROPS = {
     reviewer_run_acknowledged: { type: "boolean", description: "Authorizes the reviewer batch of the forecast named by reviewer_run_binding. Never set it before the user saw the forecast." },
     reviewer_run_binding: { type: "string", minLength: 1, maxLength: 200, description: "reviewer_run_binding of the forecast being acknowledged." },
 };
+const DETAIL = { type: "string", enum: ["concise", "full"], description: "Response size. full (default) is the complete status; concise drops only the projection detail and the per-slot schema, capture operation and artifact subject, and keeps every id, binding, identity, argument, next_transition, forecast, repair and consumed field." };
 const NOTE = " The `arguments` of a review_status transition are exactly this tool's properties (values as strings; \"true\", integers and JSON arrays are coerced), so a transition can be passed as given.";
 const object = (properties, required = []) => ({
     type: "object", properties, required, additionalProperties: false,
 });
+// ---- helpers ----
+const CONCISE_STATUS_DROPS = ["projection"];
+const CONCISE_INPUT_DROPS = ["schema", "capture_operation", "artifact_subject", "base_tree", "candidate_tree"];
+/** review_status detail "concise": drops descriptive fields only; everything the next call needs (ids, bindings, arguments, next_transition) stays. */
+function conciseStatus(status) {
+    const out = { ...status };
+    for (const k of CONCISE_STATUS_DROPS)
+        delete out[k];
+    const next = out.next_transition;
+    if (next?.collect?.inputs !== undefined) {
+        const inputs = next.collect.inputs.map((i) => {
+            const c = { ...i };
+            for (const k of CONCISE_INPUT_DROPS)
+                delete c[k];
+            return c;
+        });
+        out.next_transition = { ...next, collect: { ...next.collect, inputs } };
+    }
+    return out;
+}
 const str = (a, k) => (typeof a[k] === "string" ? a[k] : undefined);
 const bool = (a, k) => (typeof a[k] === "boolean" ? a[k] : undefined);
 const cwdOf = (a, ctx) => str(a, "cwd") ?? ctx.defaultCwd;
@@ -296,9 +317,10 @@ export const TOOLS = [
     },
     {
         name: "review_status",
-        description: "Read-only: the review status of the candidate. Follow ONLY the next_transition it returns (its `command` names the tool to call); never infer a step. Pass `acknowledgement` (from start/capture) to be offered the approval acknowledgement." + NOTE,
+        description: "Read-only: the review status of the candidate. Follow ONLY the next_transition it returns (its `command` names the tool to call); never infer a step. Pass `acknowledgement` (from start/capture) to be offered the approval acknowledgement. Optional `detail`: \"full\" (default) or \"concise\" (smaller: drops only the projection detail and per-slot artifact subjects; keeps every id, binding, next_transition, forecast and repair)." + NOTE,
         inputSchema: object({
             ...TARGET_PROPS,
+            detail: DETAIL,
             acknowledgement: object({
                 lineage_id: { type: "string", pattern: LINEAGE_PATTERN }, target_identity: { type: "string", pattern: SHA_PATTERN },
                 expected_revision: { type: "string", minLength: 1, maxLength: 200 }, token: { type: "string", minLength: 1, maxLength: 200 },
@@ -310,7 +332,8 @@ export const TOOLS = [
             if (typeof t === "string")
                 return invalid(t);
             const ack = a.acknowledgement;
-            return ok(reviewStatus(cwdOf(a, ctx), { target: t.target, projection: t.projection, ...(ack !== undefined ? { acknowledgement: ack } : {}) }));
+            const status = reviewStatus(cwdOf(a, ctx), { target: t.target, projection: t.projection, ...(ack !== undefined ? { acknowledgement: ack } : {}) });
+            return ok(str(a, "detail") === "concise" ? conciseStatus(status) : status);
         },
     },
     {
