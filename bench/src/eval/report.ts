@@ -22,6 +22,15 @@ export function renderReport(records0: readonly RunRecord[], outcome?: Pick<Eval
     const graded = rs.filter((r) => r.passed !== null), pass = graded.filter((r) => r.passed).length;
     lines.push(`| ${arm} | ${rs.length} | ${pass}/${graded.length}${graded.length ? ` (${((100 * pass) / graded.length).toFixed(0)}%)` : ""} | ${cell(summarize(rs.map((r) => r.cost_usd)), 3)} | ${cell(summarize(rs.map((r) => r.tokens?.total ?? null)), 0)} | ${cell(summarize(rs.map((r) => r.wall_ms)), 1, 1000)} | ${cell(summarize(rs.map((r) => r.subagents)), 2)} | ${rs.filter((r) => r.visible_tests_modified).length} | ${invalid.filter((r) => r.arm === arm).length} |`);
   }
+  const names = [...new Set(records.flatMap((r) => Object.keys(r.checks ?? {})))].sort();
+  const rate = (rs: readonly RunRecord[], n: string): string => {
+    const g = rs.filter((r) => r.checks && n in r.checks), ok = g.filter((r) => r.checks?.[n]).length;
+    return `${ok}/${g.length}${g.length ? ` (${((100 * ok) / g.length).toFixed(0)}%)` : ""}`;
+  };
+  if (names.length) {
+    lines.push("", "Check pass rates per arm:", "", `| arm | ${names.map((n) => `check ${n}`).join(" | ")} |`, `| --- | ${names.map(() => "---").join(" | ")} |`);
+    for (const arm of arms) lines.push(`| ${arm} | ${names.map((n) => rate(records.filter((r) => r.arm === arm), n)).join(" | ")} |`);
+  }
   const tasks = [...new Set(records.map((r) => r.task))].sort();
   lines.push("", "## Per task", "", `| task | ${arms.map((a) => `${a} pass | ${a} cost USD (mean)`).join(" | ")} |`, `| --- | ${arms.map(() => "--- | ---").join(" | ")} |`);
   for (const t of tasks) {
@@ -30,6 +39,10 @@ export function renderReport(records0: readonly RunRecord[], outcome?: Pick<Eval
       return `${graded.filter((r) => r.passed).length}/${graded.length} | ${f(summarize(rs.map((r) => r.cost_usd)).mean, 3)}`;
     });
     lines.push(`| ${t} | ${cols.join(" | ")} |`);
+  }
+  if (names.length) {
+    lines.push("", "Check pass rates per task:", "", `| task | ${arms.flatMap((a) => names.map((n) => `${a} ${n}`)).join(" | ")} |`, `| --- | ${arms.flatMap((a) => names.map(() => "---")).join(" | ")} |`);
+    for (const t of tasks) lines.push(`| ${t} | ${arms.flatMap((a) => names.map((n) => (rate(records.filter((r) => r.task === t && r.arm === a), n).replace(/ \(.*/, "")))).join(" | ")} |`);
   }
   if (invalid.length) {
     lines.push("", "## Invalid runs (excluded from the stats above)", "", ...arms.map((a) => `- ${a}: ${invalid.filter((r) => r.arm === a).length}`), "", ...invalid.map((r) => `- ${r.run_id}: invalid${r.error ? ` (${r.error})` : ""}`));

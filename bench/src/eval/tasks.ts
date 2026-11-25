@@ -4,17 +4,21 @@ import { join } from "node:path";
 export interface EvalTask {
   id: string;
   kind: "bugfix" | "feature" | "refactor";
-  size: "small" | "medium";
+  size: "small" | "medium" | "large";
   prompt: string;
   /** Shell command run in the workspace root after the hidden tests are copied in; exit 0 = pass. */
   grade: string;
   timeout_s: number;
+  /** Optional named grade checks (name -> shell command, same cwd/env/deadline as `grade`); when present, a run passes only if `grade` and every check exit 0. */
+  checks?: Record<string, string>;
+  /** Optional free-form difficulty label, recorded on the run record. */
+  difficulty?: string;
   /** Optional extra allowed tools on top of the defaults. */
   allowed_tools?: string[];
   dir: string;
 }
 
-const KINDS = ["bugfix", "feature", "refactor"], SIZES = ["small", "medium"];
+const KINDS = ["bugfix", "feature", "refactor"], SIZES = ["small", "medium", "large"];
 
 export function loadTask(tasksDir: string, id: string): EvalTask {
   const dir = join(tasksDir, id);
@@ -27,6 +31,11 @@ export function loadTask(tasksDir: string, id: string): EvalTask {
   if (typeof raw.prompt !== "string" || raw.prompt === "") bad("prompt must be a non-empty string");
   if (typeof raw.grade !== "string" || raw.grade === "") bad("grade must be a non-empty string");
   if (typeof raw.timeout_s !== "number" || !(raw.timeout_s > 0)) bad("timeout_s must be a positive number");
+  if (raw.checks !== undefined) {
+    const c = raw.checks;
+    if (typeof c !== "object" || c === null || Array.isArray(c) || Object.keys(c).length === 0 || !Object.values(c).every((v) => typeof v === "string" && v !== "")) bad("checks must be an object of name -> non-empty command string");
+  }
+  if (raw.difficulty !== undefined && (typeof raw.difficulty !== "string" || raw.difficulty === "")) bad("difficulty must be a non-empty string");
   if (raw.allowed_tools !== undefined && !(Array.isArray(raw.allowed_tools) && raw.allowed_tools.every((t) => typeof t === "string"))) bad("allowed_tools must be a string array");
   for (const sub of ["repo", "hidden"]) if (!existsSync(join(dir, sub))) bad(`missing ${sub}/ directory`);
   return { ...(raw as unknown as EvalTask), dir };

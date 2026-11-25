@@ -34,6 +34,10 @@ export interface RunRecord {
   plugin_staged: boolean;
   /** Hidden tests passed (grade command exit 0); null when grading did not run. */
   passed: boolean | null; grade_exit_code: number | null;
+  /** Per named check of the task (present only when the task defines `checks`); `passed` requires all of them true. */
+  checks?: Record<string, boolean>;
+  /** The task's difficulty label (present only when task.json sets it). */
+  difficulty?: string;
   /** The agent changed or removed a visible test file that existed in the shipped repo. */
   visible_tests_modified: boolean | null;
 }
@@ -133,6 +137,7 @@ export async function runOne(run: PlannedRun, o: EvalOptions): Promise<RunRecord
     started_at: started.toISOString(), status: "ok", error: null, exit_code: null, timed_out: false, wall_ms: 0,
     cost_usd: null, tokens: null, tokens_by_model: null, num_turns: null, duration_ms: null, subagents: 0,
     is_error: null, result_subtype: null, result_found: false, observed_delegation: null, observed_plugins: null, observed_output_style: null, plugin_staged: arm !== "none" && o.pluginStaged === true, passed: null, grade_exit_code: null, visible_tests_modified: null,
+    ...(task.difficulty !== undefined ? { difficulty: task.difficulty } : {}),
   };
   try {
     const dirs = runDirs(root), ws = join(root, "workspace");
@@ -171,6 +176,15 @@ export async function runOne(run: PlannedRun, o: EvalOptions): Promise<RunRecord
     const g = await runProcess("sh", ["-c", task.grade], { cwd: ws, env, deadlineMs: Math.min(task.timeout_s, 300) * 1000 });
     rec.grade_exit_code = g.code;
     rec.passed = g.code === 0 && !g.timedOut;
+    if (task.checks) {
+      const results: Record<string, boolean> = {};
+      for (const [name, cmd] of Object.entries(task.checks)) {
+        const c = await runProcess("sh", ["-c", cmd], { cwd: ws, env, deadlineMs: Math.min(task.timeout_s, 300) * 1000 });
+        results[name] = c.code === 0 && !c.timedOut;
+      }
+      rec.checks = results;
+      rec.passed = rec.passed && Object.values(results).every(Boolean);
+    }
   } catch (e) {
     rec.status = "error"; rec.error = (e as Error).message;
   } finally {

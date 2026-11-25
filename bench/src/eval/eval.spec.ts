@@ -280,6 +280,74 @@ describe("stats and report", () => {
   });
 });
 
+describe("named grade checks", () => {
+  const ov = (o: Record<string, unknown>): never => o as never;
+  /** A fake claude that fixes src/value.txt in its cwd, then prints a good stream. */
+  const fixer = (root: string): string => {
+    const bin = join(root, "fake-fix");
+    writeFileSync(bin, `#!${process.execPath}\nconst fs=require("fs");fs.mkdirSync("src",{recursive:true});fs.writeFileSync("src/value.txt","fixed");process.stdout.write(${JSON.stringify(goodStream())});\n`, { mode: 0o755 });
+    return bin;
+  };
+  const optsFor = (root: string, tasksDir: string, bin: string): EvalOptions => ({ tasks: loadTasks(tasksDir), arms: ["none"], trials: 1, pluginDir: "/p", claudeBin: bin, model: "opus", maxBudgetUsd: 1, maxTurns: 5, totalBudgetUsd: 70, outDir: join(root, "o"), baseEnv: { PATH: process.env.PATH, ANTHROPIC_API_KEY: "k" } });
+
+  test("one failing check: checks records both, passed is false, grade is still recorded", async () => {
+    const root = tmp(), tasksDir = join(root, "tasks");
+    makeTask(tasksDir, "t1", ov({ checks: { good: "grep -q fixed src/value.txt", bad: "exit 3" } }));
+    const o = optsFor(root, tasksDir, fixer(root));
+    const rec = await runOne({ task: o.tasks[0], arm: "none", trial: 1 }, o);
+    assert.deepEqual(rec.checks, { good: true, bad: false }); assert.equal(rec.grade_exit_code, 0); assert.equal(rec.passed, false);
+  });
+  test("all checks pass: passed is true; checks run in the hidden-copied workspace root", async () => {
+    const root = tmp(), tasksDir = join(root, "tasks");
+    makeTask(tasksDir, "t1", ov({ checks: { acceptance: "sh hidden/check.sh", regression: "test -f README.md" } }));
+    const o = optsFor(root, tasksDir, fixer(root));
+    const rec = await runOne({ task: o.tasks[0], arm: "none", trial: 1 }, o);
+    assert.deepEqual(rec.checks, { acceptance: true, regression: true }); assert.equal(rec.passed, true);
+  });
+  test("checks pass but grade fails: passed is false", async () => {
+    const root = tmp(), tasksDir = join(root, "tasks");
+    makeTask(tasksDir, "t1", ov({ checks: { ok: "true" } }));
+    const a = setup({}, ov({ checks: { ok: "true" } }));
+    const rec = await runOne({ task: a.opts.tasks[0], arm: "none", trial: 1 }, a.opts);
+    assert.deepEqual(rec.checks, { ok: true }); assert.notEqual(rec.grade_exit_code, 0); assert.equal(rec.passed, false);
+  });
+  test("a task without checks keeps the previous record shape (no checks, no difficulty key)", async () => {
+    const a = setup();
+    const rec = await runOne({ task: a.opts.tasks[0], arm: "none", trial: 1 }, a.opts);
+    assert.ok(!("checks" in rec)); assert.ok(!("difficulty" in rec)); assert.equal(rec.size, "small");
+  });
+  test("size large and difficulty are accepted and recorded", async () => {
+    const a = setup({}, ov({ size: "large", difficulty: "regression-trap" }));
+    assert.equal(a.opts.tasks[0].size, "large");
+    const rec = await runOne({ task: a.opts.tasks[0], arm: "none", trial: 1 }, a.opts);
+    assert.equal(rec.size, "large"); assert.equal(rec.difficulty, "regression-trap");
+  });
+  test("loader rejects invalid checks, difficulty and size with clear errors", () => {
+    const root = tmp(), d = join(root, "t");
+    makeTask(d, "a", ov({ checks: "nope" })); assert.throws(() => loadTasks(d), /task a: checks must be an object of name -> non-empty command string/);
+    makeTask(d, "b", ov({ checks: { x: "" } })); assert.throws(() => loadTasks(d, ["b"]), /task b: checks must be an object of name -> non-empty command string/);
+    makeTask(d, "c", ov({ checks: { x: 1 } })); assert.throws(() => loadTasks(d, ["c"]), /task c: checks must be an object/);
+    makeTask(d, "e", ov({ checks: ["true"] })); assert.throws(() => loadTasks(d, ["e"]), /task e: checks must be an object/);
+    makeTask(d, "f", ov({ difficulty: 3 })); assert.throws(() => loadTasks(d, ["f"]), /task f: difficulty must be a non-empty string/);
+    makeTask(d, "g", ov({ size: "huge" })); assert.throws(() => loadTasks(d, ["g"]), /task g: size must be one of small\|medium\|large/);
+  });
+  test("report adds per-arm and per-task pass rates per check name, excluding invalid runs; absent without checks", () => {
+    const mk = (arm: string, task: string, status: string, checks?: Record<string, boolean>): RunRecord => ({ arm, task, status, passed: true, cost_usd: 1, tokens: null, wall_ms: 1000, subagents: 0, error: null, visible_tests_modified: false, run_id: `${task}.${arm}`, ...(checks ? { checks } : {}) }) as unknown as RunRecord;
+    const md = renderReport([
+      mk("none", "a", "ok", { acceptance: true, regression: false }), mk("none", "b", "ok", { acceptance: true, regression: true }),
+      mk("coord-on", "a", "ok", { acceptance: false, regression: true }), mk("coord-on", "a", "invalid", { acceptance: true, regression: true }),
+    ]);
+    assert.match(md, /## Per arm[\s\S]*\| arm \| check acceptance \| check regression \|/);
+    assert.match(md, /\| none \| 2\/2 \(100%\) \| 1\/2 \(50%\) \|/);
+    assert.match(md, /\| coord-on \| 0\/1 \(0%\) \| 1\/1 \(100%\) \|/);
+    assert.match(md, /## Per task[\s\S]*\| task \| none acceptance \| none regression \| coord-on acceptance \| coord-on regression \|/);
+    assert.match(md, /\| a \| 1\/1 \| 0\/1 \| 0\/1 \| 1\/1 \|/);
+    assert.match(md, /\| b \| 1\/1 \| 1\/1 \| 0\/0 \| 0\/0 \|/);
+    const plain = renderReport([mk("none", "a", "ok")]);
+    assert.ok(!plain.includes("check "));
+  });
+});
+
 describe("cli", () => {
   test("--dry-run plans 6 tasks x 3 arms x 3 trials = 54 runs and executes nothing", async () => {
     const root = tmp(), tasksDir = join(root, "tasks"), log = join(root, "c.log");

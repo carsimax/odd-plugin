@@ -17,9 +17,11 @@ npm run eval -- [--tasks a,b] [--arms none,coord-on,coord-off] [--trials 3] [--m
 
 ## Task format
 
-`bench/eval-tasks/<id>/task.json` (`id`, `kind` bugfix|feature|refactor, `size` small|medium, `prompt`, `grade`, `timeout_s`, optional `allowed_tools`), `repo/` (shipped to the agent) and `hidden/` (never shown).
+`bench/eval-tasks/<id>/task.json` (`id`, `kind` bugfix|feature|refactor, `size` small|medium|large, `prompt`, `grade`, `timeout_s`, optional `allowed_tools`, optional `difficulty` string, optional `checks`), `repo/` (shipped to the agent) and `hidden/` (never shown).
 
 Per run: `repo/` is copied into a fresh temp workspace, `git init` + one commit; `claude` runs there. Afterwards the task's `hidden/` directory is copied to `<workspace>/hidden/` (so `node --test hidden/` and imports like `../src/...` resolve) and `grade` runs with `sh -c` in the workspace root; exit 0 = pass. `timeout_s` bounds the claude session (killed with SIGKILL; no shell `timeout`, which macOS lacks); grading gets `min(timeout_s, 300)` s.
+
+Optional `checks` (`{ "<name>": "<shell command>" }`, non-empty strings): after `hidden/` is copied, each check runs like `grade` (same cwd, environment and deadline). The run record gains `checks: { "<name>": boolean }`, and `passed` is true only when `grade` AND every check exit 0 (`grade_exit_code` still records the grade command). `difficulty`, when set, is copied to the record. Records of tasks without `checks`/`difficulty` carry neither key, and the report adds per-arm and per-task pass-rate tables per check name only when some run has `checks` (invalid runs excluded as elsewhere).
 
 ## Arms
 
