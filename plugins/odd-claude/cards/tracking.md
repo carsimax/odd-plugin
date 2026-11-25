@@ -14,6 +14,12 @@ Size every task by the always-on Task Size section; small work creates no durabl
 
 Use about 400 authored changed lines per ODD task only as a planning heuristic, counting additions plus deletions. Keep the smallest coherent behavior with its tests and docs. This is not a task acceptance criterion, hard cap, counter-trigger, automatic stop, forced split, or review trigger. If the correct clear solution naturally exceeds it, briefly explain why and continue without size-only rework loops. Never delete spaces, blank lines, or comments for cosmetic line savings; never omit tests, minify, add gratuitous abstractions, or split artificially to fit the heuristic. Forward this same advisory-only instruction when delegating tasks to subagents. The delivery budget below reads the accumulated branch, not this per-task heuristic. Existing PR size gates remain unchanged; follow repository policy. A user's line limit is a ceiling, never an exact-count gate; never invent acceptance gates the user did not ask for.
 
+#### Done-when checks and document lint
+
+Every task line in `## Tasks` ends with `done when: <observable check>` (the command or observation that proves it: a test name, a CLI output, a file state). Stop-and-fix: when a task's done-when check fails, fix it before starting a task that depends on it, or ask the human; never mark it done on a failing check.
+
+At closure, run `node "${CLAUDE_PLUGIN_ROOT}/dist/cli/tasks.js"` (read-only, always exit 0; `--json` for machine output). Fix every finding for the feature document you worked on (stale open tasks, done tasks without a Log entry, tasks without `done when`, missing sections) before reporting completion; report findings in other documents without editing them.
+
 #### Research depth without a new phase
 
 Step 3 decides when to research, ask, or challenge. Establish the problem, intended outcome, constraints, and current evidence; inspect relevant code. Adapt depth to uncertainty and consequence: no fixed questionnaire or mandatory rounds. The parent owns product decisions; workers return gaps to the parent rather than assuming choices.
