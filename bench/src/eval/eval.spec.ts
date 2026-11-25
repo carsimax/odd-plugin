@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { afterEach, describe, test } from "node:test";
 import { buildClaudeArgv } from "./argv.js";
@@ -10,7 +10,7 @@ import { planRuns, runEval, runOne, type EvalOptions, type RunRecord } from "./r
 import { parseStream } from "./stream.js";
 import { summarize } from "./stats.js";
 import { loadTasks } from "./tasks.js";
-import { goodStream, installFakeClaude, makeTask, scratch } from "./fixtures.js";
+import { FAKE_PLUGIN_JSON, goodStream, installFakeClaude, makeFakePlugin, makeTask, scratch } from "./fixtures.js";
 
 const dirs: string[] = [];
 const tmp = (): string => { const d = scratch(); dirs.push(d); return d; };
@@ -21,7 +21,8 @@ const logOf = (f: string): Record<string, any>[] => (existsSync(f) ? readFileSyn
 function setup(over: Partial<Parameters<typeof installFakeClaude>[1]> = {}, taskOver = {}): { root: string; tasksDir: string; log: string; opts: EvalOptions } {
   const root = tmp(), tasksDir = join(root, "tasks"), log = join(root, "calls.log");
   makeTask(tasksDir, "t1", taskOver);
-  const claudeBin = installFakeClaude(root, { logFile: log, stdout: goodStream(), ...over });
+  makeFakePlugin(join(root, "plugin"));
+  const claudeBin = installFakeClaude(root, { logFile: log, stdout: goodStream(), proof: {}, ...over });
   const opts: EvalOptions = {
     tasks: loadTasks(tasksDir), arms: ["none", "coord-on", "coord-off"], trials: 1, pluginDir: join(root, "plugin"), claudeBin, model: "opus",
     maxBudgetUsd: 1, maxTurns: 5, totalBudgetUsd: 70, outDir: join(root, "out"),
@@ -44,8 +45,12 @@ describe("argv", () => {
     assert.equal(a.at(-1), "P");
     assert.ok(a.includes("--no-session-persistence") && a.includes("--verbose"));
   });
-  test("coord arms: plugin-dir", () => {
-    for (const arm of ["coord-on", "coord-off"] as const) { const a = buildClaudeArgv({ ...base, arm }); assert.equal(a[a.indexOf("--plugin-dir") + 1], "/p"); assert.ok(!a.includes("--bare")); }
+  test("coord arms: plugin-dir and the odd output style via --settings", () => {
+    for (const arm of ["coord-on", "coord-off"] as const) {
+      const a = buildClaudeArgv({ ...base, arm }); assert.equal(a[a.indexOf("--plugin-dir") + 1], "/p"); assert.ok(!a.includes("--bare"));
+      assert.deepEqual(JSON.parse(a[a.indexOf("--settings") + 1]), { outputStyle: "odd-claude:odd" });
+    }
+    assert.ok(!buildClaudeArgv({ ...base, arm: "none" }).includes("--settings"));
   });
 });
 
@@ -99,6 +104,15 @@ describe("stream parsing", () => {
   });
   test("observed delegation mode from the session context", () => {
     assert.equal(parseStream(JSON.stringify({ type: "system", output: "Delegation mode: organic" }) + "\n").observed_delegation, "organic");
+    const hook = JSON.stringify({ type: "system", subtype: "hook_response", hook_name: "SessionStart:startup", output: "ctx\nDelegation mode: full\nx" });
+    assert.equal(parseStream(hook + "\n").observed_delegation, "full");
+  });
+  test("init message: observed plugins and output style", () => {
+    const init = JSON.stringify({ type: "system", subtype: "init", plugins: [{ name: "odd-claude", path: "/p", source: "odd-claude@inline" }, { name: "x", source: "x@y" }, 7], output_style: "odd-claude:odd" });
+    const p = parseStream(init + "\n") as Record<string, any>;
+    assert.deepEqual(p.observed_plugins, ["odd-claude@inline", "x@y"]); assert.equal(p.observed_output_style, "odd-claude:odd");
+    const none = parseStream(goodStream()) as Record<string, any>;
+    assert.equal(none.observed_plugins, null); assert.equal(none.observed_output_style, null);
   });
 });
 
@@ -139,6 +153,90 @@ describe("runOne grading", () => {
     const a = setup({ sleepMs: 5000 }, { timeout_s: 0.3 });
     const rec = await runOne({ task: a.opts.tasks[0], arm: "none", trial: 1 }, a.opts);
     assert.equal(rec.status, "timeout"); assert.equal(rec.timed_out, true);
+  });
+});
+
+describe("grading path", () => {
+  test("hidden tests are graded from <workspace>/hidden/ (a test importing ../src/x.js passes only there)", async () => {
+    const a = setup({}, { grade: "node --test hidden/" });
+    writeFileSync(join(a.tasksDir, "t1", "hidden", "x.test.js"), 'import { test } from "node:test";\nimport assert from "node:assert/strict";\nimport { x } from "../src/x.js";\ntest("x", () => assert.equal(x, 1));\n');
+    writeFileSync(join(a.tasksDir, "t1", "repo", "package.json"), '{"type":"module"}\n');
+    const bin = join(a.root, "fake-x");
+    writeFileSync(bin, `#!${process.execPath}\nconst fs=require("fs");fs.mkdirSync("src",{recursive:true});fs.writeFileSync("src/x.js","export const x = 1;\\n");process.stdout.write(${JSON.stringify(goodStream())});\n`, { mode: 0o755 });
+    a.opts.claudeBin = bin;
+    const rec = await runOne({ task: loadTasks(a.tasksDir)[0], arm: "none", trial: 1 }, a.opts);
+    assert.equal(rec.grade_exit_code, 0); assert.equal(rec.passed, true);
+  });
+});
+
+describe("plugin staging, output style and proof fields", () => {
+  const armOf = (c: Record<string, any>): string => (!c.argv.includes("--plugin-dir") ? "none" : JSON.parse(c.delegation).data.mode === "full" ? "coord-on" : "coord-off");
+
+  test("plugin arms get a staged copy without dependencies; the source is untouched; the copy is removed afterwards", async () => {
+    const a = setup(); const srcManifest = join(a.opts.pluginDir, ".claude-plugin", "plugin.json");
+    const before = readFileSync(srcManifest, "utf8");
+    await runEval(a.opts);
+    const calls = logOf(a.log).filter((c) => c.argv.includes("--plugin-dir"));
+    assert.equal(calls.length, 2);
+    const dirsUsed = new Set(calls.map((c) => c.argv[c.argv.indexOf("--plugin-dir") + 1]));
+    assert.equal(dirsUsed.size, 1, "staged once per eval");
+    const staged = [...dirsUsed][0];
+    assert.notEqual(staged, a.opts.pluginDir);
+    for (const c of calls) { const m = JSON.parse(c.pluginJson); assert.equal(m.name, "odd-claude"); assert.ok(!("dependencies" in m)); }
+    assert.equal(readFileSync(srcManifest, "utf8"), before); assert.deepEqual(JSON.parse(before), FAKE_PLUGIN_JSON);
+    assert.ok(!existsSync(staged), "staged copy removed");
+  });
+  test("the staged copy is removed when the eval throws; no staging for the none arm only", async () => {
+    const a = setup(); a.opts.arms = ["coord-on"]; a.opts.onRecord = () => { throw new Error("boom"); };
+    await assert.rejects(runEval(a.opts), /boom/);
+    const staged = logOf(a.log)[0].argv; const dir = staged[staged.indexOf("--plugin-dir") + 1];
+    assert.ok(!existsSync(dir));
+    const b = setup(); b.opts.arms = ["none"]; await runEval(b.opts);
+    assert.ok(!logOf(b.log)[0].argv.includes("--plugin-dir"));
+  });
+  test("--settings with the odd output style for plugin arms only; records say whether the plugin was staged", async () => {
+    const a = setup(); const out = await runEval(a.opts);
+    for (const c of logOf(a.log)) {
+      if (armOf(c) === "none") assert.ok(!c.argv.includes("--settings")); else assert.deepEqual(JSON.parse(c.argv[c.argv.indexOf("--settings") + 1]), { outputStyle: "odd-claude:odd" });
+    }
+    for (const r of out.records as Record<string, any>[]) {
+      assert.equal(r.plugin_staged, r.arm !== "none"); assert.equal(r.status, "ok", `${r.run_id}: ${r.error}`);
+      assert.deepEqual(r.observed_plugins, r.arm === "none" ? [] : ["odd-claude@inline"]);
+      assert.equal(r.observed_output_style, r.arm === "none" ? "default" : "odd-claude:odd");
+      assert.equal(r.observed_delegation, r.arm === "coord-on" ? "full" : r.arm === "coord-off" ? "organic" : null);
+    }
+  });
+  test("raw stdout of each run is saved under <out>/streams/<run_id>.jsonl", async () => {
+    const a = setup(); const out = await runEval(a.opts);
+    for (const r of out.records) {
+      const f = join(a.opts.outDir, "streams", `${r.run_id}.jsonl`);
+      assert.ok(existsSync(f), f); assert.match(readFileSync(f, "utf8"), /"type":"result"/); assert.match(readFileSync(f, "utf8"), /"subtype":"init"/);
+    }
+  });
+
+  const invalidCase = async (arm: "none" | "coord-on" | "coord-off", proof: Record<string, unknown>, expectError: RegExp): Promise<void> => {
+    const a = setup({ proof }); const rec = await runOne({ task: a.opts.tasks[0], arm, trial: 1 }, a.opts) as unknown as Record<string, any>;
+    assert.equal(rec.status, "invalid"); assert.match(rec.error, expectError);
+    assert.equal(rec.cost_usd, 0.5, "cost still recorded"); assert.equal(typeof rec.passed, "boolean", "still graded");
+  };
+  test("invalid: plugin arm without odd-claude@inline in the init plugins", () => invalidCase("coord-on", { plugins: [] }, /odd-claude@inline/));
+  test("invalid: plugin arm with another output style", () => invalidCase("coord-off", { output_style: "default" }, /output style.*default/i));
+  test("invalid: observed delegation differs from the arm's mode", async () => {
+    await invalidCase("coord-on", { delegation: "organic" }, /delegation.*organic.*full/i);
+    await invalidCase("coord-off", { delegation: "full" }, /delegation.*full.*organic/i);
+    await invalidCase("coord-on", { delegation: null }, /delegation/i);
+  });
+  test("invalid: arm none that loaded odd-claude", () => invalidCase("none", { plugins: [{ name: "odd-claude", source: "odd-claude@inline" }] }, /odd-claude@inline/));
+
+  test("report excludes invalid runs from stats and lists them with a count per arm", async () => {
+    const a = setup({ proof: { output_style: "default" } }); a.opts.arms = ["none", "coord-on"];
+    const out = await runEval(a.opts);
+    assert.deepEqual(out.records.map((r) => r.status), ["ok", "invalid"]);
+    const md = renderReport(out.records, out);
+    assert.match(md, /\| none \| 1 \| 0\/1 \(0%\) \| 0\.500 .*\| 0 \|\n/);
+    assert.match(md, /\| coord-on \| 0 \| 0\/0 \| n\/a .*\| 1 \|\n/);
+    assert.match(md, /Invalid runs[\s\S]*- t1\.coord-on\.1: invalid/); assert.match(md, /Invalid runs[\s\S]*coord-on: 1/);
+    assert.match(md, /\| t1 \| 0\/1 \| 0\.500 \| 0\/0 \| n\/a \|/);
   });
 });
 

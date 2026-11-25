@@ -1,12 +1,12 @@
 // One eval run = fresh workspace + isolated Claude Code state + `claude -p` + hidden-test grading; `runEval` loops with a global budget guard.
-import { appendFileSync, cpSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
+import { appendFileSync, cpSync, existsSync, writeFileSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { tmpdir } from "node:os";
-import { join, relative } from "node:path";
+import { dirname, join, relative } from "node:path";
 import { runProcess } from "../process.js";
-import { buildClaudeArgv } from "./argv.js";
-import { buildRunEnv, prepareIsolation, runDirs, type Arm } from "./isolation.js";
+import { buildClaudeArgv, ODD_OUTPUT_STYLE } from "./argv.js";
+import { ARM_MODE, buildRunEnv, PLUGIN_ID, prepareIsolation, runDirs, type Arm } from "./isolation.js";
 import { parseStream, type TokenCounts } from "./stream.js";
 import type { EvalTask } from "./tasks.js";
 
@@ -17,7 +17,7 @@ export interface RunRecord {
   run_id: string;
   task: string; kind: string; size: string; arm: Arm; trial: number; model: string;
   started_at: string;
-  status: "ok" | "error" | "timeout";
+  status: "ok" | "error" | "timeout" | "invalid";
   error: string | null;
   exit_code: number | null; timed_out: boolean;
   wall_ms: number;
@@ -28,6 +28,10 @@ export interface RunRecord {
   subagents: number;
   is_error: boolean | null; result_subtype: string | null; result_found: boolean;
   observed_delegation: string | null;
+  /** Proof fields from the init message (null when absent). */
+  observed_plugins: string[] | null; observed_output_style: string | null;
+  /** The plugin ran from a staged copy without its `dependencies` (engram is not installed in the isolated config). */
+  plugin_staged: boolean;
   /** Hidden tests passed (grade command exit 0); null when grading did not run. */
   passed: boolean | null; grade_exit_code: number | null;
   /** The agent changed or removed a visible test file that existed in the shipped repo. */
@@ -45,6 +49,8 @@ export interface EvalOptions {
   maxTurns: number;
   totalBudgetUsd: number;
   outDir: string;
+  /** Set by runEval when `pluginDir` is the staged copy; recorded as `plugin_staged` on plugin-arm records. */
+  pluginStaged?: boolean;
   /** Parent environment the run env is derived from (defaults to process.env). */
   baseEnv?: NodeJS.ProcessEnv;
   keepWorkspaces?: boolean;
@@ -91,6 +97,33 @@ function git(args: string[], cwd: string, env: NodeJS.ProcessEnv): void {
   execFileSync("git", args, { cwd, env, stdio: ["ignore", "pipe", "pipe"] });
 }
 
+/** Differences between what the arm promises and what the init/hook messages showed. */
+export function proofMismatches(arm: Arm, r: Pick<RunRecord, "observed_plugins" | "observed_output_style" | "observed_delegation">): string[] {
+  const loaded = r.observed_plugins?.includes(PLUGIN_ID) ?? false, out: string[] = [];
+  if (arm === "none") {
+    if (loaded) out.push(`arm none loaded ${PLUGIN_ID}`);
+    return out;
+  }
+  if (!loaded) out.push(`init plugins ${JSON.stringify(r.observed_plugins)} lack ${PLUGIN_ID}`);
+  if (r.observed_output_style !== ODD_OUTPUT_STYLE) out.push(`output style ${JSON.stringify(r.observed_output_style)}, expected "${ODD_OUTPUT_STYLE}"`);
+  if (r.observed_delegation !== ARM_MODE[arm]) out.push(`delegation mode ${JSON.stringify(r.observed_delegation)}, expected "${ARM_MODE[arm]}"`);
+  return out;
+}
+
+/** Copy of the plugin in a fresh temp dir with `dependencies` removed from its manifest: the isolated config has no engram, and Claude Code disables a plugin with an unsatisfied dependency. */
+export function stagePlugin(pluginDir: string): string {
+  const root = mkdtempSync(join(tmpdir(), "odd-eval-plugin-"));
+  try {
+    const dest = join(root, "odd-claude");
+    cpSync(pluginDir, dest, { recursive: true });
+    const manifest = join(dest, ".claude-plugin", "plugin.json");
+    const json = JSON.parse(readFileSync(manifest, "utf8")) as Record<string, unknown>;
+    delete json.dependencies;
+    writeFileSync(manifest, JSON.stringify(json, null, 2) + "\n");
+    return dest;
+  } catch (e) { rmSync(root, { recursive: true, force: true }); throw e; }
+}
+
 export async function runOne(run: PlannedRun, o: EvalOptions): Promise<RunRecord> {
   const { task, arm, trial } = run;
   const root = mkdtempSync(join(tmpdir(), "odd-eval-run-"));
@@ -99,7 +132,7 @@ export async function runOne(run: PlannedRun, o: EvalOptions): Promise<RunRecord
     schema: RUN_SCHEMA, run_id: `${task.id}.${arm}.${trial}`, task: task.id, kind: task.kind, size: task.size, arm, trial, model: o.model,
     started_at: started.toISOString(), status: "ok", error: null, exit_code: null, timed_out: false, wall_ms: 0,
     cost_usd: null, tokens: null, tokens_by_model: null, num_turns: null, duration_ms: null, subagents: 0,
-    is_error: null, result_subtype: null, result_found: false, observed_delegation: null, passed: null, grade_exit_code: null, visible_tests_modified: null,
+    is_error: null, result_subtype: null, result_found: false, observed_delegation: null, observed_plugins: null, observed_output_style: null, plugin_staged: arm !== "none" && o.pluginStaged === true, passed: null, grade_exit_code: null, visible_tests_modified: null,
   };
   try {
     const dirs = runDirs(root), ws = join(root, "workspace");
@@ -116,17 +149,25 @@ export async function runOne(run: PlannedRun, o: EvalOptions): Promise<RunRecord
     const res = await runProcess(o.claudeBin, argv, { cwd: ws, env, deadlineMs: task.timeout_s * 1000 });
     rec.wall_ms = Math.round(performance.now() - t0);
     rec.exit_code = res.code; rec.timed_out = res.timedOut;
+    mkdirSync(join(o.outDir, "streams"), { recursive: true });
+    writeFileSync(join(o.outDir, "streams", `${rec.run_id}.jsonl`), res.stdout);
     const p = parseStream(res.stdout);
     Object.assign(rec, {
       cost_usd: p.cost_usd, tokens: p.tokens, tokens_by_model: p.tokens_by_model, num_turns: p.num_turns, duration_ms: p.duration_ms, subagents: p.subagents,
       is_error: p.is_error, result_subtype: p.result_subtype, result_found: p.result_found, observed_delegation: p.observed_delegation,
+      observed_plugins: p.observed_plugins, observed_output_style: p.observed_output_style,
     });
     rec.status = res.timedOut ? "timeout" : "ok";
     if (!res.timedOut && (res.code !== 0 || !p.result_found)) { rec.status = "error"; rec.error = `claude exited ${res.code}${p.result_found ? "" : " without a result message"}: ${res.stderr.trim().slice(0, 300)}`; }
+    // Proof check: a run whose arm was not what it claims must not enter the stats (it is still graded and its cost recorded).
+    if (rec.status === "ok") {
+      const bad = proofMismatches(arm, rec);
+      if (bad.length) { rec.status = "invalid"; rec.error = `proof mismatch: ${bad.join("; ")}`; }
+    }
 
     rec.visible_tests_modified = testsModified(before, hashTests(ws));
     // Grading runs after the session whatever its status: the end state is what counts.
-    cpSync(join(task.dir, "hidden"), ws, { recursive: true, force: true });
+    cpSync(join(task.dir, "hidden"), join(ws, "hidden"), { recursive: true, force: true });
     const g = await runProcess("sh", ["-c", task.grade], { cwd: ws, env, deadlineMs: Math.min(task.timeout_s, 300) * 1000 });
     rec.grade_exit_code = g.code;
     rec.passed = g.code === 0 && !g.timedOut;
@@ -138,7 +179,16 @@ export async function runOne(run: PlannedRun, o: EvalOptions): Promise<RunRecord
   return rec;
 }
 
-export async function runEval(o: EvalOptions): Promise<EvalOutcome> {
+export async function runEval(opts: EvalOptions): Promise<EvalOutcome> {
+  const staged = opts.arms.some((a) => a !== "none") ? stagePlugin(opts.pluginDir) : null;
+  try {
+    return await runEvalStaged(staged ? { ...opts, pluginDir: staged, pluginStaged: true } : opts);
+  } finally {
+    if (staged) rmSync(dirname(staged), { recursive: true, force: true });
+  }
+}
+
+async function runEvalStaged(o: EvalOptions): Promise<EvalOutcome> {
   mkdirSync(o.outDir, { recursive: true });
   const file = join(o.outDir, "runs.jsonl");
   const plan = planRuns(o.tasks, o.arms, o.trials);

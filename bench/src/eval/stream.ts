@@ -16,6 +16,10 @@ export interface ParsedStream {
   subagents: number;
   /** Mode the plugin's SessionStart context announced ("Delegation mode: full|organic"), or null when absent. */
   observed_delegation: string | null;
+  /** `plugins[].source` of the `system`/`init` message; null when no init message carried a plugins list. */
+  observed_plugins: string[] | null;
+  /** `output_style` of the `system`/`init` message, or null. */
+  observed_output_style: string | null;
   malformed_lines: number;
 }
 
@@ -30,7 +34,7 @@ function counts(u: Record<string, unknown>): TokenCounts {
 export function parseStream(stdout: string): ParsedStream {
   const out: ParsedStream = {
     result_found: false, is_error: null, result_subtype: null, cost_usd: null, num_turns: null, duration_ms: null,
-    tokens: null, tokens_by_model: null, subagents: 0, observed_delegation: null, malformed_lines: 0,
+    tokens: null, tokens_by_model: null, subagents: 0, observed_delegation: null, observed_plugins: null, observed_output_style: null, malformed_lines: 0,
   };
   const agentIds = new Set<string>();
   let anonymous = 0;
@@ -39,8 +43,15 @@ export function parseStream(stdout: string): ParsedStream {
     let msg: Record<string, unknown> | null;
     try { msg = rec(JSON.parse(line)); } catch { msg = null; }
     if (!msg) { out.malformed_lines++; continue; }
-    const m = /Delegation mode: (full|organic)/.exec(line);
-    if (m) out.observed_delegation = m[1];
+    if (msg.type === "system") {
+      // The SessionStart hook output arrives inside a system/hook_response message; only system messages count (an assistant quoting the line is not proof).
+      const m = /Delegation mode: (full|organic)/.exec(line);
+      if (m && out.observed_delegation === null) out.observed_delegation = m[1];
+      if (msg.subtype === "init") {
+        if (Array.isArray(msg.plugins)) out.observed_plugins = msg.plugins.map((p) => rec(p)?.source).filter((x): x is string => typeof x === "string");
+        if (typeof msg.output_style === "string") out.observed_output_style = msg.output_style;
+      }
+    }
     if (msg.type === "assistant" && (msg.parent_tool_use_id === null || msg.parent_tool_use_id === undefined)) {
       const content = rec(msg.message)?.content;
       if (Array.isArray(content)) {

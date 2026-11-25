@@ -19,17 +19,19 @@ npm run eval -- [--tasks a,b] [--arms none,coord-on,coord-off] [--trials 3] [--m
 
 `bench/eval-tasks/<id>/task.json` (`id`, `kind` bugfix|feature|refactor, `size` small|medium, `prompt`, `grade`, `timeout_s`, optional `allowed_tools`), `repo/` (shipped to the agent) and `hidden/` (never shown).
 
-Per run: `repo/` is copied into a fresh temp workspace, `git init` + one commit; `claude` runs there. Afterwards `hidden/` is copied over the workspace root (relative paths preserved, overwriting) and `grade` runs with `sh -c` in the workspace root; exit 0 = pass. `timeout_s` bounds the claude session (killed with SIGKILL; no shell `timeout`, which macOS lacks); grading gets `min(timeout_s, 300)` s.
+Per run: `repo/` is copied into a fresh temp workspace, `git init` + one commit; `claude` runs there. Afterwards the task's `hidden/` directory is copied to `<workspace>/hidden/` (so `node --test hidden/` and imports like `../src/...` resolve) and `grade` runs with `sh -c` in the workspace root; exit 0 = pass. `timeout_s` bounds the claude session (killed with SIGKILL; no shell `timeout`, which macOS lacks); grading gets `min(timeout_s, 300)` s.
 
 ## Arms
 
 | arm | plugin | delegation state |
 | --- | --- | --- |
 | `none` | none (no `--plugin-dir`) | n/a |
-| `coord-on` | `--plugin-dir plugins/odd-claude` | `{"mode":"full"}` |
-| `coord-off` | `--plugin-dir plugins/odd-claude` | `{"mode":"organic"}` |
+| `coord-on` | `--plugin-dir <staged copy of plugins/odd-claude>` | `{"mode":"full"}` |
+| `coord-off` | `--plugin-dir <staged copy of plugins/odd-claude>` | `{"mode":"organic"}` |
 
-Every run: `claude -p --output-format stream-json --verbose --model opus --permission-mode dontAsk --allowedTools "Agent,Read,Edit,Write,Glob,Grep,Bash(node *),Bash(npm *),Bash(git *)" --max-turns N --max-budget-usd B --no-session-persistence --setting-sources "" [--plugin-dir ...] <prompt>`. Never `--bare` (it skips plugin hooks) and never a permission-bypass flag.
+Caveat: the eval runs odd-claude WITHOUT its engram dependency, so memory is absent in every arm. `plugins/odd-claude/.claude-plugin/plugin.json` declares `"dependencies": ["engram@engram"]`, which is not installed in the isolated `CLAUDE_CONFIG_DIR`, and Claude Code then disables the whole plugin. Once per `runEval` the runner copies the plugin to a fresh temp dir, removes the `dependencies` key from the copy's manifest, passes that copy as `--plugin-dir` and deletes it when the eval ends (also on error). The repository's `plugin.json` is never modified. Each record carries `plugin_staged`.
+
+Every run: `claude -p --output-format stream-json --verbose --model opus --permission-mode dontAsk --allowedTools "Agent,Read,Edit,Write,Glob,Grep,Bash(node *),Bash(npm *),Bash(git *)" --max-turns N --max-budget-usd B --no-session-persistence --setting-sources "" [--plugin-dir <staged copy> --settings '{"outputStyle":"odd-claude:odd"}'] <prompt>`. The plugin flags apply to `coord-on` / `coord-off` only (`--settings` is needed because `--setting-sources ""` leaves the output style at `default`). Never `--bare` (it skips plugin hooks) and never a permission-bypass flag.
 
 ## Isolation
 
@@ -58,6 +60,10 @@ Before each run: if accumulated cost + the per-run cap (`--max-budget-usd`) woul
 
 ## Output
 
-`<out>/runs.jsonl`: one record per run, appended as each run ends. Schema `odd-claude.eval-run/v1`: `schema`, `run_id` (`task.arm.trial`), `task`, `kind`, `size`, `arm`, `trial`, `model`, `started_at`, `status` (`ok`|`error`|`timeout`), `error`, `exit_code`, `timed_out`, `wall_ms` (measured by the runner), `cost_usd` (`total_cost_usd`), `tokens` (`input`, `output`, `cache_read`, `cache_creation`, `total`, summed over `modelUsage`, so subagents are included), `tokens_by_model`, `num_turns`, `duration_ms`, `subagents` (distinct top-level `tool_use` blocks named `Agent`/`Task`), `is_error`, `result_subtype`, `result_found`, `observed_delegation`, `passed` (hidden tests), `grade_exit_code`, `visible_tests_modified` (a shipped test file changed or was removed; new tests do not count). Any field the stream lacks is `null`; parsing never throws.
+`<out>/runs.jsonl`: one record per run, appended as each run ends. Schema `odd-claude.eval-run/v1`: `schema`, `run_id` (`task.arm.trial`), `task`, `kind`, `size`, `arm`, `trial`, `model`, `started_at`, `status` (`ok`|`error`|`timeout`|`invalid`), `error`, `exit_code`, `timed_out`, `wall_ms` (measured by the runner), `cost_usd` (`total_cost_usd`), `tokens` (`input`, `output`, `cache_read`, `cache_creation`, `total`, summed over `modelUsage`, so subagents are included), `tokens_by_model`, `num_turns`, `duration_ms`, `subagents` (distinct top-level `tool_use` blocks named `Agent`/`Task`), `is_error`, `result_subtype`, `result_found`, `observed_delegation`, `observed_plugins` (`plugins[].source` of the stream `system`/`init` message), `observed_output_style`, `plugin_staged`, `passed` (hidden tests), `grade_exit_code`, `visible_tests_modified` (a shipped test file changed or was removed; new tests do not count). Any field the stream lacks is `null`; parsing never throws.
+
+`invalid` (proof check, only for a run that would be `ok`; it is still graded and its cost recorded): a plugin arm whose `observed_plugins` lacks `odd-claude@inline`, whose `observed_output_style` is not `odd-claude:odd`, or whose `observed_delegation` differs from the arm's mode (`coord-on` = `full`, `coord-off` = `organic`); or arm `none` whose `observed_plugins` contains `odd-claude@inline`. `error` names the mismatch. `report.md` excludes invalid runs from pass rate and cost stats and lists them (count per arm, plus an `invalid` column).
+
+`<out>/streams/<run_id>.jsonl`: the raw stdout of each run, kept for later analysis without re-running.
 
 `<out>/report.md`: per arm (runs, pass rate, mean / median / sample stdev of cost, tokens, wall seconds, subagents, visible-test modifications) and per task (pass count and mean cost per arm), plus a list of runs with problems and the budget-stop notice, if any.
