@@ -1,0 +1,8 @@
+{
+  "id": "config-layers",
+  "kind": "feature",
+  "size": "medium",
+  "prompt": "We need configuration from more than a file. Add resolveConfig({ defaults, file, env, argv }) exported from src/index.js (every property optional, inputs never mutated, returns a new object). Precedence from lowest to highest: defaults, file, env, argv. Objects merge deeply across layers; arrays and scalars are replaced. env is a plain object: only variables starting with APP_ count, the rest of the name is lowercased and a double underscore starts a nested key (APP_DB__HOST=x gives { db: { host: \"x\" } }, APP_LOG_LEVEL gives log_level). argv is an array of strings: --db.host=x sets a nested key by dotted path, a bare --flag means true, anything else is ignored. Values from env and argv are converted: \"true\"/\"false\" to booleans, plain integers and decimals (optionally negative) to numbers, everything else stays a string. Keep loadConfig working as it does now.",
+  "grade": "node --test hidden/",
+  "timeout_s": 1200
+}

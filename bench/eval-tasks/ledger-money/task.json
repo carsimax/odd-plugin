@@ -1,0 +1,8 @@
+{
+  "id": "ledger-money",
+  "kind": "refactor",
+  "size": "medium",
+  "prompt": "Money handling in this ledger is scattered: every module does its own float rounding and toFixed formatting. Centralize it. Create src/money.js exporting parseAmount(value) (a number or numeric string to an integer number of cents; throws Error with message \"invalid amount\" for anything that is not a finite number) and formatAmount(cents) (integer cents to a string with two decimals, a leading \"-\" for negatives, e.g. 1234 gives \"12.34\" and -5 gives \"-0.05\"). Have the ledger store and sum integer cents internally, add Ledger#balanceCents(account) returning the exact integer balance, and make statement and report formatting use the shared helpers. Everything that works today (balance(), statement(), accounts(), trialBalance(), error messages, output formats) must behave exactly as before.",
+  "grade": "node --test hidden/",
+  "timeout_s": 1200
+}

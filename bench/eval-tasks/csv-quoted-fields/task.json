@@ -1,0 +1,8 @@
+{
+  "id": "csv-quoted-fields",
+  "kind": "feature",
+  "size": "small",
+  "prompt": "Our CSV reader breaks on real exports: a field like \"hello, world\" gets split at the comma. Make parseCsv and parseCsvWithHeader handle standard quoted CSV fields (commas, doubled quotes and line breaks inside quotes) and Windows line endings, without changing how plain files are read today.",
+  "grade": "node --test hidden/",
+  "timeout_s": 600
+}

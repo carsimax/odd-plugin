@@ -1,0 +1,8 @@
+{
+  "id": "inventory-orders-bug",
+  "kind": "bugfix",
+  "size": "medium",
+  "prompt": "The warehouse team reports two stock problems. First, when an order has several lines and a later line is out of stock, placing the order fails (correct) but the stock for the earlier lines stays reserved forever, so it can never be sold. Second, cancelling the same order twice makes stock look available that other open orders have reserved, and cancelling an order that was already fulfilled should be refused with an error instead of touching stock. Please fix both.",
+  "grade": "node --test hidden/",
+  "timeout_s": 1200
+}

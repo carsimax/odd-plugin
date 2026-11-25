@@ -1,0 +1,8 @@
+{
+  "id": "token-bucket-extract",
+  "kind": "refactor",
+  "size": "small",
+  "prompt": "ApiLimiter and LoginLimiter in src/limiters.js both carry their own copy of the same refill-and-spend logic. Pull that logic out into one reusable token bucket exported as TokenBucket from src/token-bucket.js, constructed with { capacity, refillPerMs, now } and offering tryTake(n = 1) (returns true or false), available() (whole tokens currently available) and msUntil(n = 1) (milliseconds until n tokens are available, 0 if already). Both limiters should use it, and their existing behavior must not change.",
+  "grade": "node --test hidden/",
+  "timeout_s": 600
+}

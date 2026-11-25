@@ -1,0 +1,8 @@
+{
+  "id": "range-merge-bug",
+  "kind": "bugfix",
+  "size": "small",
+  "prompt": "Merging date ranges gives wrong results in some cases. For example mergeRanges([[1, 10], [2, 3]]) should be a single range covering days 1 to 10, but the result is wrong and totalDays reports too few days. Please fix it.",
+  "grade": "node --test hidden/",
+  "timeout_s": 600
+}
