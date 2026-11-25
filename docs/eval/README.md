@@ -67,3 +67,5 @@ Before each run: if accumulated cost + the per-run cap (`--max-budget-usd`) woul
 `<out>/streams/<run_id>.jsonl`: the raw stdout of each run, kept for later analysis without re-running.
 
 `<out>/report.md`: per arm (runs, pass rate, mean / median / sample stdev of cost, tokens, wall seconds, subagents, visible-test modifications) and per task (pass count and mean cost per arm), plus a list of runs with problems and the budget-stop notice, if any.
+
+Results: [pilot 2026-11-25](pilot-2026-11-25.md) (6 tasks x 3 arms x 3 trials).
