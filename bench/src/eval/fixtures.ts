@@ -5,7 +5,7 @@ import { join } from "node:path";
 import type { EvalTask } from "./tasks.js";
 
 /** Overrides for the proof messages the fake emits (init + hook_response); `{}` = behave like the real CLI would for the given argv and seeded state. */
-export interface FakeProof { plugins?: { name: string; source: string }[]; output_style?: string; delegation?: string | null }
+export interface FakeProof { plugins?: { name: string; source: string }[]; output_style?: string; delegation?: string | null; agents?: string[] }
 export interface FakePlan { logFile: string; stdout?: string; exitCode?: number; edits?: Record<string, string>; sleepMs?: number; proof?: FakeProof }
 
 export function installFakeClaude(dir: string, plan: FakePlan): string {
@@ -21,7 +21,10 @@ const argv = process.argv.slice(2);
 let pluginJson = null;
 const pdi = argv.indexOf("--plugin-dir");
 if (pdi >= 0) { try { pluginJson = fs.readFileSync(require("node:path").join(argv[pdi + 1], ".claude-plugin", "plugin.json"), "utf8"); } catch {} }
-fs.appendFileSync(plan.logFile, JSON.stringify({ argv, cwd: process.cwd(), env, delegation, pluginJson }) + "\\n");
+const cfg = process.env.CLAUDE_CONFIG_DIR, P = require("node:path");
+const ls = (d) => { try { return fs.readdirSync(P.join(cfg, d)).sort(); } catch { return null; } };
+const installed = { agents: ls("agents"), skills: ls("skills"), claudeMd: fs.existsSync(P.join(cfg, "CLAUDE.md")), settings: fs.existsSync(P.join(cfg, "settings.json")) };
+fs.appendFileSync(plan.logFile, JSON.stringify({ argv, cwd: process.cwd(), env, delegation, pluginJson, installed }) + "\\n");
 let pre = "";
 if (plan.proof) {
   const o = plan.proof, hasPlugin = pdi >= 0;
@@ -29,6 +32,9 @@ if (plan.proof) {
   if (si >= 0) { try { style = JSON.parse(argv[si + 1]).outputStyle || style; } catch {} }
   let mode = null; if (delegation) { try { mode = JSON.parse(delegation).data.mode; } catch {} }
   const init = { type: "system", subtype: "init", plugins: hasPlugin ? [{ name: "odd-claude", path: "/x", source: "odd-claude@inline" }] : [], output_style: style };
+  init.agents = installed.agents ? installed.agents.map((f) => f.replace(/\\.md$/, "")) : [];
+  if (installed.skills) init.skills = installed.skills;
+  if ("agents" in o) init.agents = o.agents;
   if ("plugins" in o) init.plugins = o.plugins;
   if ("output_style" in o) init.output_style = o.output_style;
   const lines = [init];

@@ -7,7 +7,7 @@ Source: `bench/src/eval/` (compiled to the gitignored `bench/dist/eval/` by `npm
 ## Usage
 
 ```
-npm run eval -- [--tasks a,b] [--arms none,coord-on,coord-off] [--trials 3] [--max-budget-usd 2] [--max-turns 60] [--total-budget-usd 70] [--out <dir>] [--dry-run]
+npm run eval -- [--tasks a,b] [--arms none,coord-on,coord-off,skills] [--model opus] [--trials 3] [--max-budget-usd 2] [--max-turns 60] [--total-budget-usd 70] [--out <dir>] [--dry-run]
 ```
 
 - `--dry-run` prints the plan (tasks x arms x trials, in execution order) and the worst-case cost; nothing runs.
@@ -30,6 +30,9 @@ Optional `checks` (`{ "<name>": "<shell command>" }`, non-empty strings): after 
 | `none` | none (no `--plugin-dir`) | n/a |
 | `coord-on` | `--plugin-dir <staged copy of plugins/odd-claude>` | `{"mode":"full"}` |
 | `coord-off` | `--plugin-dir <staged copy of plugins/odd-claude>` | `{"mode":"organic"}` |
+| `skills` | none; `odd-skills/` installed into the run's private config | n/a |
+
+`skills` is opt-in (the default arms stay `none,coord-on,coord-off`). Per run, before claude starts, the runner executes `sh odd-skills/install.sh --target <the run's private CLAUDE_CONFIG_DIR>` with the run's private environment; a non-zero exit makes the run `error` with the installer's stderr and claude is not spawned. The record gets `skills_installed: true` (false for other arms). argv differs from the other arms: no `--plugin-dir`, no `--settings` output style, and `--setting-sources user` instead of `--setting-sources ""`, so the private config's `CLAUDE.md`, `settings.json` hook, skills and agents load (the dir is private, so no real user state leaks). No `CLAUDE_PLUGIN_DATA`, no plugin staging. Proof fields `observed_agents` / `observed_skills` come from the init message `agents` / `skills` (null when absent). Proof rule: `skills` is `invalid` unless `observed_agents` includes `odd-worker` and `observed_plugins` lacks `odd-claude@inline`; `none` is additionally `invalid` when `observed_agents` includes `odd-worker`. Measurement of the odd-skills POC: two invocations, `--model opus` and `--model sonnet`, each with `--arms none,skills` (for example `--tasks-dir bench/eval-tasks-hard`: 36 runs each).
 
 Caveat: the eval runs odd-claude WITHOUT its engram dependency, so memory is absent in every arm. `plugins/odd-claude/.claude-plugin/plugin.json` declares `"dependencies": ["engram@engram"]`, which is not installed in the isolated `CLAUDE_CONFIG_DIR`, and Claude Code then disables the whole plugin. Once per `runEval` the runner copies the plugin to a fresh temp dir, removes the `dependencies` key from the copy's manifest, passes that copy as `--plugin-dir` and deletes it when the eval ends (also on error). The repository's `plugin.json` is never modified. Each record carries `plugin_staged`.
 

@@ -20,6 +20,10 @@ export interface ParsedStream {
   observed_plugins: string[] | null;
   /** `output_style` of the `system`/`init` message, or null. */
   observed_output_style: string | null;
+  /** `agents` (names) of the init message; null when absent. */
+  observed_agents: string[] | null;
+  /** `skills` (names) of the init message; null when absent. */
+  observed_skills: string[] | null;
   malformed_lines: number;
 }
 
@@ -34,7 +38,7 @@ function counts(u: Record<string, unknown>): TokenCounts {
 export function parseStream(stdout: string): ParsedStream {
   const out: ParsedStream = {
     result_found: false, is_error: null, result_subtype: null, cost_usd: null, num_turns: null, duration_ms: null,
-    tokens: null, tokens_by_model: null, subagents: 0, observed_delegation: null, observed_plugins: null, observed_output_style: null, malformed_lines: 0,
+    tokens: null, tokens_by_model: null, subagents: 0, observed_delegation: null, observed_plugins: null, observed_output_style: null, observed_agents: null, observed_skills: null, malformed_lines: 0,
   };
   const agentIds = new Set<string>();
   let anonymous = 0;
@@ -49,6 +53,8 @@ export function parseStream(stdout: string): ParsedStream {
       if (m && out.observed_delegation === null) out.observed_delegation = m[1];
       if (msg.subtype === "init") {
         if (Array.isArray(msg.plugins)) out.observed_plugins = msg.plugins.map((p) => rec(p)?.source).filter((x): x is string => typeof x === "string");
+        const names = (v: unknown): string[] | null => (Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : null);
+        out.observed_agents = names(msg.agents) ?? out.observed_agents; out.observed_skills = names(msg.skills) ?? out.observed_skills;
         if (typeof msg.output_style === "string") out.observed_output_style = msg.output_style;
       }
     }

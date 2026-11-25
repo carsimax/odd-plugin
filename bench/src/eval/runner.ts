@@ -3,12 +3,17 @@ import { appendFileSync, cpSync, existsSync, writeFileSync, mkdirSync, mkdtempSy
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { tmpdir } from "node:os";
-import { dirname, join, relative } from "node:path";
+import { dirname, join, relative, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { runProcess } from "../process.js";
 import { buildClaudeArgv, ODD_OUTPUT_STYLE } from "./argv.js";
-import { ARM_MODE, buildRunEnv, PLUGIN_ID, prepareIsolation, runDirs, type Arm } from "./isolation.js";
+import { ARM_MODE, buildRunEnv, isPluginArm, PLUGIN_ID, prepareIsolation, runDirs, type Arm } from "./isolation.js";
 import { parseStream, type TokenCounts } from "./stream.js";
 import type { EvalTask } from "./tasks.js";
+
+/** odd-skills installer of this repository (bench/dist/eval -> repo root). */
+export const DEFAULT_SKILLS_INSTALLER = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..", "..", "odd-skills", "install.sh");
+export const SKILLS_AGENT = "odd-worker";
 
 export const RUN_SCHEMA = "odd-claude.eval-run/v1";
 
@@ -30,6 +35,10 @@ export interface RunRecord {
   observed_delegation: string | null;
   /** Proof fields from the init message (null when absent). */
   observed_plugins: string[] | null; observed_output_style: string | null;
+  /** Init `agents` / `skills` names (null when absent). */
+  observed_agents: string[] | null; observed_skills: string[] | null;
+  /** odd-skills was installed into the run's private config before claude started (arm skills only). */
+  skills_installed: boolean;
   /** The plugin ran from a staged copy without its `dependencies` (engram is not installed in the isolated config). */
   plugin_staged: boolean;
   /** Hidden tests passed (grade command exit 0); null when grading did not run. */
@@ -55,6 +64,8 @@ export interface EvalOptions {
   outDir: string;
   /** Set by runEval when `pluginDir` is the staged copy; recorded as `plugin_staged` on plugin-arm records. */
   pluginStaged?: boolean;
+  /** install.sh of odd-skills run for arm `skills` (defaults to the repository's). */
+  skillsInstaller?: string;
   /** Parent environment the run env is derived from (defaults to process.env). */
   baseEnv?: NodeJS.ProcessEnv;
   keepWorkspaces?: boolean;
@@ -102,10 +113,17 @@ function git(args: string[], cwd: string, env: NodeJS.ProcessEnv): void {
 }
 
 /** Differences between what the arm promises and what the init/hook messages showed. */
-export function proofMismatches(arm: Arm, r: Pick<RunRecord, "observed_plugins" | "observed_output_style" | "observed_delegation">): string[] {
+export function proofMismatches(arm: Arm, r: Pick<RunRecord, "observed_plugins" | "observed_output_style" | "observed_delegation"> & { observed_agents?: string[] | null }): string[] {
   const loaded = r.observed_plugins?.includes(PLUGIN_ID) ?? false, out: string[] = [];
+  const worker = r.observed_agents?.includes(SKILLS_AGENT) ?? false;
   if (arm === "none") {
     if (loaded) out.push(`arm none loaded ${PLUGIN_ID}`);
+    if (worker) out.push(`arm none lists the ${SKILLS_AGENT} agent`);
+    return out;
+  }
+  if (arm === "skills") {
+    if (!worker) out.push(`init agents ${JSON.stringify(r.observed_agents)} lack ${SKILLS_AGENT}`);
+    if (loaded) out.push(`arm skills loaded ${PLUGIN_ID}`);
     return out;
   }
   if (!loaded) out.push(`init plugins ${JSON.stringify(r.observed_plugins)} lack ${PLUGIN_ID}`);
@@ -136,13 +154,18 @@ export async function runOne(run: PlannedRun, o: EvalOptions): Promise<RunRecord
     schema: RUN_SCHEMA, run_id: `${task.id}.${arm}.${trial}`, task: task.id, kind: task.kind, size: task.size, arm, trial, model: o.model,
     started_at: started.toISOString(), status: "ok", error: null, exit_code: null, timed_out: false, wall_ms: 0,
     cost_usd: null, tokens: null, tokens_by_model: null, num_turns: null, duration_ms: null, subagents: 0,
-    is_error: null, result_subtype: null, result_found: false, observed_delegation: null, observed_plugins: null, observed_output_style: null, plugin_staged: arm !== "none" && o.pluginStaged === true, passed: null, grade_exit_code: null, visible_tests_modified: null,
+    is_error: null, result_subtype: null, result_found: false, observed_delegation: null, observed_plugins: null, observed_output_style: null, plugin_staged: isPluginArm(arm) && o.pluginStaged === true, observed_agents: null, observed_skills: null, skills_installed: false, passed: null, grade_exit_code: null, visible_tests_modified: null,
     ...(task.difficulty !== undefined ? { difficulty: task.difficulty } : {}),
   };
   try {
     const dirs = runDirs(root), ws = join(root, "workspace");
     prepareIsolation(dirs, arm);
     const env = buildRunEnv(o.baseEnv ?? process.env, dirs, arm);
+    if (arm === "skills") {
+      const inst = await runProcess("sh", [o.skillsInstaller ?? DEFAULT_SKILLS_INSTALLER, "--target", dirs.config], { cwd: root, env, deadlineMs: 60_000 });
+      if (inst.code !== 0 || inst.timedOut) throw new Error(`odd-skills install failed (exit ${inst.code}${inst.timedOut ? ", timed out" : ""}): ${inst.stderr.trim().slice(0, 500)}`);
+      rec.skills_installed = true;
+    }
     cpSync(join(task.dir, "repo"), ws, { recursive: true });
     git(["init", "-q", "-b", "main"], ws, env);
     git(["add", "-A"], ws, env);
@@ -160,7 +183,7 @@ export async function runOne(run: PlannedRun, o: EvalOptions): Promise<RunRecord
     Object.assign(rec, {
       cost_usd: p.cost_usd, tokens: p.tokens, tokens_by_model: p.tokens_by_model, num_turns: p.num_turns, duration_ms: p.duration_ms, subagents: p.subagents,
       is_error: p.is_error, result_subtype: p.result_subtype, result_found: p.result_found, observed_delegation: p.observed_delegation,
-      observed_plugins: p.observed_plugins, observed_output_style: p.observed_output_style,
+      observed_plugins: p.observed_plugins, observed_output_style: p.observed_output_style, observed_agents: p.observed_agents, observed_skills: p.observed_skills,
     });
     rec.status = res.timedOut ? "timeout" : "ok";
     if (!res.timedOut && (res.code !== 0 || !p.result_found)) { rec.status = "error"; rec.error = `claude exited ${res.code}${p.result_found ? "" : " without a result message"}: ${res.stderr.trim().slice(0, 300)}`; }
@@ -194,7 +217,7 @@ export async function runOne(run: PlannedRun, o: EvalOptions): Promise<RunRecord
 }
 
 export async function runEval(opts: EvalOptions): Promise<EvalOutcome> {
-  const staged = opts.arms.some((a) => a !== "none") ? stagePlugin(opts.pluginDir) : null;
+  const staged = opts.arms.some(isPluginArm) ? stagePlugin(opts.pluginDir) : null;
   try {
     return await runEvalStaged(staged ? { ...opts, pluginDir: staged, pluginStaged: true } : opts);
   } finally {

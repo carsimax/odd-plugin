@@ -1,9 +1,9 @@
-// Dev-only CLI: `npm run eval -- [--tasks a,b] [--arms none,coord-on,coord-off] [--trials 3] [--max-budget-usd 2] [--max-turns 60] [--total-budget-usd 70] [--out <dir>] [--dry-run]`
+// Dev-only CLI: `npm run eval -- [--tasks a,b] [--arms none,coord-on,coord-off,skills] [--model opus] [--trials 3] [--max-budget-usd 2] [--max-turns 60] [--total-budget-usd 70] [--out <dir>] [--dry-run]`
 import { existsSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { ARMS, hasAuthEnv, type Arm } from "./isolation.js";
+import { ARMS, DEFAULT_ARMS, hasAuthEnv, isPluginArm, type Arm } from "./isolation.js";
 import { planRuns, runEval } from "./runner.js";
 import { renderReport } from "./report.js";
 import { loadTasks } from "./tasks.js";
@@ -13,7 +13,7 @@ const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..", "
 export interface CliArgs { tasks?: string[]; arms: Arm[]; trials: number; maxBudgetUsd: number; maxTurns: number; totalBudgetUsd: number; out?: string; dryRun: boolean; tasksDir: string; claudeBin: string; model: string; skipAuthCheck: boolean; keepWorkspaces: boolean }
 
 export function parseArgs(argv: readonly string[]): CliArgs {
-  const a: CliArgs = { arms: [...ARMS], trials: 3, maxBudgetUsd: 2, maxTurns: 60, totalBudgetUsd: 70, dryRun: false, tasksDir: join(REPO_ROOT, "bench", "eval-tasks"), claudeBin: "claude", model: "opus", skipAuthCheck: false, keepWorkspaces: false };
+  const a: CliArgs = { arms: [...DEFAULT_ARMS], trials: 3, maxBudgetUsd: 2, maxTurns: 60, totalBudgetUsd: 70, dryRun: false, tasksDir: join(REPO_ROOT, "bench", "eval-tasks"), claudeBin: "claude", model: "opus", skipAuthCheck: false, keepWorkspaces: false };
   const posNum = (flag: string, v: string | undefined): number => { const n = Number(v); if (v === undefined || v === "" || !Number.isFinite(n) || n <= 0) throw new Error(`${flag} needs a positive number`); return n; };
   for (let i = 0; i < argv.length; i++) {
     const flag = argv[i];
@@ -51,7 +51,7 @@ export async function main(argv: readonly string[], write: (s: string) => void =
     return 0;
   }
   const pluginDir = join(REPO_ROOT, "plugins", "odd-claude");
-  if (a.arms.some((x) => x !== "none") && !existsSync(join(pluginDir, ".claude-plugin", "plugin.json"))) throw new Error(`plugin not found at ${pluginDir}`);
+  if (a.arms.some(isPluginArm) && !existsSync(join(pluginDir, ".claude-plugin", "plugin.json"))) throw new Error(`plugin not found at ${pluginDir}`);
   if (!a.skipAuthCheck && !hasAuthEnv(env)) throw new Error("no credential in the environment: runs use a private CLAUDE_CONFIG_DIR, so your stored login is not available. Set ANTHROPIC_API_KEY or CLAUDE_CODE_OAUTH_TOKEN (see `claude setup-token`), or pass --skip-auth-check.");
   const outDir = a.out ?? mkdtempSync(join(tmpdir(), "odd-eval-out-"));
   write(`Output: ${outDir}\n`);

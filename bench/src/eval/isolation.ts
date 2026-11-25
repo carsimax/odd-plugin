@@ -2,9 +2,13 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
-export type Arm = "none" | "coord-on" | "coord-off";
-export const ARMS: readonly Arm[] = ["none", "coord-on", "coord-off"];
-export const ARM_MODE: Record<Arm, "full" | "organic" | null> = { none: null, "coord-on": "full", "coord-off": "organic" };
+export type Arm = "none" | "coord-on" | "coord-off" | "skills";
+export const ARMS: readonly Arm[] = ["none", "coord-on", "coord-off", "skills"];
+/** Arms run when `--arms` is not given (the plugin eval); `skills` is opt-in. */
+export const DEFAULT_ARMS: readonly Arm[] = ["none", "coord-on", "coord-off"];
+export const ARM_MODE: Record<Arm, "full" | "organic" | null> = { none: null, "coord-on": "full", "coord-off": "organic", skills: null };
+/** Arms that load the odd-claude plugin with --plugin-dir. */
+export const isPluginArm = (arm: Arm): boolean => arm === "coord-on" || arm === "coord-off";
 
 /** Plugin manifest name of plugins/odd-claude, loaded with --plugin-dir as `<name>@inline`. */
 export const PLUGIN_ID = "odd-claude@inline";
@@ -39,7 +43,7 @@ export function buildRunEnv(base: NodeJS.ProcessEnv, dirs: RunDirs, arm: Arm): N
   };
   for (const [k, v] of Object.entries(base)) if (v !== undefined && INHERIT.test(k) && !NEVER.test(k)) env[k] = v;
   // Belt and braces: Claude Code exports its own value to hooks; setting ours points at the same private dir if it honors the variable.
-  if (arm !== "none") env.CLAUDE_PLUGIN_DATA = dirs.pluginData;
+  if (isPluginArm(arm)) env.CLAUDE_PLUGIN_DATA = dirs.pluginData;
   return env;
 }
 

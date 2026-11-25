@@ -16,10 +16,10 @@ Runner: `npm run build:bench && node --test bench/dist/eval/*.spec.js`; installe
 
 ## Tasks
 
-- T1 | S3,S4,S5(odd),S6,S7 | worker | pending — core: CLAUDE.md, `odd` skill, 10 agents, guard hook, README; done when: CLAUDE.md <= 2.5 KB, no forbidden references (grep for `CLAUDE_PLUGIN_ROOT`, `mcp__plugin_`, `review_`), guard has a test script showing blocked and allowed commands.
-- T2 | S5 | worker | pending — ported auxiliary skills; done when: every listed skill has valid frontmatter, no forbidden references, 4r-review and judgment-day launch agents by Agent tool with models.
-- T3 | S8 | worker | pending — installer with tests (install, idempotent re-install, uninstall restores, refuses missing target and real config, preserves foreign CLAUDE.md/settings content); done when: tests RED then GREEN against temp dirs only.
-- T4 | S9 | worker | pending — eval arm `skills` (test-first with fake claude); done when: eval specs RED then GREEN and dry-run plans 72 runs.
+- T1 | S3,S4,S5(odd),S6,S7 | worker | done — core: CLAUDE.md, `odd` skill, 10 agents, guard hook, README; done when: CLAUDE.md <= 2.5 KB, no forbidden references (grep for `CLAUDE_PLUGIN_ROOT`, `mcp__plugin_`, `review_`), guard has a test script showing blocked and allowed commands.
+- T2 | S5 | worker | done — ported auxiliary skills; done when: every listed skill has valid frontmatter, no forbidden references, 4r-review and judgment-day launch agents by Agent tool with models.
+- T3 | S8 | worker | done — installer with tests (install, idempotent re-install, uninstall restores, refuses missing target and real config, preserves foreign CLAUDE.md/settings content); done when: tests RED then GREEN against temp dirs only.
+- T4 | S9 | worker | done — eval arm `skills` (test-first with fake claude); done when: eval specs RED then GREEN and dry-run plans 72 runs.
 - T5 | S9 | parent | pending — smoke (1 run each: none/skills × opus/sonnet on one hard task), then 72-run measurement; done when: valid records, isolation re-verified.
 - T6 | S9 | worker | pending — report `docs/eval/odd-skills-<date>.md`; done when: committed with raw runs.
 
@@ -28,3 +28,5 @@ Risk: item 5 (installer modifies a Claude config dir; real `~/.claude` only behi
 ## Log
 
 - L1: user request (verbatim) in S1; choices in S2. Context: pilot and hard eval (108 runs) showed no outcome gain from the plugin with Opus and +50-80% cost.
+- L2: T1-T3 done (commit 053d6b6). Parent checks: guard 33/33, installer 42/42, real-payload install into a temp profile OK (16 skills, 10 agents, PreToolUse hook registered); isolated probe with `--setting-sources user`: init lists the 10 odd agents and odd skills, guard blocked `git reset --hard`, CLAUDE.md applied (Sonnet named the `odd` skill as its workflow for large work). Haiku probe USD 0.003, Sonnet probe USD 0.036.
+- L3: T4 done: eval specs RED (9 new skills-arm specs: compile errors on the new arm, then 3 failing logic specs after the types landed) then GREEN 51/51 (`node --test bench/dist/eval/*.spec.js`); dry-run `--tasks-dir bench/eval-tasks-hard --arms none,skills`: "Plan: 6 tasks x 2 arms x 3 trials = 36 runs".

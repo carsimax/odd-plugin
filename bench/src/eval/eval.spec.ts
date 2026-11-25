@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { afterEach, describe, test } from "node:test";
+import { chmodSync } from "node:fs";
 import { buildClaudeArgv } from "./argv.js";
 import { main, parseArgs } from "./cli.js";
 import { buildRunEnv, hasAuthEnv, prepareIsolation, runDirs } from "./isolation.js";
@@ -348,6 +349,66 @@ describe("named grade checks", () => {
   });
 });
 
+describe("skills arm", () => {
+  const sk = (proof: Record<string, unknown> = {}) => { const a = setup({ proof }); a.opts.arms = ["skills"]; return a; };
+  test("argv: no plugin-dir, no --settings, --setting-sources user", () => {
+    const a = buildClaudeArgv({ prompt: "P", pluginDir: "/p", model: "sonnet", maxTurns: 9, maxBudgetUsd: 1, arm: "skills" });
+    assert.ok(!a.includes("--plugin-dir") && !a.includes("--settings") && !a.includes("--bare"));
+    assert.equal(a[a.indexOf("--setting-sources") + 1], "user"); assert.equal(a.at(-1), "P");
+    assert.equal(a[a.indexOf("--permission-mode") + 1], "dontAsk");
+  });
+  test("the installer runs into the private config before claude; no plugin staging, no plugin data", async () => {
+    const a = sk(); const out = await runEval(a.opts);
+    const calls = logOf(a.log); assert.equal(calls.length, 1);
+    const c = calls[0];
+    assert.ok(c.installed.agents.includes("odd-worker.md") && c.installed.skills.length > 0 && c.installed.claudeMd && c.installed.settings);
+    assert.equal(c.env.CLAUDE_PLUGIN_DATA, null); assert.equal(c.pluginJson, null);
+    const r = out.records[0] as unknown as Record<string, any>;
+    assert.equal(r.status, "ok", String(r.error)); assert.equal(r.skills_installed, true); assert.equal(r.plugin_staged, false);
+    assert.ok(r.observed_agents.includes("odd-worker")); assert.deepEqual(r.observed_plugins, []); assert.ok(r.observed_skills.length > 0);
+    assert.ok(!existsSync(c.env.CLAUDE_CONFIG_DIR), "private dirs removed");
+  });
+  test("other arms never install and record skills_installed false", async () => {
+    const a = setup(); const out = await runEval(a.opts);
+    for (const c of logOf(a.log)) assert.equal(c.installed.agents, null);
+    for (const r of out.records as unknown as Record<string, any>[]) assert.equal(r.skills_installed, false);
+  });
+  test("installer failure: error record with the installer's stderr, claude never spawned", async () => {
+    const a = sk(); const bad = join(a.root, "bad-install.sh");
+    writeFileSync(bad, "#!/bin/sh\necho 'jq missing' >&2\nexit 7\n"); chmodSync(bad, 0o755);
+    (a.opts as unknown as Record<string, unknown>).skillsInstaller = bad;
+    const rec = await runOne({ task: a.opts.tasks[0], arm: "skills", trial: 1 }, a.opts);
+    assert.equal(rec.status, "error"); assert.match(String(rec.error), /jq missing/); assert.equal(logOf(a.log).length, 0);
+    assert.equal((rec as unknown as Record<string, unknown>).skills_installed, false);
+  });
+  test("invalid: skills run without odd-worker, or with odd-claude@inline", async () => {
+    for (const [proof, re] of [[{ agents: ["odd-explore"] }, /odd-worker/], [{ plugins: [{ name: "odd-claude", source: "odd-claude@inline" }] }, /odd-claude@inline/]] as const) {
+      const a = sk(proof as Record<string, unknown>); const rec = await runOne({ task: a.opts.tasks[0], arm: "skills", trial: 1 }, a.opts);
+      assert.equal(rec.status, "invalid"); assert.match(String(rec.error), re); assert.equal(rec.cost_usd, 0.5);
+    }
+  });
+  test("invalid: arm none that shows odd-worker; valid none without it", async () => {
+    const a = setup({ proof: { agents: ["odd-worker"] } }); const bad = await runOne({ task: a.opts.tasks[0], arm: "none", trial: 1 }, a.opts);
+    assert.equal(bad.status, "invalid"); assert.match(String(bad.error), /odd-worker/);
+    const b = setup({ proof: {} }); assert.equal((await runOne({ task: b.opts.tasks[0], arm: "none", trial: 1 }, b.opts)).status, "ok");
+  });
+  test("parseStream: agents and skills from init", () => {
+    const p = parseStream(JSON.stringify({ type: "system", subtype: "init", agents: ["a", 3, "b"], skills: ["s"] }) + "\n") as Record<string, any>;
+    assert.deepEqual(p.observed_agents, ["a", "b"]); assert.deepEqual(p.observed_skills, ["s"]);
+    const q = parseStream(goodStream()) as Record<string, any>; assert.equal(q.observed_agents, null); assert.equal(q.observed_skills, null);
+  });
+  test("report lists the skills arm after the others", async () => {
+    const a = sk(); const o = await runEval(a.opts); const md = renderReport(o.records, o);
+    assert.match(md, /\| skills \| 1 \| 0\/1 \(0%\)/);
+  });
+  test("dry-run accepts the arm: 6 tasks x 2 arms x 3 trials = 36 runs", async () => {
+    const root = tmp(), tasksDir = join(root, "tasks");
+    for (let i = 1; i <= 6; i++) makeTask(tasksDir, `task${i}`);
+    let out = ""; const code = await main(["--dry-run", "--tasks-dir", tasksDir, "--arms", "none,skills"], (s) => { out += s; }, {});
+    assert.equal(code, 0); assert.match(out, /6 tasks x 2 arms x 3 trials = 36 runs/); assert.match(out, /arm=skills/);
+  });
+});
+
 describe("cli", () => {
   test("--dry-run plans 6 tasks x 3 arms x 3 trials = 54 runs and executes nothing", async () => {
     const root = tmp(), tasksDir = join(root, "tasks"), log = join(root, "c.log");
@@ -364,7 +425,7 @@ describe("cli", () => {
     const a = parseArgs(["--tasks", "a,b", "--arms", "none,coord-on", "--trials", "2", "--max-budget-usd", "1.5", "--max-turns", "10", "--out", "/x", "--dry-run"]);
     assert.deepEqual(a.tasks, ["a", "b"]); assert.deepEqual(a.arms, ["none", "coord-on"]); assert.equal(a.trials, 2); assert.equal(a.maxBudgetUsd, 1.5); assert.equal(a.maxTurns, 10); assert.equal(a.out, "/x"); assert.equal(a.dryRun, true);
     assert.equal(parseArgs([]).totalBudgetUsd, 70); assert.equal(parseArgs([]).trials, 3);
-    assert.throws(() => parseArgs(["--arms", "bogus"]), /unknown arm "bogus"; available: none, coord-on, coord-off/);
+    assert.throws(() => parseArgs(["--arms", "bogus"]), /unknown arm "bogus"; available: none, coord-on, coord-off, skills/);
     assert.throws(() => parseArgs(["--trials", "0"]), /--trials needs a positive number/);
     assert.throws(() => parseArgs(["--wat"]), /unknown option "--wat"/);
   });
