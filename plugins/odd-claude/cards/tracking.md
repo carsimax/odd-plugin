@@ -18,7 +18,7 @@ Use about 400 authored changed lines per ODD task only as a planning heuristic, 
 
 Every task line in `## Tasks` ends with `done when: <observable check>` (the command or observation that proves it: a test name, a CLI output, a file state). Stop-and-fix: when a task's done-when check fails, fix it before starting a task that depends on it, or ask the human; never mark it done on a failing check.
 
-At closure, run `node "${CLAUDE_PLUGIN_ROOT}/dist/cli/tasks.js"` (read-only, always exit 0; `--json` for machine output). Fix every finding for the feature document you worked on (stale open tasks, done tasks without a Log entry, tasks without `done when`, missing sections) before reporting completion; report findings in other documents without editing them.
+At closure, run `node "${CLAUDE_PLUGIN_ROOT}/dist/cli/tasks.js"` (read-only, always exit 0; `--json` for machine output). Fix every finding for the feature document you worked on (stale open tasks, done tasks without a Log entry, tasks without `done when`, missing sections) before reporting completion, closing a task only with git or Log evidence (otherwise report the finding); report findings in other documents without editing them.
 
 #### Research depth without a new phase
 

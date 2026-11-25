@@ -23,16 +23,16 @@ test("odd-verify: calibration section sits between Evidence by change kind and S
 });
 
 test("odd-verify: skeptical default", () => {
-  pin(VERIFY, ["an item is unmet until your own observed evidence shows it met"]);
+  pin(VERIFY, ["an item is unmet until observed evidence (your own probes, plus writer checks reusable under the rule above) shows it met"]);
 });
 
 test("odd-verify: five worked verdict examples", () => {
   pin(VERIFY, [
-    "(a) The writer reports tests pass but the spec's example command was never run: unverified, which counts as unmet",
+    "(a) The writer reports tests pass but the spec's example command was never run and you could not run it yourself: unverified, which counts as unmet",
     "(b) The suite is green but the spec's exact error text differs from the observed output: unmet, a blocker",
     "(c) The behavior is already present at the baseline and the request did not ask to change it: a pre-existing advisory, not a blocker",
-    "(d) A test was loosened or skipped to reach green without spec authorization: a blocker",
-    "(e) Your observed output matches the spec example exactly: met",
+    "(d) A test was loosened or skipped to reach green without spec authorization, and not required by a spec change to the behavior under test: a blocker",
+    "(e) Your observed output matches the spec example exactly and your other probes for that item pass: met",
   ]);
 });
 
@@ -41,4 +41,29 @@ test("odd-verify: calibration section stays compact", () => {
   const m = /^## Calibration\n([\s\S]*?)(?=^## )/m.exec(s);
   assert.ok(m, "Calibration section");
   assert.ok(Buffer.byteLength(m?.[1] ?? "") <= 1500, "section at most 1.5 KB");
+});
+
+test("odd-verify: calibration examples carry the qualifiers of the rules they restate", () => {
+  const m = /^## Calibration\n([\s\S]*?)(?=^## )/m.exec(read(VERIFY));
+  const c = m?.[1] ?? "";
+  for (const p of ["required by a spec change", "could not run", "reusable", "a rule in this file"]) assert.ok(c.includes(p), p);
+  assert.ok(!c.includes("a rule above"));
+});
+
+test("odd.md step 5: a failed done-when waits only its dependents or goes to the human", () => {
+  const line = read("output-styles/odd.md").split("\n").find((l) => l.startsWith("5. **Track before the first write.**")) ?? "";
+  assert.ok(line.includes("dependents"), "dependents");
+  assert.ok(/\bask\b/.test(line), "ask");
+  assert.ok(!line.includes("fix a failed one first"));
+});
+
+test("cards/tracking.md: a task is closed only with git or Log evidence, else the finding is reported", () => {
+  const closure = read("cards/tracking.md").split("\n").find((l) => l.startsWith("At closure, run")) ?? "";
+  assert.match(closure, /git or Log evidence/);
+  assert.match(closure, /otherwise report the finding/);
+});
+
+test("status skill: the description mentions the feature-document lint", () => {
+  const fm = /^---\n([\s\S]*?)\n---/.exec(read("skills/status/SKILL.md"))?.[1] ?? "";
+  assert.match(fm, /^description:.*lint/m);
 });

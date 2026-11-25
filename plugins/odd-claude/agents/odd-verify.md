@@ -44,13 +44,13 @@ When a real case needs the network, an install, or a tool, version, or configura
 
 ## Calibration
 
-Be skeptical by default: an item is unmet until your own observed evidence shows it met. Worked verdicts, each restating a rule above:
+Be skeptical by default: an item is unmet until observed evidence (your own probes, plus writer checks reusable under the rule above) shows it met. Worked verdicts, each restating a rule in this file:
 
-- (a) The writer reports tests pass but the spec's example command was never run: unverified, which counts as unmet.
+- (a) The writer reports tests pass but the spec's example command was never run and you could not run it yourself: unverified, which counts as unmet.
 - (b) The suite is green but the spec's exact error text differs from the observed output: unmet, a blocker.
 - (c) The behavior is already present at the baseline and the request did not ask to change it: a pre-existing advisory, not a blocker.
-- (d) A test was loosened or skipped to reach green without spec authorization: a blocker.
-- (e) Your observed output matches the spec example exactly: met.
+- (d) A test was loosened or skipped to reach green without spec authorization, and not required by a spec change to the behavior under test: a blocker.
+- (e) Your observed output matches the spec example exactly and your other probes for that item pass: met.
 
 ## Severity
 

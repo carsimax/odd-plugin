@@ -67,7 +67,7 @@ test("the `odd` output style stays", () => {
   assert.ok(existsSync(join(root, "output-styles", "odd.md")));
   // Pinned byte-identical to its content after the refine-v5 prompt dedupe (T3). A deliberate edit of odd.md must update this hash.
   const sha = createHash("sha256").update(readFileSync(join(root, "output-styles", "odd.md"))).digest("hex");
-  assert.equal(sha, "ea844d565e27b77f78b34c3a9ae24c27b26600312cc477136397e3184292b1ff");
+  assert.equal(sha, "a63ae6a469a732ee3ebe81467861edb974650399ae41979bde8e82bf5689b81f");
 });
 
 test("setup has no statusline subcommand, flag or shim", () => {
