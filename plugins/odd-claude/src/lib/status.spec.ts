@@ -38,12 +38,12 @@ test("status with state: session id from env wins over latest", () => {
     assert.equal(s.session.origin, "env");
     assert.equal(s.session.state.source, "startup");
     assert.deepEqual(s.hooks, ["SessionStart"]);
-    assert.equal(s.roadmapPhase, "v5.2: session retro and skill pressure tests shipped");
+    assert.equal(s.roadmapPhase, "v5.3: harness research, done-when lint and verifier calibration shipped");
     const text = renderStatus(s);
     assert.match(text, /odd-claude 0\.1\.0/);
     assert.match(text, /session: a \(env\)/);
     assert.match(text, /hooks: SessionStart/);
-    assert.match(text, /roadmap: v5\.2: session retro and skill pressure tests shipped/);
+    assert.match(text, /roadmap: v5\.3: harness research, done-when lint and verifier calibration shipped/);
   });
 });
 

@@ -1,7 +1,7 @@
 // Read-only status (R38 status semantics): plugin, data dir, session state, hooks, roadmap.
 import { listSessionIds, readSessionState, type StateData } from "./state.js";
 
-export const ROADMAP_PHASE = "v5.2: session retro and skill pressure tests shipped";
+export const ROADMAP_PHASE = "v5.3: harness research, done-when lint and verifier calibration shipped";
 
 export interface StatusDeps {
   pluginVersion: string;
