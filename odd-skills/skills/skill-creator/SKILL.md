@@ -1,0 +1,85 @@
+---
+name: skill-creator
+description: "Trigger: skill creation, skill creator, create skill, new skill. Create LLM-first skills with valid frontmatter."
+license: Apache-2.0
+metadata:
+  author: odd-skills
+  version: "1.0"
+---
+
+## Activation Contract
+
+Use this skill when creating or updating a reusable AI skill for Claude Code or another agent runtime.
+
+Create a skill when:
+- a workflow or convention is reused across sessions;
+- generic agent behavior needs project-specific constraints;
+- a decision tree helps the agent choose safely;
+- examples, templates, or references would make future execution more reliable.
+
+Do not create a skill for a one-off task, generic documentation, or rules that belong in code/tests.
+
+## Hard Rules
+
+- Follow these rules as the normative source for skill structure and style; if the project has its own `docs/skill-style-guide.md`, it takes precedence.
+- A skill is an LLM runtime contract, not human-facing docs.
+- Keep `SKILL.md` concise: target 180–450 tokens, max 1000.
+- Use imperative instructions and concrete gates; avoid tutorials and background prose.
+- Frontmatter `description` must be one physical YAML-safe line and include trigger words first.
+- Do not add a `Keywords` section; put essential trigger words in `description`.
+- Put templates, schemas, and generated examples in `assets/`.
+- Put longer rationale or local doc links in `references/`.
+
+## Decision Gates
+
+| Need | Action |
+| --- | --- |
+| Small reusable behavior | Create `skills/{skill-name}/SKILL.md` only |
+| Templates, schemas, fixtures | Add `skills/{skill-name}/assets/` |
+| Longer explanation or edge cases | Add `skills/{skill-name}/references/` |
+| Existing skill covers it | Update the existing skill instead |
+| Skill affects delegation discovery | Ensure trigger words appear in `description` |
+| Discipline skill (new or edited) | Run the RED baseline before writing and the GREEN/REFACTOR retest before reporting done |
+
+## Execution Steps
+
+1. Read the project's `docs/skill-style-guide.md` when present before creating or updating skills.
+2. Inspect existing skills and confirm the new skill does not duplicate one.
+3. Choose a kebab-case skill name that matches the user-facing trigger.
+4. Create or update this structure:
+
+```text
+skills/{skill-name}/
+├── SKILL.md
+├── assets/       # optional
+└── references/   # optional
+```
+
+5. Use this frontmatter shape:
+
+```yaml
+---
+name: {skill-name}
+description: "Trigger: {phrases users or agents will say}. {What this skill does}."
+license: Apache-2.0
+metadata:
+  author: odd-skills
+  version: "1.0"
+---
+```
+
+6. Write sections in this order: Activation Contract, Hard Rules, Decision Gates, Execution Steps, Output Contract, References.
+7. Install the skill as a directory under `~/.claude/skills/` (user) or `.claude/skills/` (project); it is picked up on the next session.
+8. Pressure-test a discipline skill (rules an agent is tempted to bypass): follow [references/pressure-testing.md](references/pressure-testing.md) with [assets/pressure-scenario.md](assets/pressure-scenario.md). Skip for pure reference skills.
+
+## Output Contract
+
+Return:
+- Files created or modified.
+- Whether this created a new skill or updated an existing one.
+- Any supporting `assets/` or `references/` files added.
+- Pressure-test scenarios run and their results, or why testing did not apply.
+
+## References
+
+- `docs/skill-style-guide.md` — the project's own style guide, when present.
