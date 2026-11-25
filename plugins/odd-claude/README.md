@@ -2,6 +2,15 @@
 
 A Claude Code plugin that ports the ODD harness of gentle-shell (MIT) <!-- odd-check: allow --> to Claude Code. **v2.0** adds native receipt-driven review (RDD) on top of **v1.0** (the parity release): the ODD persona, orchestrator cards, agents, skills, native integrations, advisory review and lifecycle hooks. Apart from the RDD Stop settle reminder, which can block only when you turn RDD on (it is off by default), the plugin ships **no deny/ask/block hook** (user decision, v0.5, amended for v2): its hooks only add context. Coordinator mode and the admission rules are prompt text, not enforcement; otherwise the only enforcement is Claude Code's native permission system (see [Permission modes](#permission-modes)). The plugin collects no data and sends nothing anywhere.
 
+## What's new (next release)
+
+Harness refinements from `odd/tasks/harness-research.md`. No breaking changes.
+
+- **Done-when per task and a feature-document lint:** every task line carries `done when: <observable check>`. `node dist/cli/tasks.js [--json] [--cwd <dir>]` lints `odd/tasks/*.md` (open tasks on a closed branch, done without a Log entry, open without done-when, missing sections), read-only and shown by `/odd-claude:status`.
+- **`odd-verify` calibration:** a skeptical default (an item is unmet until your own observed evidence shows it met) plus five worked verdict examples that restate existing rules; no new rule.
+- **`review_status` `detail: "concise"`:** optional argument, default `"full"` (output unchanged). Concise drops only the projection detail and per-slot artifact subjects; every id, binding, `next_transition`, forecast and repair field stays.
+- **Research:** `docs/research/ai-leaders-harness.md` maps harness guidance from AI leaders to odd-claude, with sources.
+
 ## What's new in 5.2.0
 
 Session retrospective and pressure-tested skills. No breaking changes.
@@ -179,7 +188,7 @@ A stdio server, `dist/mcp/review-server.js`, declared as server `review` in `.mc
 |---|---|
 | `review_assess` | Read-only: freeze the candidate and classify risk, reasons and changed paths; starts nothing, creates no lineage and writes nothing. The tier is decided by this assessment alone. |
 | `review_inspect` | Read-only: lineages of this repository (state, risk, revision), unreadable ones, and the RDD mode. |
-| `review_status` | Read-only status envelope. Follow only its `next_transition`. |
+| `review_status` | Read-only status envelope. Follow only its `next_transition`. Optional `detail`: `full` (default) or `concise`. |
 | `review_start` | Start a review. **Always relays consent** for medium/high risk and creates nothing; low risk is approved at once. |
 | `review_answer_consent` | Records your explicit `granted` / `declined` for the envelope's exact `target_identity`. |
 | `review_capture`, `review_capture_group` | Admit one reviewer slot, or the whole ordered group status issued, then stop. |
