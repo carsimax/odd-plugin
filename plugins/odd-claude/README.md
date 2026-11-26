@@ -346,6 +346,78 @@ For development, load the plugin from a checkout without installing:
 claude --plugin-dir plugins/odd-claude
 ```
 
+## Installer
+
+odd-claude installs globally (no plugin) with one file, `odd-claude.mjs`, that needs only Node >= 22. Run it with no arguments in a terminal for the interactive installer, or with a subcommand for scripts:
+
+```
+node odd-claude.mjs                      # TUI: Welcome > Detection > Profile > Models > Extras > Dependencies > Review > Installing > Complete
+node odd-claude.mjs install --source plugins/odd-claude --dry-run --json
+node odd-claude.mjs install --yes --profile economy --model worker=opus
+node odd-claude.mjs update | rollback [--to <version>] | models --profile max | backups [--restore <id>] | status | uninstall [--purge]
+```
+
+The TUI keys are: up/down to move, enter to continue, esc to go back, space to toggle, left/right to change a model, `q` to quit. Without a terminal and without a subcommand it prints the usage and exits 2; a failed step exits 1.
+
+### Subcommands
+
+| Command | What it does |
+|---|---|
+| `install` | migrates from the plugin (uninstalls it, copies its state), stages the payload, installs files, hooks, output style, MCP servers, extras and dependencies, in that order |
+| `update` | downloads the latest GitHub release (checksums verified), swaps `current`, re-applies hooks, MCP and extras with the options saved at install; models are kept |
+| `uninstall` | reverse order: extras, MCP, output style, hooks, files; never uninstalls Engram or codegraph |
+| `rollback` | points `current` back at the previous (or `--to`) installed version |
+| `models` | applies `--profile` / `--model` to the installed version |
+| `backups` | lists the backups, or restores one with `--restore <id>` |
+| `status` | node, `claude`, `gh`, Engram and codegraph, installed version, plugin install |
+
+### Flags
+
+Every TUI choice has a flag. `odd-claude --help` is the reference.
+
+| Flag | Meaning |
+|---|---|
+| `--source <dir>` | install from a local checkout instead of the latest release |
+| `--profile balanced\|economy\|max\|custom` | model preset; `balanced` (the previous models) is the default on a fresh install, and a reinstall keeps the stored selection |
+| `--model <role>=<model>` | per-agent override, repeatable, e.g. `--model worker=opus --model explore=haiku`; models are `haiku`, `sonnet`, `opus`; an override turns the preset into `custom` |
+| `--dry-run` | plan only: nothing is written and nothing external is changed |
+| `--yes` | non-interactive; confirms the Engram and codegraph installs |
+| `--no-deps` | skip Engram and codegraph |
+| `--no-statusline` | skip the status line |
+| `--keep-claude-ai-connectors`, `--keep-claude-ai-skills`, `--keep-claude-ai-plugins` | leave that claude.ai sync setting alone (by default each is disabled) |
+| `--keep-builtin-plugins`, `--disable-builtin <id>` | leave the `@builtin` plugins alone, or disable only the given ones (repeatable); by default every discovered builtin is disabled except managed ones and `cc-plugin-sec-default@builtin` |
+| `--purge` | uninstall: also delete the data dir and the backups |
+| `--force` | update: skip the 6 hour release-check cache and reinstall the same version |
+| `--to <version>` | rollback target |
+| `--json` | one machine-readable JSON document |
+
+### What gets written where
+
+```
+~/.odd-claude/
+  versions/<x.y.z>/     the release payload (dist, cards, agents, skills, output-styles, statusline, ...)
+  current -> versions/x.y.z
+  data/                 state that used to live in CLAUDE_PLUGIN_DATA (profiles.json, persona, delegation, ...)
+  manifest.json         every file installed into ~/.claude with its sha256
+  settings-state.json   values replaced in settings.json, MCP servers added, update-check cache, chosen extras
+  backups/<timestamp>/  copy of each ~/.claude file before it changed (and settings.json backups)
+  bin/odd-claude.mjs    the installer bundle of the installed release
+~/.claude/
+  skills/, agents/, output-styles/odd.md    copied, with absolute paths resolved
+  settings.json         + 9 hooks, outputStyle "odd", statusLine, the claude.ai keys, enabledPlugins for builtins
+  MCP (user scope)      odd-review, odd-peers, codegraph
+```
+
+`CLAUDE_CONFIG_DIR` and `ODD_CLAUDE_HOME` relocate the two roots.
+
+### Uninstall guarantees
+
+- A file in `~/.claude` is removed only when its hash still matches the manifest; edited or foreign files are reported and kept.
+- Only our hook entries are removed; other hooks keep their place and order.
+- `outputStyle`, `statusLine`, the three claude.ai keys and the `enabledPlugins` entries return to their previous values (absent keys are removed again); a value you changed after the install is kept.
+- Only the MCP servers odd-claude added are removed; servers that already existed are never touched.
+- Engram and codegraph are never uninstalled. `--purge` additionally deletes `data/` and `backups/`; without it they stay.
+
 ## Peer orchestrators (R07)
 
 **What it is.** One Claude Code session on this machine can send a short message to another live session, with the recipient's human consent. The channel is a file mailbox under `${CLAUDE_PLUGIN_DATA}/peers/<recipient session id>/`, delivered by hooks. Released in 2.1.0.
