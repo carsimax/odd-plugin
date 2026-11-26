@@ -5,10 +5,10 @@ import { join } from "node:path";
 import { stagePayload } from "./payload.js";
 import { applyInstallFiles, applyUninstallFiles, planInstallFiles, planUninstallFiles } from "./files.js";
 import { readManifest, sha256 } from "./manifest.js";
-import { buildSelection, defaultSelection } from "./models.js";
+import { applyAgentEffort, buildSelection, defaultSelection, roleEffort } from "./models.js";
 import { listBackups } from "./backup.js";
 import { installPlan, runInstall, runUninstall, summarizePlan, uninstallPlan } from "./plan.js";
-import { readProfile } from "../lib/profiles.js";
+import { PRESETS, PROFILE_ROLES, readProfile } from "../lib/profiles.js";
 import { makeHome, makeSource, put } from "./installer.testkit.js";
 
 function setup() {
@@ -44,6 +44,22 @@ test("agent model: written for each role from balanced defaults and from a custo
       assert.match(a.content!.toString(), new RegExp(`\\nmodel: ${model}\\n`), `${role} -> ${model}`);
     }
   }
+});
+
+test("agent effort: written next to model for each role from the balanced preset, idempotent across reinstall", () => {
+  const { paths } = setup();
+  const plan = planInstallFiles(paths, defaultSelection());
+  for (const role of PROFILE_ROLES) {
+    const text = plan.actions.find((x) => x.rel === `agents/${role}.md`)!.content!.toString();
+    assert.match(text, new RegExp(`\\nmodel: ${PRESETS.balanced[role]!.model}\\neffort: ${PRESETS.balanced[role]!.effort}\\n`), role);
+    assert.equal(applyAgentEffort(text, PRESETS.balanced[role]!.effort!), text, `${role} idempotent`);
+  }
+  assert.match(plan.actions.find((x) => x.rel === "agents/odd-worker.md")!.content!.toString(), /\neffort: medium\n/);
+  assert.match(plan.actions.find((x) => x.rel === "agents/odd-verify.md")!.content!.toString(), /\neffort: medium\n/);
+  const max = planInstallFiles(paths, buildSelection("max"));
+  assert.match(max.actions.find((x) => x.rel === "agents/odd-worker.md")!.content!.toString(), /\nmodel: opus\neffort: high\n/);
+  assert.equal(roleEffort(buildSelection("economy"), "odd-worker"), "low");
+  assert.equal(roleEffort(defaultSelection(), "unknown-role"), undefined);
 });
 
 test("install writes files, manifest and profile state; a second run is all unchanged", () => {

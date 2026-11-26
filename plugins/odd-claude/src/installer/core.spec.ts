@@ -7,7 +7,7 @@ import { activeVersion, listVersions, stagePayload } from "./payload.js";
 import { resolvePlaceholders } from "./placeholders.js";
 import { readManifest, sha256, writeManifest } from "./manifest.js";
 import { backupFiles, listBackups, restoreBackup } from "./backup.js";
-import { applyAgentModel, buildSelection, defaultSelection, readSelection, roleCoverage, writeProfileState } from "./models.js";
+import { applyAgentEffort, applyAgentModel, buildSelection, defaultSelection, readSelection, roleCoverage, writeProfileState } from "./models.js";
 import { PROFILE_ROLES, PRESETS, profileContextLine, readProfile } from "../lib/profiles.js";
 import { dataDirFromEnv } from "../lib/state.js";
 import { runInstall, runUninstall } from "./plan.js";
@@ -210,4 +210,15 @@ test("upgrading from a payload with cards/ and older rules leaves no cards dir a
 
   runUninstall({ paths });
   assert.equal(existsSync(join(paths.claudeDir, "rules", "odd-delegation.md")), false);
+});
+
+test("applyAgentEffort inserts after model, replaces an existing line, is idempotent and leaves other bytes alone", () => {
+  const withModel = "---\nname: odd-worker\nmodel: sonnet\nmaxTurns: 5\n---\n\nBody.\n";
+  const once = applyAgentEffort(withModel, "high");
+  assert.equal(once, "---\nname: odd-worker\nmodel: sonnet\neffort: high\nmaxTurns: 5\n---\n\nBody.\n");
+  assert.equal(applyAgentEffort(once, "high"), once);
+  assert.equal(applyAgentEffort(once, "low"), once.replace("effort: high", "effort: low"));
+  assert.equal(applyAgentEffort("---\nname: x\n---\nbody\n", "low"), "---\nname: x\neffort: low\n---\nbody\n");
+  assert.equal(applyAgentEffort("---\r\nname: x\r\nmodel: opus\r\n---\r\nb\r\n", "max"), "---\r\nname: x\r\nmodel: opus\r\neffort: max\r\n---\r\nb\r\n");
+  assert.throws(() => applyAgentEffort("no frontmatter", "low"), /no frontmatter/);
 });

@@ -70,3 +70,24 @@ export function applyAgentModel(markdown, model) {
     const next = line.test(body) ? body.replace(line, () => `model: ${model}`) : `${body}${eol}model: ${model}`;
     return `---${eol}${next}${m[3]}---${markdown.slice(m[0].length)}`;
 }
+/** The effort the profile gives a role (a `custom` selection starts from balanced, as writeProfileState does); undefined when it has none. */
+export function roleEffort(selection, role) {
+    const base = selection.profile === CUSTOM_PROFILE ? "balanced" : selection.profile;
+    return PRESETS[base][role]?.effort;
+}
+/** Sets or replaces `effort:` in the agent frontmatter (inserted right after `model:` when present), leaving every other byte untouched. */
+export function applyAgentEffort(markdown, effort) {
+    const m = /^---(\r?\n)([\s\S]*?)(\r?\n)---(?=\r?\n|$)/.exec(markdown);
+    if (!m)
+        throw new Error("agent file has no frontmatter");
+    const eol = m[1];
+    const body = m[2];
+    const line = /^effort:.*$/m;
+    const model = /^model:.*$/m;
+    const next = line.test(body)
+        ? body.replace(line, () => `effort: ${effort}`)
+        : model.test(body)
+            ? body.replace(model, (l) => `${l.replace(/\r$/, "")}${eol}effort: ${effort}`)
+            : `${body}${eol}effort: ${effort}`;
+    return `---${eol}${next}${m[3]}---${markdown.slice(m[0].length)}`;
+}

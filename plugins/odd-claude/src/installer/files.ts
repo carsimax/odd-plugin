@@ -5,7 +5,7 @@ import { dirname, join, posix } from "node:path";
 import { backupFiles } from "./backup.js";
 import { CLAUDE_MD, applyBlocks, parseBlocks, planBlocks, readDesiredBlocks, type BlockAction, type DesiredBlock } from "./claude-md.js";
 import { atomicWriteFile, readManifest, sha256, writeManifest, type Manifest } from "./manifest.js";
-import { agentFileForRole, applyAgentModel, roleCoverage, type ModelSelection } from "./models.js";
+import { agentFileForRole, applyAgentEffort, applyAgentModel, roleCoverage, roleEffort, type ModelSelection } from "./models.js";
 import { activeVersion, readTree } from "./payload.js";
 import type { InstallPaths } from "./paths.js";
 import { resolvePlaceholders } from "./placeholders.js";
@@ -90,7 +90,11 @@ function desiredFiles(paths: InstallPaths, selection: ModelSelection, payloadDir
       const role = rel.slice(0, -3);
       let text = resolve(f.data).toString("utf8");
       const model = selection.roles[role];
-      if (model !== undefined && rel === agentFileForRole(role)) text = applyAgentModel(text, model);
+      if (model !== undefined && rel === agentFileForRole(role)) {
+        text = applyAgentModel(text, model);
+        const effort = roleEffort(selection, role);
+        if (effort !== undefined) text = applyAgentEffort(text, effort);
+      }
       files.set(`agents/${rel}`, { data: Buffer.from(text), mode: f.mode });
     }
   }
