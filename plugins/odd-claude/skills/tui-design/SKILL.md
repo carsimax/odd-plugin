@@ -9,7 +9,7 @@ metadata:
 
 ## Activation Contract
 
-Use for designing, reviewing or refining a terminal interface (panels, rails, status bars, cards, prompts), especially in a terminal-hosted coding agent. The target feel is an IDE inside a terminal: dense, calm, developer-first, never a costume of retro TUI chrome. Not for web pages (use `/odd-claude:ui-design`).
+Use for designing, reviewing or refining a terminal interface (panels, rails, status bars, cards, prompts), especially in a terminal-hosted coding agent. The target feel is an IDE inside a terminal: dense, calm, developer-first, never a costume of retro TUI chrome. Not for web pages (use `/ui-design`).
 
 ## Hard Rules
 

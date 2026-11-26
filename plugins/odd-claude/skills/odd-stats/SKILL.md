@@ -1,5 +1,5 @@
 ---
-name: stats
+name: odd-stats
 description: Show local stats for this session (tokens in/out/cache, turns, subagent count and time, exploration counters) read from the transcript and plugin state. No network.
 disable-model-invocation: true
 ---

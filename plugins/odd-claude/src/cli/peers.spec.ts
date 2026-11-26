@@ -87,9 +87,9 @@ test("the CLI source does not import any grant writer", () => {
 });
 
 test("the peers skill disables model invocation and passes no user argument text to its command", () => {
-  const skill = readFileSync(join(pluginRoot, "skills", "peers", "SKILL.md"), "utf8");
+  const skill = readFileSync(join(pluginRoot, "skills", "odd-peers", "SKILL.md"), "utf8");
   const fm = /^---\n([\s\S]*?)\n---/.exec(skill)?.[1] ?? "";
-  assert.match(fm, /^name: peers$/m);
+  assert.match(fm, /^name: odd-peers$/m);
   assert.match(fm, /^disable-model-invocation: true$/m);
   assert.match(skill, /dist\/cli\/peers\.js" list --session/);
   assert.doesNotMatch(skill, /\b(allow|revoke)\b[^\n]*dist\/cli\/peers\.js|peers\.js"? (allow|revoke)/);

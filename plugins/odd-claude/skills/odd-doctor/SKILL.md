@@ -1,5 +1,5 @@
 ---
-name: doctor
+name: odd-doctor
 description: Run read-only odd-claude diagnostics (node, git, engram, codegraph, plugin version, data dir).
 disable-model-invocation: true
 ---

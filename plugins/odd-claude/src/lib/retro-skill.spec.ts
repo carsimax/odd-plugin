@@ -19,11 +19,11 @@ const pin = (file: string, phrases: string[]): void => {
   for (const p of phrases) assert.equal(s.split(p).length - 1, 1, `${file}: exactly one "${p}"`);
 };
 
-const RETRO = "skills/retro/SKILL.md";
+const RETRO = "skills/odd-retro/SKILL.md";
 
 test("skill retro: frontmatter, MIT, model-invocable, trigger words, small body", () => {
   const { fm, body } = split(RETRO);
-  assert.match(fm, /^name: retro$/m);
+  assert.match(fm, /^name: odd-retro$/m);
   assert.match(fm, /^license: MIT$/m);
   assert.match(fm, /^ {2}author: odd-claude$/m);
   assert.ok(!fm.includes("disable-model-invocation"));

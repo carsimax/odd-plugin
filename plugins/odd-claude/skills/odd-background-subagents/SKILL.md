@@ -1,5 +1,5 @@
 ---
-name: background-subagents
+name: odd-background-subagents
 description: Show or switch the background subagents policy (enable, disable, status). Stored in plugin state; applies from the next session start.
 disable-model-invocation: true
 user-invocable: true

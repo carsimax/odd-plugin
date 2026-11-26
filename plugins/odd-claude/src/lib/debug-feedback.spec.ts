@@ -178,7 +178,7 @@ test("receiving-review: GitHub inline comments answered in their thread, wording
   pin(REVIEW, [
     "in its thread",
     "pulls/{pr}/comments/{id}/replies",
-    "/odd-claude:comment-writer",
+    "/comment-writer",
     "the thread's language",
   ]);
 });
@@ -193,8 +193,8 @@ test("odd-worker: bug-fix rule with root cause first and a counted three-attempt
 
 test("cards/skills.md: both skill hints", () => {
   const s = read("cards/skills.md");
-  assert.match(s, /`\/odd-claude:systematic-debugging`/);
-  assert.match(s, /`\/odd-claude:receiving-review`/);
+  assert.match(s, /`\/systematic-debugging`/);
+  assert.match(s, /`\/receiving-review`/);
 });
 
 test("README lists both skills in both lists", () => {

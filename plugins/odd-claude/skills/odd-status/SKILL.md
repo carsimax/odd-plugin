@@ -1,5 +1,5 @@
 ---
-name: status
+name: odd-status
 description: Show read-only odd-claude status (version, data dir, session state, hooks, roadmap phase) and the feature-document lint.
 disable-model-invocation: true
 ---

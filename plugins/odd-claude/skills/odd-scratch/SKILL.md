@@ -1,5 +1,5 @@
 ---
-name: scratch
+name: odd-scratch
 description: Show this session's scratch directory (created at session start, removed at session end) and what is in it.
 disable-model-invocation: true
 ---

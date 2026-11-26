@@ -1,7 +1,7 @@
 ---
 name: odd-jd-fix
 description: Judgment Day surgical fix agent for confirmed findings. Edits code within the allowed surfaces and runs focused tests; fixes only the authorized finding IDs.
-tools: Read, Grep, Glob, Edit, Write, Bash, mcp__codegraph__codegraph_explore, mcp__plugin_odd-claude_codegraph__codegraph_explore
+tools: Read, Grep, Glob, Edit, Write, Bash, mcp__codegraph__codegraph_explore
 maxTurns: 60
 color: green
 ---

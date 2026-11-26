@@ -81,7 +81,7 @@ test("skill-improver: audit flag, before/after reruns, reference by skill name",
   pin(IMPROVER, [
     "Flag a discipline skill with no pressure-test evidence",
     "rerun its scenarios before and after a change to a discipline rule and report both results",
-    "pressure-testing reference of `/odd-claude:skill-creator`",
+    "pressure-testing reference of `/skill-creator`",
   ]);
 });
 

@@ -4,7 +4,7 @@ Parent (main-thread) session only. Load it when the Writer rule fires or for an 
 
 - **Invariants**: each writer prompt names the existing helpers its unit must reuse for shared state and the invariants they keep; units built in parallel cannot see each other.
 - **Size threshold**: a subagent costs one to two minutes of reading and setup before it writes anything; delegate a unit only when it needs several minutes of work (several files or roughly 100+ changed lines). Several small independent changes are faster inline, one after another.
-- **Parallelism**: a unit is one independent piece of behavior with its own code, tests, and docs; never split one behavior into a test writer, a docs writer, and inline code, and never delegate a unit that depends on another unit still in progress. Launch every independent unit in the same turn: several `Agent` calls (`subagent_type: "odd-claude:odd-worker"`, `run_in_background: true` when background is useful) in one assistant message with no other tool call, then wait for all completions before the Seam check; serial launches void the reason: if units cannot launch together, work inline.
+- **Parallelism**: a unit is one independent piece of behavior with its own code, tests, and docs; never split one behavior into a test writer, a docs writer, and inline code, and never delegate a unit that depends on another unit still in progress. Launch every independent unit in the same turn: several `Agent` calls (`subagent_type: "odd-worker"`, `run_in_background: true` when background is useful) in one assistant message with no other tool call, then wait for all completions before the Seam check; serial launches void the reason: if units cannot launch together, work inline.
 
 #### Allowed edit surfaces (MANDATORY)
 
@@ -25,4 +25,4 @@ A writer never widens its surface; it reports exact candidate paths with reasons
 
 #### Judgment Day fix dispatch
 
-Use `odd-claude:odd-jd-fix` only for an explicitly activated Judgment Day fix batch, never as a lexical or generic-writer fallback. Judgment Day is independent: it neither enables nor replaces ordinary review. The exact dispatch shape (activation, round, frozen ledger hash, finding rows, `## Allowed edit surfaces`) is defined once in `/odd-claude:judgment-day` (Fix Boundary). No hook enforces it or the `## Allowed edit surfaces` rule: both are rules the parent follows.
+Use `odd-jd-fix` only for an explicitly activated Judgment Day fix batch, never as a lexical or generic-writer fallback. Judgment Day is independent: it neither enables nor replaces ordinary review. The exact dispatch shape (activation, round, frozen ledger hash, finding rows, `## Allowed edit surfaces`) is defined once in `/judgment-day` (Fix Boundary). No hook enforces it or the `## Allowed edit surfaces` rule: both are rules the parent follows.

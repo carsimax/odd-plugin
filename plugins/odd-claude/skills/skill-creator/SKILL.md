@@ -29,7 +29,7 @@ Do not create a skill for a one-off task, generic documentation, or rules that b
 - Do not add a `Keywords` section; put essential trigger words in `description`.
 - Put templates, schemas, and generated examples in `assets/`.
 - Put longer rationale or local doc links in `references/`.
-- After changing project skills, refresh the registry with `/odd-claude:skill-registry` when available.
+- After changing project skills, refresh the registry with `/odd-skill-registry` when available.
 
 ## Decision Gates
 
@@ -86,4 +86,4 @@ Return:
 ## References
 
 - `docs/skill-style-guide.md` — the project's own style guide, when present.
-- `/odd-claude:skill-registry` — registry refresh and indexing contract.
+- `/odd-skill-registry` — registry refresh and indexing contract.

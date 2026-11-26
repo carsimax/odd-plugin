@@ -1,5 +1,5 @@
 ---
-name: peers
+name: odd-peers
 description: Show which other sessions this session accepts peer messages from (consent for inter-session messaging).
 disable-model-invocation: true
 ---
@@ -8,10 +8,10 @@ Show the user the peer-consent status below exactly as printed, then this usage.
 
 Usage (the human types these as their own prompt, exactly, one per message):
 
-- `/odd-claude:peers allow <session-id>`: this session accepts messages from `<session-id>`.
-- `/odd-claude:peers revoke <session-id>`: stop accepting from that session.
-- `/odd-claude:peers revoke --all`: stop accepting from everyone.
-- `/odd-claude:peers`: show the current grants.
+- `/odd-peers allow <session-id>`: this session accepts messages from `<session-id>`.
+- `/odd-peers revoke <session-id>`: stop accepting from that session.
+- `/odd-peers revoke --all`: stop accepting from everyone.
+- `/odd-peers`: show the current grants.
 
 Closed by default. Grants are recorded by a hook from the human's own prompt (the model and this skill cannot grant) and cleared when this session ends.
 

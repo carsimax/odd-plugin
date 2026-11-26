@@ -1,5 +1,5 @@
 ---
-name: persona
+name: odd-persona
 description: Show the odd-claude persona. There is a single persona, neutral (the default); any other mode, including mentor, is refused.
 disable-model-invocation: true
 user-invocable: true

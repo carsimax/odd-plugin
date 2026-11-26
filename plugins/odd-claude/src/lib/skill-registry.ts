@@ -13,7 +13,7 @@ import { atomicWriteFile } from "./state.js";
 export const REGISTRY_REL_PATH = ".atl/skill-registry.md";
 export const CACHE_REL_PATH = ".atl/.skill-registry.cache.json";
 export const NO_REGISTRY_ENV = "ODD_CLAUDE_NO_SKILL_REGISTRY";
-const EXCLUDE_NAMES = new Set(["_shared", "skill-registry"]);
+const EXCLUDE_NAMES = new Set(["_shared", "skill-registry", "odd-skill-registry"]);
 const EXCLUDE_PREFIXES = ["sdd-"];
 
 export interface SkillEntry {

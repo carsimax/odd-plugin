@@ -1,16 +1,22 @@
 // Naming/telemetry guard (S4/S5): fails when authored files under the plugin contain
-// forbidden `gentle-`/`gentle_`/`GENTLE_` identifiers or telemetry markers.
+// forbidden `gentle-`/`gentle_`/`GENTLE_` identifiers or telemetry markers, or the retired
+// plugin-namespaced references (`odd-claude:<name>`, `mcp__plugin_odd-claude_`) in the shipped
+// content (skills, cards, agents, output-styles, support, README.md); the global install uses bare
+// agent/skill names and `mcp__odd-*` tool names.
 // Attributed notices are allowed on lines containing `odd-check: allow` or in files
 // named LICENSE / NOTICE*.
 import { readdirSync, readFileSync, statSync } from "node:fs";
-import { join, basename, relative, resolve } from "node:path";
+import { join, basename, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const SKIP_DIRS = new Set(["node_modules", "dist-test", ".git"]);
 const SKIP_FILES = new Set(["package-lock.json"]);
+const CONTENT = new Set(["skills", "cards", "agents", "output-styles", "README.md", "support"]);
 const PATTERNS = [
   { name: "gentle- identifier", re: /gentle[-_]/i },
   { name: "telemetry marker", re: /telemetry/i },
+  { name: "plugin-namespaced agent/skill reference", re: /odd-claude:[A-Za-z0-9]/, scope: CONTENT },
+  { name: "plugin-namespaced MCP tool name", re: /mcp__plugin_odd-claude_/, scope: CONTENT },
 ];
 
 export function walk(dir) {
@@ -31,12 +37,14 @@ export function scan(root) {
     const base = basename(file);
     if (base === "LICENSE" || base.startsWith("NOTICE")) continue;
     if (relative(root, file) === join("scripts", "check-naming.mjs")) continue;
+    const rel = relative(root, file);
     const lines = readFileSync(file, "utf8").split("\n");
     lines.forEach((line, i) => {
       if (line.includes("odd-check: allow")) return;
-      for (const { name, re } of PATTERNS) {
+      for (const { name, re, scope } of PATTERNS) {
+        if (scope && !scope.has(rel.split(sep)[0])) continue;
         if (re.test(line)) {
-          violations.push(`${relative(root, file)}:${i + 1}: ${name}: ${line.trim()}`);
+          violations.push(`${rel}:${i + 1}: ${name}: ${line.trim()}`);
         }
       }
     });

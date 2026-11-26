@@ -9,11 +9,11 @@ metadata:
 
 ## Activation Contract
 
-Use this skill when auditing, refactoring, normalizing, or improving existing `SKILL.md` files. Use `/odd-claude:skill-creator` when creating a brand-new skill from a reusable pattern.
+Use this skill when auditing, refactoring, normalizing, or improving existing `SKILL.md` files. Use `/skill-creator` when creating a brand-new skill from a reusable pattern.
 
 ## Hard Rules
 
-- Read the project's `docs/skill-style-guide.md` when present, otherwise `/odd-claude:skill-creator`, and treat it as the normative style contract.
+- Read the project's `docs/skill-style-guide.md` when present, otherwise `/skill-creator`, and treat it as the normative style contract.
 - Treat `SKILL.md` as the source of truth; preserve author intent, critical rules, activation semantics, and output requirements.
 - In Claude Code use the skills listed in the current session (plugin and project skills) for names, triggers, scopes, and exact paths. The shared `.atl/skill-registry.md` is a disk-only fallback and omits runtime-only skills.
 - Default to audit-only. Modify files only when the user explicitly asks to apply improvements.
@@ -32,12 +32,12 @@ Use this skill when auditing, refactoring, normalizing, or improving existing `S
 
 ## Execution Steps
 
-1. Read `docs/skill-style-guide.md` when present, otherwise `/odd-claude:skill-creator`.
+1. Read `docs/skill-style-guide.md` when present, otherwise `/skill-creator`.
 2. Use the effective session view (`<available_skills>` plus any `Effective session skills` rows) to select skills. If neither is present, report that limitation and use `.atl/skill-registry.md` as a disk-only fallback; if absent, scan known skill directories for `*/SKILL.md`.
 3. For each selected skill, audit metadata, trigger clarity, section order, body budget, actionability, decision gates, output contract, and local references.
-4. Flag a discipline skill with no pressure-test evidence; the method is the pressure-testing reference of `/odd-claude:skill-creator`.
+4. Flag a discipline skill with no pressure-test evidence; the method is the pressure-testing reference of `/skill-creator`.
 5. Return an audit report grouped by skill with severity and exact proposed changes.
-6. In apply mode, edit only safe issues, preserve content, create supporting files when needed, then refresh or request `/odd-claude:skill-registry`. In apply mode also rerun its scenarios before and after a change to a discipline rule and report both results.
+6. In apply mode, edit only safe issues, preserve content, create supporting files when needed, then refresh or request `/odd-skill-registry`. In apply mode also rerun its scenarios before and after a change to a discipline rule and report both results.
 
 ## Output Contract
 
@@ -50,5 +50,5 @@ Return:
 
 ## References
 
-- `/odd-claude:skill-creator` — normative LLM-first skill style guide.
-- [../skill-registry/SKILL.md](../skill-registry/SKILL.md) — registry refresh and indexing contract.
+- `/skill-creator` — normative LLM-first skill style guide.
+- [../odd-skill-registry/SKILL.md](../odd-skill-registry/SKILL.md) — registry refresh and indexing contract.

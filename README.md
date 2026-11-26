@@ -1,6 +1,6 @@
 # odd-claude
 
-odd-claude is a Claude Code plugin marketplace whose first plugin, `odd-claude`, ports the ODD harness to Claude Code. v0.1 is the installable skeleton: Engram dependency, `/odd-claude:doctor`, `/odd-claude:status` and an opt-in `/odd-claude:setup`.
+odd-claude is a Claude Code plugin marketplace whose first plugin, `odd-claude`, ports the ODD harness to Claude Code. v0.1 is the installable skeleton: Engram dependency, `/odd-doctor`, `/odd-status` and an opt-in `/odd-setup`.
 
 Install (engram is required: `plugin.json` declares `dependencies: ["engram@engram"]`, so add its marketplace first):
 

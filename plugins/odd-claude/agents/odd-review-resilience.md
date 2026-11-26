@@ -1,7 +1,7 @@
 ---
 name: odd-review-resilience
 description: Resilience reviewer (advisory, read-only): fallbacks, retry/backoff, graceful degradation, observability, load, rollback and SLO risks. Receives the candidate change in the prompt and returns finding rows; never edits.
-tools: Read, Grep, Glob, mcp__codegraph__codegraph_explore, mcp__plugin_odd-claude_codegraph__codegraph_explore
+tools: Read, Grep, Glob, mcp__codegraph__codegraph_explore
 disallowedTools: Edit, Write, NotebookEdit, Bash
 maxTurns: 30
 color: purple

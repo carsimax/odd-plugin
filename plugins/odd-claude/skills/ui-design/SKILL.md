@@ -9,7 +9,7 @@ metadata:
 
 ## Activation Contract
 
-Use for web and product interfaces when shaping, implementing, or assessing a user experience. When producing artboards or mockups, this skill owns UX quality; deliver them in whatever format the project already uses. Use `/odd-claude:tui-design` for terminal interfaces.
+Use for web and product interfaces when shaping, implementing, or assessing a user experience. When producing artboards or mockups, this skill owns UX quality; deliver them in whatever format the project already uses. Use `/tui-design` for terminal interfaces.
 
 ## Hard Rules
 

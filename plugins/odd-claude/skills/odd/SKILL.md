@@ -52,7 +52,7 @@ large authorized work      → track ODD tasks and implement by work unit
 For large implementation with subagents (launched with the `Agent` tool):
 
 ```text
-clarify → odd-claude:odd-explore when the evidence budget is exceeded → inline, or odd-claude:odd-worker only for a reason → odd-claude:odd-verify
+clarify → odd-explore when the evidence budget is exceeded → inline, or odd-worker only for a reason → odd-verify
 ```
 
 Trigger specifics beyond the odd output style (Delegation):
