@@ -20,6 +20,30 @@ curl -fsSL https://raw.githubusercontent.com/carsimax/odd-plugin/main/cds-skills
 
 The installer needs `bash`, `curl`, `tar` and coreutils. `jq` is optional. The repository must be public: plain `curl` sends no GitHub credentials.
 
+Linux: works on Debian/Ubuntu and on Alpine with `bash` installed (BusyBox coreutils are enough).
+
+## Windows
+
+Native PowerShell (Windows PowerShell 5.1 or PowerShell 7), no `jq` needed:
+
+```powershell
+irm https://raw.githubusercontent.com/carsimax/odd-plugin/main/cds-skills/install.ps1 | iex
+```
+
+Pin a version by setting `CDS_REF` first:
+
+```powershell
+$env:CDS_REF = "<tag>"; irm https://raw.githubusercontent.com/carsimax/odd-plugin/main/cds-skills/install.ps1 | iex
+```
+
+It writes the same files as the bash installer to `$HOME\.claude` (or `$env:CLAUDE_CONFIG_DIR`) and sets `outputStyle` in `settings.json` itself. If `settings.json` is not valid JSON, the install stops before changing anything. Uninstall:
+
+```powershell
+& "$HOME\.claude\cds-skills\uninstall.ps1"
+```
+
+Alternative: with Git Bash installed, run the bash `curl ... | bash` command above and `bash ~/.claude/cds-skills/uninstall.sh`. Use one route per machine, not both.
+
 ## What it writes
 
 Target is `~/.claude`, or `$CLAUDE_CONFIG_DIR` when set.
@@ -32,11 +56,11 @@ Target is `~/.claude`, or `$CLAUDE_CONFIG_DIR` when set.
 | `output-styles/cds.md` | the `cds` output style |
 | `CLAUDE.md` | the cds instructions between `<!-- cds:start -->` and `<!-- cds:end -->`; your own content outside the markers is kept |
 | `CLAUDE.md.cds-backup-<timestamp>` | backup made before every change to `CLAUDE.md` |
-| `settings.json` | `"outputStyle": "cds"`, other keys untouched (only with `jq`) |
-| `cds-skills/manifest.txt`, `cds-skills/uninstall.sh` | what was installed, and the uninstaller |
+| `settings.json` | `"outputStyle": "cds"`, other keys untouched (bash route: only with `jq`; Windows route: always, no `jq` needed) |
+| `cds-skills/manifest.txt`, `cds-skills/uninstall.sh` (`uninstall.ps1` on Windows) | what was installed, and the uninstaller |
 
 - Reinstalling replaces the block (never duplicates it) and removes cds files that are no longer shipped.
-- Without `jq`, `settings.json` is not edited. Run `/output-style cds` inside Claude Code instead.
+- Bash route without `jq`: `settings.json` is not edited. Run `/output-style cds` inside Claude Code instead. The Windows installer edits `settings.json` itself and never needs `jq`.
 - If `settings.json` is not valid JSON, the install stops before changing anything.
 
 ## Uninstall
