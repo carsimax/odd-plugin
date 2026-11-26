@@ -51,12 +51,12 @@ if (plan.sleepMs) setTimeout(go, plan.sleepMs); else go();
 }
 
 /** stream-json of a successful run: one Agent launch, one subagent-internal launch (ignored), a result with two models. */
-export function goodStream(cost = 0.5): string {
+export function goodStream(cost = 0.5, denials?: unknown[]): string {
   const lines = [
     { type: "system", subtype: "init" },
     { type: "assistant", parent_tool_use_id: null, message: { content: [{ type: "tool_use", id: "t1", name: "Agent", input: {} }, { type: "tool_use", id: "t2", name: "Read", input: {} }] } },
     { type: "assistant", parent_tool_use_id: "t1", message: { content: [{ type: "tool_use", id: "t3", name: "Task", input: {} }] } },
-    { type: "result", subtype: "success", is_error: false, num_turns: 7, duration_ms: 1234, total_cost_usd: cost, modelUsage: {
+    { type: "result", subtype: "success", is_error: false, num_turns: 7, duration_ms: 1234, total_cost_usd: cost, ...(denials ? { permission_denials: denials } : {}), modelUsage: {
       "claude-opus": { inputTokens: 10, outputTokens: 20, cacheReadInputTokens: 30, cacheCreationInputTokens: 40, costUSD: 0.4 },
       "claude-haiku": { inputTokens: 1, outputTokens: 2, cacheReadInputTokens: 3, cacheCreationInputTokens: 4, costUSD: 0.1 } } },
   ];

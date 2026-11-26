@@ -9,11 +9,19 @@ Detail lives in `references/` next to this file (path: `<skills-dir>/odd/referen
 
 ## Flow
 
-1. Authorize and explore (read-only requests stay read-only). Ask the user for any open product decision; batch the questions and wait.
+1. Authorize and explore (read-only requests stay read-only). Interactive: ask the user for any open product decision; batch the questions and wait. Unattended: see "Unattended runs".
 2. Track before the first write: create `odd/tasks/<feature>.md` (header, `## Specs` with `S#` quoting user strings verbatim, `## Tasks` each ending `done when: <check>`, `## Log` last with `L1` = the user's request verbatim), then the visible task list (`TaskCreate`/`TaskUpdate`, or `TodoWrite`). One line to the user: document and task count. Format and rules: `references/tracking.md`.
 3. Implement task by task. Test-first when a deterministic runner applies: RED (observe the intended failure), GREEN, PRESERVE (one test per touched existing behavior). Check a task off only after its outcome and checks were observed this session.
 4. Commit work units (about 400 changed lines, tests and docs together, Conventional Commit) on a feature branch, only for authorized large work; load `work-unit-commits`. Push, PR and merge stay the user's decision.
 5. Close: report the verified outcome, every failed, skipped or pending check, and the next step, plus the `Risk:` line.
+
+## Unattended runs
+
+Unattended = no human can answer: a headless or `claude -p` session, `AskUserQuestion` unavailable, or the request says to proceed. Then the ask-first steps (step 1 questions, the pause before the first write, relaying a subagent's `interaction_required`) do not apply: never stop to ask and never end with open questions. Pick the most conservative reasonable assumption (smallest change, existing conventions, reversible, no new dependency), record each one in the feature document `## Log`, proceed, and finish the requested change. Final report: an `Assumptions` list, one line each. Genuinely destructive or out-of-repo actions stay off-limits; skip them and report. Interactive sessions keep asking.
+
+## Denied or failing commands
+
+One denied or failing command is not proof that a tool is unavailable. Retry in a simpler form (one command per call, no `&&`/`;`/pipes/redirects, no subshells) and try the direct tool equivalent before concluding. Never claim tests, builds or other checks cannot run until the exact command was run alone and its output read. If it still fails, report the command, the error and what was tried, then continue with the checks that do run.
 
 ## Delegation: when
 

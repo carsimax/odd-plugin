@@ -16,11 +16,11 @@ export function renderReport(records0: readonly RunRecord[], outcome?: Pick<Eval
   lines.push(`Runs: ${all.length}${outcome ? ` of ${outcome.planned} planned; recorded cost ${outcome.spent_usd.toFixed(2)} USD` : ""}${invalid.length ? `; ${invalid.length} invalid (excluded from the stats)` : ""}.`);
   if (outcome?.stopped) lines.push("", `Stopped by the budget guard: ${outcome.stopped.reason}; ${outcome.stopped.skipped} runs not started.`);
   lines.push("", "## Per arm", "", "Metric cells read mean / median / stdev (sample stdev; n/a when no data).", "",
-    "| arm | runs | pass rate | cost USD | tokens | wall s | subagents | visible tests modified | invalid |", "| --- | --- | --- | --- | --- | --- | --- | --- | --- |");
+    "| arm | runs | pass rate | cost USD | tokens | wall s | subagents | visible tests modified | invalid | runs with denials | mean denials |", "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |");
   for (const arm of arms) {
     const rs = records.filter((r) => r.arm === arm);
     const graded = rs.filter((r) => r.passed !== null), pass = graded.filter((r) => r.passed).length;
-    lines.push(`| ${arm} | ${rs.length} | ${pass}/${graded.length}${graded.length ? ` (${((100 * pass) / graded.length).toFixed(0)}%)` : ""} | ${cell(summarize(rs.map((r) => r.cost_usd)), 3)} | ${cell(summarize(rs.map((r) => r.tokens?.total ?? null)), 0)} | ${cell(summarize(rs.map((r) => r.wall_ms)), 1, 1000)} | ${cell(summarize(rs.map((r) => r.subagents)), 2)} | ${rs.filter((r) => r.visible_tests_modified).length} | ${invalid.filter((r) => r.arm === arm).length} |`);
+    lines.push(`| ${arm} | ${rs.length} | ${pass}/${graded.length}${graded.length ? ` (${((100 * pass) / graded.length).toFixed(0)}%)` : ""} | ${cell(summarize(rs.map((r) => r.cost_usd)), 3)} | ${cell(summarize(rs.map((r) => r.tokens?.total ?? null)), 0)} | ${cell(summarize(rs.map((r) => r.wall_ms)), 1, 1000)} | ${cell(summarize(rs.map((r) => r.subagents)), 2)} | ${rs.filter((r) => r.visible_tests_modified).length} | ${invalid.filter((r) => r.arm === arm).length} | ${rs.filter((r) => (r.permission_denials ?? 0) > 0).length} | ${f(summarize(rs.map((r) => r.permission_denials ?? null)).mean)} |`);
   }
   const names = [...new Set(records.flatMap((r) => Object.keys(r.checks ?? {})))].sort();
   const rate = (rs: readonly RunRecord[], n: string): string => {

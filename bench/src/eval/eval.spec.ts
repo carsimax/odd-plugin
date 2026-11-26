@@ -32,6 +32,7 @@ function setup(over: Partial<Parameters<typeof installFakeClaude>[1]> = {}, task
   return { root, tasksDir, log, opts };
 }
 
+const SANDBOX = { sandbox: { enabled: true, autoAllowBashIfSandboxed: true, allowUnsandboxedCommands: false, failIfUnavailable: true } };
 describe("argv", () => {
   const base = { prompt: "P", pluginDir: "/p", model: "opus", maxTurns: 9, maxBudgetUsd: 1.5 };
   test("none arm: no plugin-dir; never --bare nor a bypass flag", () => {
@@ -42,16 +43,27 @@ describe("argv", () => {
     assert.equal(a[a.indexOf("--setting-sources") + 1], "");
     assert.equal(a[a.indexOf("--max-turns") + 1], "9");
     assert.equal(a[a.indexOf("--max-budget-usd") + 1], "1.5");
-    assert.match(a[a.indexOf("--allowedTools") + 1], /^Agent,Read,Edit,Write,Glob,Grep,Bash\(node \*\),Bash\(npm \*\),Bash\(git \*\)$/);
+    assert.match(a[a.indexOf("--allowedTools") + 1], /^Agent,Read,Edit,Write,Glob,Grep,Bash$/);
     assert.equal(a.at(-1), "P");
     assert.ok(a.includes("--no-session-persistence") && a.includes("--verbose"));
   });
   test("coord arms: plugin-dir and the odd output style via --settings", () => {
     for (const arm of ["coord-on", "coord-off"] as const) {
       const a = buildClaudeArgv({ ...base, arm }); assert.equal(a[a.indexOf("--plugin-dir") + 1], "/p"); assert.ok(!a.includes("--bare"));
-      assert.deepEqual(JSON.parse(a[a.indexOf("--settings") + 1]), { outputStyle: "odd-claude:odd" });
+      assert.deepEqual(JSON.parse(a[a.indexOf("--settings") + 1]), { outputStyle: "odd-claude:odd", ...SANDBOX });
     }
-    assert.ok(!buildClaudeArgv({ ...base, arm: "none" }).includes("--settings"));
+    assert.deepEqual(JSON.parse(buildClaudeArgv({ ...base, arm: "none" }).join("\u0000").split("--settings\u0000")[1].split("\u0000")[0]), SANDBOX);
+  });
+  test("every arm: plain Bash (no Bash(...) patterns), extra tools kept, one --settings with the native sandbox", () => {
+    for (const arm of ["none", "coord-on", "coord-off", "skills"] as const) {
+      const a = buildClaudeArgv({ ...base, arm, extraTools: ["WebFetch"] });
+      const tools = a[a.indexOf("--allowedTools") + 1].split(",");
+      assert.deepEqual(tools, ["Agent", "Read", "Edit", "Write", "Glob", "Grep", "Bash", "WebFetch"]);
+      assert.equal(a.filter((x) => x === "--settings").length, 1);
+      const s = JSON.parse(a[a.indexOf("--settings") + 1]);
+      assert.deepEqual(s.sandbox, SANDBOX.sandbox);
+      assert.deepEqual(Object.keys(s).sort(), arm.startsWith("coord") ? ["outputStyle", "sandbox"] : ["sandbox"]);
+    }
   });
 });
 
@@ -195,13 +207,13 @@ describe("plugin staging, output style and proof fields", () => {
     const b = setup(); b.opts.arms = ["none"]; await runEval(b.opts);
     assert.ok(!logOf(b.log)[0].argv.includes("--plugin-dir"));
   });
-  test("--settings with the odd output style for plugin arms only; records say whether the plugin was staged", async () => {
+  test("--settings carries the sandbox for every arm and the odd output style for plugin arms only; records say whether the plugin was staged", async () => {
     const a = setup(); const out = await runEval(a.opts);
     for (const c of logOf(a.log)) {
-      if (armOf(c) === "none") assert.ok(!c.argv.includes("--settings")); else assert.deepEqual(JSON.parse(c.argv[c.argv.indexOf("--settings") + 1]), { outputStyle: "odd-claude:odd" });
+      assert.deepEqual(JSON.parse(c.argv[c.argv.indexOf("--settings") + 1]), armOf(c) === "none" ? SANDBOX : { outputStyle: "odd-claude:odd", ...SANDBOX });
     }
     for (const r of out.records as Record<string, any>[]) {
-      assert.equal(r.plugin_staged, r.arm !== "none"); assert.equal(r.status, "ok", `${r.run_id}: ${r.error}`);
+      assert.equal(r.plugin_staged, r.arm !== "none"); assert.equal(r.sandboxed, true); assert.equal(r.status, "ok", `${r.run_id}: ${r.error}`);
       assert.deepEqual(r.observed_plugins, r.arm === "none" ? [] : ["odd-claude@inline"]);
       assert.equal(r.observed_output_style, r.arm === "none" ? "default" : "odd-claude:odd");
       assert.equal(r.observed_delegation, r.arm === "coord-on" ? "full" : r.arm === "coord-off" ? "organic" : null);
@@ -234,8 +246,8 @@ describe("plugin staging, output style and proof fields", () => {
     const out = await runEval(a.opts);
     assert.deepEqual(out.records.map((r) => r.status), ["ok", "invalid"]);
     const md = renderReport(out.records, out);
-    assert.match(md, /\| none \| 1 \| 0\/1 \(0%\) \| 0\.500 .*\| 0 \|\n/);
-    assert.match(md, /\| coord-on \| 0 \| 0\/0 \| n\/a .*\| 1 \|\n/);
+    assert.match(md, /\| none \| 1 \| 0\/1 \(0%\) \| 0\.500 .*\| 0 \| 0 \| n\/a \|\n/);
+    assert.match(md, /\| coord-on \| 0 \| 0\/0 \| n\/a .*\| 1 \| 0 \| n\/a \|\n/);
     assert.match(md, /Invalid runs[\s\S]*- t1\.coord-on\.1: invalid/); assert.match(md, /Invalid runs[\s\S]*coord-on: 1/);
     assert.match(md, /\| t1 \| 0\/1 \| 0\.500 \| 0\/0 \| n\/a \|/);
   });
@@ -351,9 +363,10 @@ describe("named grade checks", () => {
 
 describe("skills arm", () => {
   const sk = (proof: Record<string, unknown> = {}) => { const a = setup({ proof }); a.opts.arms = ["skills"]; return a; };
-  test("argv: no plugin-dir, no --settings, --setting-sources user", () => {
+  test("argv: no plugin-dir, sandbox-only --settings, --setting-sources user", () => {
     const a = buildClaudeArgv({ prompt: "P", pluginDir: "/p", model: "sonnet", maxTurns: 9, maxBudgetUsd: 1, arm: "skills" });
-    assert.ok(!a.includes("--plugin-dir") && !a.includes("--settings") && !a.includes("--bare"));
+    assert.ok(!a.includes("--plugin-dir") && !a.includes("--bare"));
+    assert.deepEqual(JSON.parse(a[a.indexOf("--settings") + 1]), SANDBOX);
     assert.equal(a[a.indexOf("--setting-sources") + 1], "user"); assert.equal(a.at(-1), "P");
     assert.equal(a[a.indexOf("--permission-mode") + 1], "dontAsk");
   });
@@ -406,6 +419,30 @@ describe("skills arm", () => {
     for (let i = 1; i <= 6; i++) makeTask(tasksDir, `task${i}`);
     let out = ""; const code = await main(["--dry-run", "--tasks-dir", tasksDir, "--arms", "none,skills"], (s) => { out += s; }, {});
     assert.equal(code, 0); assert.match(out, /6 tasks x 2 arms x 3 trials = 36 runs/); assert.match(out, /arm=skills/);
+  });
+});
+
+describe("permission denials", () => {
+  const two = [{ tool_name: "Bash", tool_use_id: "a", tool_input: {} }, { tool_name: "Bash", tool_use_id: "b", tool_input: {} }];
+  test("parseStream counts result.permission_denials; null when absent or not an array", () => {
+    assert.equal(parseStream(goodStream(0.5, two)).permission_denials, 2);
+    assert.equal(parseStream(goodStream(0.5, [])).permission_denials, 0);
+    assert.equal(parseStream(goodStream()).permission_denials, null);
+    assert.equal(parseStream(JSON.stringify({ type: "result", permission_denials: "x" })).permission_denials, null);
+    assert.equal(parseStream("").permission_denials, null);
+  });
+  test("the run record carries permission_denials and sandboxed", async () => {
+    const a = setup({ stdout: goodStream(0.5, two) }); const out = await runEval(a.opts);
+    for (const r of out.records as Record<string, any>[]) { assert.equal(r.permission_denials, 2); assert.equal(r.sandboxed, true); }
+    const b = setup({ stdout: goodStream() }); const o2 = await runEval(b.opts);
+    for (const r of o2.records as Record<string, any>[]) assert.equal(r.permission_denials, null);
+  });
+  test("report adds runs with denials and mean denials per arm", () => {
+    const mk = (arm: string, d: number | null): RunRecord => ({ arm, task: "a", passed: true, cost_usd: 1, tokens: null, wall_ms: 1, subagents: 0, status: "ok", error: null, visible_tests_modified: false, run_id: `a.${arm}.${d}`, permission_denials: d }) as unknown as RunRecord;
+    const md = renderReport([mk("none", 0), mk("none", 3), mk("none", null), mk("skills", 0)]);
+    assert.match(md, /runs with denials \| mean denials/);
+    assert.match(md, /\| none \|.* \| 1 \| 1\.50 \|$/m);
+    assert.match(md, /\| skills \|.* \| 0 \| 0\.00 \|$/m);
   });
 });
 

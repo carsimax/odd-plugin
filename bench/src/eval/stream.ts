@@ -24,6 +24,8 @@ export interface ParsedStream {
   observed_agents: string[] | null;
   /** `skills` (names) of the init message; null when absent. */
   observed_skills: string[] | null;
+  /** Entries of the result message's `permission_denials` array; null when the result lacks an array. */
+  permission_denials: number | null;
   malformed_lines: number;
 }
 
@@ -38,7 +40,7 @@ function counts(u: Record<string, unknown>): TokenCounts {
 export function parseStream(stdout: string): ParsedStream {
   const out: ParsedStream = {
     result_found: false, is_error: null, result_subtype: null, cost_usd: null, num_turns: null, duration_ms: null,
-    tokens: null, tokens_by_model: null, subagents: 0, observed_delegation: null, observed_plugins: null, observed_output_style: null, observed_agents: null, observed_skills: null, malformed_lines: 0,
+    tokens: null, tokens_by_model: null, subagents: 0, observed_delegation: null, observed_plugins: null, observed_output_style: null, observed_agents: null, observed_skills: null, permission_denials: null, malformed_lines: 0,
   };
   const agentIds = new Set<string>();
   let anonymous = 0;
@@ -75,6 +77,7 @@ export function parseStream(stdout: string): ParsedStream {
       out.cost_usd = num(msg.total_cost_usd);
       out.num_turns = num(msg.num_turns);
       out.duration_ms = num(msg.duration_ms);
+      out.permission_denials = Array.isArray(msg.permission_denials) ? msg.permission_denials.length : null;
       const usage = rec(msg.modelUsage);
       if (usage) {
         const byModel: Record<string, TokenCounts> = {};

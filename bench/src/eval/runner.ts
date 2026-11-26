@@ -41,6 +41,10 @@ export interface RunRecord {
   skills_installed: boolean;
   /** The plugin ran from a staged copy without its `dependencies` (engram is not installed in the isolated config). */
   plugin_staged: boolean;
+  /** The run's argv enabled the native Bash sandbox (`--settings` `sandbox`), identical for every arm. */
+  sandboxed: boolean;
+  /** Entries of the result message's `permission_denials`; null when absent. */
+  permission_denials: number | null;
   /** Hidden tests passed (grade command exit 0); null when grading did not run. */
   passed: boolean | null; grade_exit_code: number | null;
   /** Per named check of the task (present only when the task defines `checks`); `passed` requires all of them true. */
@@ -154,7 +158,7 @@ export async function runOne(run: PlannedRun, o: EvalOptions): Promise<RunRecord
     schema: RUN_SCHEMA, run_id: `${task.id}.${arm}.${trial}`, task: task.id, kind: task.kind, size: task.size, arm, trial, model: o.model,
     started_at: started.toISOString(), status: "ok", error: null, exit_code: null, timed_out: false, wall_ms: 0,
     cost_usd: null, tokens: null, tokens_by_model: null, num_turns: null, duration_ms: null, subagents: 0,
-    is_error: null, result_subtype: null, result_found: false, observed_delegation: null, observed_plugins: null, observed_output_style: null, plugin_staged: isPluginArm(arm) && o.pluginStaged === true, observed_agents: null, observed_skills: null, skills_installed: false, passed: null, grade_exit_code: null, visible_tests_modified: null,
+    is_error: null, result_subtype: null, result_found: false, observed_delegation: null, observed_plugins: null, observed_output_style: null, plugin_staged: isPluginArm(arm) && o.pluginStaged === true, observed_agents: null, observed_skills: null, skills_installed: false, sandboxed: true, permission_denials: null, passed: null, grade_exit_code: null, visible_tests_modified: null,
     ...(task.difficulty !== undefined ? { difficulty: task.difficulty } : {}),
   };
   try {
@@ -183,7 +187,7 @@ export async function runOne(run: PlannedRun, o: EvalOptions): Promise<RunRecord
     Object.assign(rec, {
       cost_usd: p.cost_usd, tokens: p.tokens, tokens_by_model: p.tokens_by_model, num_turns: p.num_turns, duration_ms: p.duration_ms, subagents: p.subagents,
       is_error: p.is_error, result_subtype: p.result_subtype, result_found: p.result_found, observed_delegation: p.observed_delegation,
-      observed_plugins: p.observed_plugins, observed_output_style: p.observed_output_style, observed_agents: p.observed_agents, observed_skills: p.observed_skills,
+      observed_plugins: p.observed_plugins, observed_output_style: p.observed_output_style, observed_agents: p.observed_agents, observed_skills: p.observed_skills, permission_denials: p.permission_denials,
     });
     rec.status = res.timedOut ? "timeout" : "ok";
     if (!res.timedOut && (res.code !== 0 || !p.result_found)) { rec.status = "error"; rec.error = `claude exited ${res.code}${p.result_found ? "" : " without a result message"}: ${res.stderr.trim().slice(0, 300)}`; }
