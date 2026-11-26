@@ -143,3 +143,9 @@ test("review_status: an invalid detail is rejected by schema validation and noth
     }
   });
 });
+
+test("the transition-arguments note is stated once, on review_status only", () => {
+  const marker = "The `arguments` of a review_status transition";
+  const holders = [...TOOL_BY_NAME.values()].filter((t) => t.description.includes(marker)).map((t) => t.name);
+  assert.deepEqual(holders, ["review_status"]);
+});

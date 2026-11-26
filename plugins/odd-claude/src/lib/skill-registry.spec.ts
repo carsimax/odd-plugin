@@ -70,6 +70,10 @@ test("render: rows by trigger and path, pipes escaped, deterministic", () => {
     assert.match(md, /\| `gamma` \| User gamma \\\| pipe \| user \| `.*gamma\/SKILL\.md` \|/);
     assert.match(md, /\| `beta` \| Trigger: beta folded text \| project \|/);
     assert.equal(md, renderRegistry(f.cwd, sources, entries));
+    assert.doesNotMatch(md, /## Loading protocol/);
+    assert.match(md, /^## Skills$/m);
+    assert.match(md, /Delegator use only/);
+    assert.match(md, /## Skills to load before work/);
   } finally {
     f.cleanup();
   }

@@ -44,7 +44,7 @@ Before building, validate any consequential premise whose failure would invalida
 
 Test-first is the harness principle (see "Test-first detail" below) (test or framework presence alone does not establish applicability); forward this policy, the applicable exact runner and commands (when available), and any exception rationale on every implementation delegation, refresh it on resume, and record observed evidence or the reason for fallback in the feature document.
 
-Run applicable functional checks per task; a task-list checkbox never triggers a review cycle. Checklists grant no approval; the review candidate is a work-unit commit or a PR slice, never a checkbox and never the accumulated feature branch. Review is advisory and parent-owned, human-consented, and runs only through the `odd-review` tools (`review_status`, then the returned `next_transition`).
+Run applicable functional checks per task; a task-list checkbox never triggers a review cycle. Checklists grant no approval; the review candidate is a work-unit commit or a PR slice, never a checkbox and never the accumulated feature branch. Review is advisory and parent-owned (see protocol step 7).
 
 #### Delivery
 

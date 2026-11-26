@@ -263,7 +263,7 @@ const writes = { readOnlyHint: false, destructiveHint: false, idempotentHint: fa
 export const TOOLS = [
     {
         name: "review_assess",
-        description: "Read-only: freeze the candidate in a private index and classify its risk (low/medium/high), with the reasons and changed paths. Starts nothing, creates no review lineage and writes nothing; it never touches the worktree." + NOTE,
+        description: "Read-only: freeze the candidate in a private index and classify its risk (low/medium/high), with the reasons and changed paths. Starts nothing, creates no review lineage and writes nothing; it never touches the worktree.",
         inputSchema: object({ ...TARGET_PROPS }),
         annotations: readOnly,
         async run(a, ctx) {
@@ -306,7 +306,7 @@ export const TOOLS = [
     },
     {
         name: "review_start",
-        description: "Start a review of the candidate. It ALWAYS relays consent: a medium/high-risk candidate returns the consent envelope untouched (show it to the human losslessly) and creates nothing; only review_answer_consent, with the human's explicit answer, can grant or decline. A low-risk candidate is approved at once and returns its one-shot acknowledgement. Refuses to open a second lineage while one waits for its correction." + NOTE,
+        description: "Start a review of the candidate. It ALWAYS relays consent: a medium/high-risk candidate returns the consent envelope untouched (show it to the human losslessly) and creates nothing; only review_answer_consent, with the human's explicit answer, can grant or decline. A low-risk candidate is approved at once and returns its one-shot acknowledgement. Refuses to open a second lineage while one waits for its correction.",
         inputSchema: object({
             ...TARGET_PROPS, ...LENS_PROPS,
             contract: { type: "string", const: REVIEW_CONTRACT },
@@ -338,7 +338,7 @@ export const TOOLS = [
     },
     {
         name: "review_answer_consent",
-        description: "Record the HUMAN's explicit answer to a consent question (granted or declined) for the exact candidate it was asked for. Call it only with the answer the human gave, never on your own judgment and never to 'relay'. target_identity must be the one in the consent envelope; if the candidate moved, nothing is recorded (binding_drift)." + NOTE,
+        description: "Record the HUMAN's explicit answer to a consent question (granted or declined) for the exact candidate it was asked for. Call it only with the answer the human gave, never on your own judgment and never to 'relay'. target_identity must be the one in the consent envelope; if the candidate moved, nothing is recorded (binding_drift).",
         inputSchema: object({
             ...TARGET_PROPS, ...LENS_PROPS,
             contract: { type: "string", const: REVIEW_CONTRACT },
@@ -358,21 +358,21 @@ export const TOOLS = [
     },
     {
         name: "review_capture",
-        description: "Admit exactly one reviewer slot issued by review_status or a review_run forecast: pass its exact binding. First returns a forecast; call again with reviewer_run_acknowledged and its reviewer_run_binding to run the reviewer. Stops after the batch (never acknowledges or follows another transition); the result may carry the one-shot approval acknowledgement." + NOTE,
+        description: "Admit exactly one reviewer slot issued by review_status or a review_run forecast: pass its exact binding. First returns a forecast; call again with reviewer_run_acknowledged and its reviewer_run_binding to run the reviewer. Stops after the batch (never acknowledges or follows another transition); the result may carry the one-shot approval acknowledgement.",
         inputSchema: object({ cwd: CWD, ...TARGET_PROPS, lineage_id: { type: "string", pattern: LINEAGE_PATTERN }, binding: { type: "string", minLength: 1, maxLength: 8192 }, ...RUN_PROPS }, ["lineage_id", "binding"]),
         annotations: writes,
         run: (a, ctx) => captureBatch(a, ctx, [str(a, "binding")], true),
     },
     {
         name: "review_capture_group",
-        description: "Admit one complete reviewer group: pass lineage_id and ALL bindings of the current collect, in order, never partial. First returns a forecast; call again with reviewer_run_acknowledged and its reviewer_run_binding. Reviewers run concurrently (bounded) and are admitted in order; stops after the batch." + NOTE,
+        description: "Admit one complete reviewer group: pass lineage_id and ALL bindings of the current collect, in order, never partial. First returns a forecast; call again with reviewer_run_acknowledged and its reviewer_run_binding. Reviewers run concurrently (bounded) and are admitted in order; stops after the batch.",
         inputSchema: object({ cwd: CWD, ...TARGET_PROPS, lineage_id: { type: "string", pattern: LINEAGE_PATTERN }, bindings: { type: "array", items: { type: "string", minLength: 1, maxLength: 8192 }, minItems: 1, maxItems: 8, uniqueItems: true }, ...RUN_PROPS }, ["lineage_id", "bindings"]),
         annotations: writes,
         run: (a, ctx) => captureBatch(a, ctx, a.bindings, false),
     },
     {
         name: "review_acknowledge_approved",
-        description: "Acknowledge an approved review once (burns the lineage, writes the receipt). Needs the one-shot token returned when the review was approved, the exact revision and target identity." + NOTE,
+        description: "Acknowledge an approved review once (burns the lineage, writes the receipt). Needs the one-shot token returned when the review was approved, the exact revision and target identity.",
         inputSchema: object({
             cwd: CWD, lineage_id: { type: "string", pattern: LINEAGE_PATTERN }, target_identity: { type: "string", pattern: SHA_PATTERN },
             expected_revision: { type: "string", minLength: 1, maxLength: 200 }, token: { type: "string", minLength: 1, maxLength: 200 },
@@ -393,7 +393,7 @@ export const TOOLS = [
     },
     {
         name: "review_complete",
-        description: "Settle a fully reviewed lineage that status offers as `review.validate` (all lens results admitted). Needs the exact expected_revision from status." + NOTE,
+        description: "Settle a fully reviewed lineage that status offers as `review.validate` (all lens results admitted). Needs the exact expected_revision from status.",
         inputSchema: object({ cwd: CWD, lineage_id: { type: "string", pattern: LINEAGE_PATTERN }, expected_revision: { type: "string", minLength: 1, maxLength: 200 } }, ["lineage_id", "expected_revision"]),
         annotations: writes,
         async run(a, ctx) {
@@ -406,7 +406,7 @@ export const TOOLS = [
     },
     {
         name: "review_run",
-        description: "Drive one review end to end by following status transitions: start, reviewers, capture, acknowledge. It returns a typed outcome: closed, not-due, consent-required (relay the envelope to the human; consent is never answered here), input-required (a correction is needed), forecast (reviewers cost money: call again with reviewer_run_acknowledged and the forecast's reviewer_run_binding), stopped, binding-drift, transition-limit or cancelled. Resume a consented or corrected review with lineage_id." + NOTE,
+        description: "Drive one review end to end by following status transitions: start, reviewers, capture, acknowledge. It returns a typed outcome: closed, not-due, consent-required (relay the envelope to the human; consent is never answered here), input-required (a correction is needed), forecast (reviewers cost money: call again with reviewer_run_acknowledged and the forecast's reviewer_run_binding), stopped, binding-drift, transition-limit or cancelled. Resume a consented or corrected review with lineage_id.",
         inputSchema: object({ ...TARGET_PROPS, ...LENS_PROPS, lineage_id: { type: "string", pattern: LINEAGE_PATTERN }, ...RUN_PROPS }),
         annotations: writes,
         async run(a, ctx) {
