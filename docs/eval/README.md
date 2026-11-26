@@ -88,3 +88,4 @@ Results: [pilot 2026-11-25](pilot-2026-11-25.md) (6 tasks x 3 arms x 3 trials).
 Results: [hard tasks 2026-11-25](hard-2026-11-25.md) (6 harder tasks x 3 arms x 3 trials, with per-check rates and a comparison with the pilot).
 Results: [odd-skills 2026-11-25](odd-skills-2026-11-25.md) (odd-skills POC vs plain Claude Code, 6 hard tasks x 2 arms x 3 trials, Opus and Sonnet, with the plugin comparison).
 Results: [odd-skills re-measurement 2026-11-26](odd-skills-rerun-2026-11-26.md) (odd-skills vs plain Claude Code after the permission fix, Sonnet and Haiku, 6 hard tasks x 2 arms x 3 trials, with the Haiku outage and an overall conclusion across all rounds).
+Results: [head-to-head 2026-11-26](head-to-head-2026-11-26.md) (odd-claude plugin with coordinator OFF vs odd-skills vs plain Claude Code, same session, Sonnet, 6 hard tasks x 3 arms x 3 trials, with cost per passed run and the context each arm loads).
