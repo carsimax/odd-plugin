@@ -136,6 +136,8 @@ export function planInstallFiles(paths: InstallPaths, selection: ModelSelection,
   const blocks: BlockAction[] = md.special
     ? [...desired.map((d): BlockAction => ({ action: "conflict", id: d.id, text: d.text })), ...Object.keys(manifest?.blocks ?? {}).filter((id) => !desired.some((d) => d.id === id)).map((id): BlockAction => ({ action: "conflict", id }))].map((a) => ({ ...a, reason: "CLAUDE.md exists and is not a regular file" }))
     : planBlocks(md.text, desired, manifest?.blocks ?? {});
+  const malformed = blocks.find((b) => b.reason?.startsWith("CLAUDE.md has malformed odd-claude markers"));
+  if (malformed) warnings.push(malformed.reason!);
   return { actions, warnings, selection, oddVersion: opts.oddVersion ?? activeVersion(paths) ?? "unknown", coverage, blocks, claudeMd };
 }
 

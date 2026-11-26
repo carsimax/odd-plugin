@@ -239,3 +239,73 @@ test("rules install as whole files with placeholders and obey the ledger: create
   assert.deepEqual(u.kept, ["rules/sub/odd-b.md"]);
   assert.equal(existsSync(target), false);
 });
+
+test("markers inside fenced code blocks are user text: example marker does not block installs", () => {
+  for (const fence of ["```", "~~~", "````"]) {
+    const { md, paths, install } = setup();
+    mkdirSync(paths.claudeDir, { recursive: true });
+    const user = `# Mine\n\n${fence}md\n${open("example")}\n${fence}\n`;
+    writeFileSync(md, user);
+    const r = install();
+    assert.deepEqual(r.conflicts.filter((c) => c.startsWith("CLAUDE.md")), [], fence);
+    assert.ok(r.written.includes("CLAUDE.md#core") && r.written.includes("CLAUDE.md#style"));
+    assert.ok(read(md).startsWith(user));
+  }
+});
+
+test("a closed pair for a real id inside a fence is not a block; an unclosed fence hides nothing", () => {
+  const fenced = `\`\`\`\n${blk("identity", "x")}\n\`\`\`\n`;
+  assert.equal(parseBlocks(fenced).blocks.size, 0);
+  assert.equal(parseBlocks(fenced).malformed, null);
+  const unclosed = `~~~\n${blk("identity", "x")}\n`;
+  assert.equal(parseBlocks(unclosed).blocks.size, 1);
+  const real = `${fenced}${blk("identity", "y")}\n`;
+  assert.deepEqual([...parseBlocks(real).blocks.keys()], ["identity"]);
+  // a shorter or different-char fence does not close
+  assert.equal(parseBlocks(`\`\`\`\`\n\`\`\`\n${open("a")}\n\`\`\`\`\n`).malformed, null);
+  assert.equal(parseBlocks(`\`\`\`\n~~~\n${open("a")}\n\`\`\`\n`).malformed, null);
+});
+
+test("malformed markers outside a fence report a malformed-markers warning and conflict reason", () => {
+  const { paths, md, install } = setup();
+  mkdirSync(paths.claudeDir, { recursive: true });
+  writeFileSync(md, `\`\`\`\n${open("ex")}\n\`\`\`\n${close("core")}\n`);
+  const r = install();
+  assert.deepEqual(r.conflicts.filter((c) => c.startsWith("CLAUDE.md")), ["CLAUDE.md#core", "CLAUDE.md#style"]);
+  assert.ok(r.warnings.some((w) => w.includes("CLAUDE.md has malformed odd-claude markers")), r.warnings.join("|"));
+  assert.ok(summarizePlan(installPlan({ paths, sourceRoot: setup().src, version: "1.0.0", selection: sel })).includes("CLAUDE.md has malformed odd-claude markers"));
+});
+
+test("a user file without a final newline round-trips install -> uninstall byte for byte (LF and CRLF)", () => {
+  for (const user of ["# Mine\nno newline", "# Mine\r\nno newline", "x"]) {
+    const { paths, md, install } = setup();
+    mkdirSync(paths.claudeDir, { recursive: true });
+    writeFileSync(md, user);
+    install();
+    assert.ok(read(md).includes(open("core")));
+    runUninstall({ paths });
+    assert.equal(read(md), user, JSON.stringify(user));
+  }
+});
+
+test("an unclosed fence does not hide installed blocks: reinstall is unchanged and the file does not grow", () => {
+  const { paths, md, install } = setup();
+  mkdirSync(paths.claudeDir, { recursive: true });
+  writeFileSync(md, "# user\n");
+  install();
+  writeFileSync(md, "```\nunclosed\n" + read(md));
+  const before = read(md);
+  install();
+  install();
+  assert.equal(read(md), before);
+});
+
+test("a shipped id whose markers sit only inside a closed fence is a conflict, never created", () => {
+  const { paths, md, install } = setup();
+  mkdirSync(paths.claudeDir, { recursive: true });
+  const user = `\`\`\`\n${blk("core", "x")}\n\`\`\`\n`;
+  writeFileSync(md, user);
+  const r = install();
+  assert.ok(r.conflicts.includes("CLAUDE.md#core"));
+  assert.equal(read(md).split(open("core")).length, 2);
+});

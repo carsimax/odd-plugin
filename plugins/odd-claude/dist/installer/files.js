@@ -120,6 +120,9 @@ export function planInstallFiles(paths, selection, opts = {}) {
     const blocks = md.special
         ? [...desired.map((d) => ({ action: "conflict", id: d.id, text: d.text })), ...Object.keys(manifest?.blocks ?? {}).filter((id) => !desired.some((d) => d.id === id)).map((id) => ({ action: "conflict", id }))].map((a) => ({ ...a, reason: "CLAUDE.md exists and is not a regular file" }))
         : planBlocks(md.text, desired, manifest?.blocks ?? {});
+    const malformed = blocks.find((b) => b.reason?.startsWith("CLAUDE.md has malformed odd-claude markers"));
+    if (malformed)
+        warnings.push(malformed.reason);
     return { actions, warnings, selection, oddVersion: opts.oddVersion ?? activeVersion(paths) ?? "unknown", coverage, blocks, claudeMd };
 }
 /** Backs up what it overwrites or removes, writes create/update, skips conflicts, then rewrites the ledger. */

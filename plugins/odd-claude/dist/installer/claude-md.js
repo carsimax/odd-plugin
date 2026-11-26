@@ -31,19 +31,48 @@ export function readDesiredBlocks(payloadDir, resolve) {
     }
     return out;
 }
+/** Markers outside CLOSED CommonMark fenced code blocks (``` or ~~~, 3+ chars; the closing fence uses the same char and is at least as long). An unclosed fence hides nothing: its markers count as outside. */
+function markersOutsideFences(text) {
+    const out = [];
+    let fence = null;
+    let pos = 0;
+    while (pos < text.length) {
+        let nl = text.indexOf("\n", pos);
+        if (nl < 0)
+            nl = text.length;
+        const line = text.slice(pos, nl).replace(/\r$/, "");
+        const f = /^ {0,3}(`{3,}|~{3,})(.*)$/.exec(line);
+        if (fence) {
+            if (f && f[1][0] === fence.ch && f[1].length >= fence.len && f[2].trim() === "")
+                fence = null;
+        }
+        else if (f && !(f[1][0] === "`" && f[2].includes("`"))) {
+            fence = { ch: f[1][0], len: f[1].length, resume: nl + 1, outLen: out.length };
+        }
+        else {
+            for (const m of line.matchAll(MARKER_RE))
+                out.push({ closing: m[1] === "/", id: m[2], at: pos + m.index, len: m[0].length });
+        }
+        pos = nl + 1;
+    }
+    if (fence) {
+        out.length = fence.outLen;
+        for (const m of text.slice(fence.resume).matchAll(MARKER_RE))
+            out.push({ closing: m[1] === "/", id: m[2], at: fence.resume + m.index, len: m[0].length });
+    }
+    return out;
+}
 export function parseBlocks(text) {
     const blocks = new Map();
     let open = null;
     let malformed = null;
-    for (const m of text.matchAll(MARKER_RE)) {
-        const closing = m[1] === "/";
-        const id = m[2];
-        const at = m.index;
+    for (const m of markersOutsideFences(text)) {
+        const { closing, id, at } = m;
         if (!closing) {
             if (open)
                 malformed ??= `marker odd-claude:${id} opens inside odd-claude:${open.id}`;
             else
-                open = { id, start: at, innerStart: at + m[0].length };
+                open = { id, start: at, innerStart: at + m.len };
         }
         else if (!open || open.id !== id) {
             malformed ??= `orphan closing marker odd-claude:${id}`;
@@ -51,7 +80,7 @@ export function parseBlocks(text) {
         else {
             if (blocks.has(id))
                 malformed ??= `duplicate block odd-claude:${id}`;
-            blocks.set(id, { start: open.start, end: at + m[0].length, hash: sha256(normalize(text.slice(open.innerStart, at))) });
+            blocks.set(id, { start: open.start, end: at + m.len, hash: sha256(normalize(text.slice(open.innerStart, at))) });
             open = null;
         }
     }
@@ -62,6 +91,8 @@ export function parseBlocks(text) {
 /** Same ownership semantics as planInstallFiles, per block. */
 export function planBlocks(current, desired, owned) {
     const parsed = parseBlocks(current ?? "");
+    const rawIds = new Set([...(current ?? "").matchAll(MARKER_RE)].map((m) => m[2]));
+    const fenced = (id) => rawIds.has(id) && !parsed.blocks.has(id);
     const bad = () => (parsed.malformed ? `CLAUDE.md has malformed odd-claude markers (${parsed.malformed}); kept` : undefined);
     const actions = [];
     for (const d of desired) {
@@ -70,6 +101,8 @@ export function planBlocks(current, desired, owned) {
         const reason = bad();
         if (reason)
             actions.push({ ...base, action: "conflict", reason });
+        else if (!cur && fenced(d.id))
+            actions.push({ ...base, action: "conflict", reason: "CLAUDE.md has odd-claude markers inside a code fence" });
         else if (!cur)
             actions.push({ ...base, action: "create" });
         else if (cur.hash === sha256(d.text))
@@ -109,8 +142,9 @@ function removeBlock(text, f, eol) {
     let before = before0;
     const after = text.slice(end);
     // Undo the blank separator that insertion added when the removed block was the last thing in the file.
+    // A block appended after a file without a final newline has no trailing EOL: drop the separator too, restoring the file exactly.
     if (after === "" && before.endsWith(eol + eol))
-        before = before.slice(0, -eol.length);
+        before = before.slice(0, f.end === text.length ? -2 * eol.length : -eol.length);
     return before + after;
 }
 /** Applies create/update/remove to `current` and returns the new text; text outside the markers is untouched. */
@@ -130,7 +164,8 @@ export function applyBlocks(current, actions) {
             head += (head.endsWith(eol) ? "" : eol) + (head.endsWith(eol + eol) ? "" : eol);
         else
             head = "";
-        text = head + created.join(eol + eol) + eol;
+        // Keep a file without a final newline without one (uninstall restores it byte for byte).
+        text = head + created.join(eol + eol) + (head === "" || text.endsWith(eol) ? eol : "");
     }
     return text;
 }
