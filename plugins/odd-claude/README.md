@@ -2,6 +2,14 @@
 
 A global Claude Code harness (installed with a TUI, no longer a plugin) that ports the ODD harness of gentle-shell (MIT) <!-- odd-check: allow --> to Claude Code. **v2.0** adds native receipt-driven review (RDD) on top of **v1.0** (the parity release): the ODD persona, orchestrator rules, agents, skills, native integrations, advisory review and lifecycle hooks. Apart from the RDD Stop settle reminder, which can block only when you turn RDD on (it is off by default), the plugin ships **no deny/ask/block hook and no `permissions.deny` by default** (user decision, v0.5, amended for v2): its hooks only add context. Coordinator mode and the admission rules are prompt text, not enforcement; otherwise the only enforcement is Claude Code's native permission system (see [Permission modes](#permission-modes)). The plugin collects no data and sends nothing anywhere.
 
+## What's new in 9.0.1
+
+Not breaking:
+
+- `update` (CLI and TUI) now re-applies hooks, MCP and extras with the NEW version's installer (it spawns the new version's bin with an internal command), so a migration shipped in a new version runs in the same update. An older target without that command falls back to the running version with a warning.
+- The re-apply has its own 300 s timeout, and a timeout is reported as a failed step.
+- Updating from 8.x to 9.0.x still needs `update` twice (the 8.x installer runs first); from 9.0.1 on one run is enough.
+
 ## What's new in 9.0.0
 
 **Breaking.** odd-peers is retired:
