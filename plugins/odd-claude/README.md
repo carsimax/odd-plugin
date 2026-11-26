@@ -2,9 +2,9 @@
 
 A global Claude Code harness (installed with a TUI, no longer a plugin) that ports the ODD harness of gentle-shell (MIT) <!-- odd-check: allow --> to Claude Code. **v2.0** adds native receipt-driven review (RDD) on top of **v1.0** (the parity release): the ODD persona, orchestrator cards, agents, skills, native integrations, advisory review and lifecycle hooks. Apart from the RDD Stop settle reminder, which can block only when you turn RDD on (it is off by default), the plugin ships **no deny/ask/block hook** (user decision, v0.5, amended for v2): its hooks only add context. Coordinator mode and the admission rules are prompt text, not enforcement; otherwise the only enforcement is Claude Code's native permission system (see [Permission modes](#permission-modes)). The plugin collects no data and sends nothing anywhere.
 
-## Unreleased: always-on context in `~/.claude/CLAUDE.md` and `rules/`
+## What's new in 7.0.0
 
-The always-on context moved out of the output style and the hooks into files Claude Code loads natively. No new commands.
+**Breaking: the persona slash command is removed (there is one neutral persona, carried by the output style), and so are the duplicated tracking and memory orchestrator cards** (their rules now live in the managed CLAUDE.md blocks and `rules/odd-tracking.md`). The always-on context moved out of the output style and the hooks into files Claude Code loads natively.
 
 - **Managed CLAUDE.md blocks.** The installer writes eight blocks into `~/.claude/CLAUDE.md` (`identity`, `protocol` and six more, sources in `claude-md/01-identity.md` ... `08-memory.md`), each wrapped as `<!-- odd-claude:ID -->` ... `<!-- /odd-claude:ID -->`. Text you wrote outside the markers is never touched, and the file is created if absent. Install and update are idempotent; a block you edited by hand is a conflict: it is reported and kept, not overwritten. Uninstall removes only the blocks it owns and that are unedited, and deletes `CLAUDE.md` only if nothing else is left in it. <!-- odd-check: allow -->
 - **Budget.** The managed blocks total about 32 KB, and a test fails if they exceed 80,000 bytes (about 20k tokens at 4 bytes per token).

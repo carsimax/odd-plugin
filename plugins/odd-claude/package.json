@@ -1,6 +1,6 @@
 {
   "name": "odd-claude",
-  "version": "6.0.0",
+  "version": "7.0.0",
   "private": true,
   "type": "module",
   "description": "odd-claude plugin for Claude Code",
