@@ -8,6 +8,7 @@ A global Claude Code harness (installed with a TUI, no longer a plugin) that por
 
 - The `odd-peers` MCP server, the `/odd-peers` skill, its hooks, CLI and libs are removed. Use Claude Code's native cross-session messaging (`ListAgents`/`SendMessage`); inbound messages follow your `crossSessionInbound` setting (accept|hold|refuse), and a peer message is never consent. See [Cross-session messaging (native)](#cross-session-messaging-native).
 - `update` removes the `odd-peers` server the installer had added (a foreign one is never touched; one you already removed by hand is just dropped from the state), the copied `odd-peers` skill and the `peers/` data dir.
+- Updating from 8.x needs `odd-claude update` run twice: the first run executes the 8.x installer, which does not retire odd-peers, and the second completes the migration. From 9.0.1 on, `update` re-runs its integration step with the new version's installer, so one run is enough.
 - GitHub workflows are removed: releases are manual, see [Releasing (manual)](#releasing-manual). The rules now point cross-session messaging to the native tools.
 
 ## What's new in 8.3.0
@@ -523,6 +524,8 @@ Running `update` (or `install`) on a machine with an older install:
 - removes the `odd-peers` MCP server, but only when the installer state recorded it as added by odd-claude; a server named `odd-peers` you added yourself is never touched;
 - deletes the `peers/` directory under the odd-claude data dir (it held only mailbox and grant state);
 - keeps `uninstall` working on old and new state files.
+
+From 8.x the migration needs `odd-claude update` twice (the 8.x installer that runs the first update does not know the retirement); from 9.0.1 on one run is enough.
 
 ## Commands
 

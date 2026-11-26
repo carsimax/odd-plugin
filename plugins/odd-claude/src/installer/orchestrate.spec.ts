@@ -381,6 +381,73 @@ describe("runUpdateFlow and runRollback", () => {
     assert.equal(runRollback({ env, homedir: home }).ok, false);
   });
 
+  const BIN = join("versions", "9.9.10", "dist", "installer", "bin.js");
+  const isReapply = (c: Call): boolean => c.args[0]?.endsWith(BIN) === true && c.args[1] === "reapply";
+  const childSteps = JSON.stringify({ ok: true, command: "reapply", steps: [{ id: "hooks", label: "Hooks", status: "ok", detail: "from child" }, { id: "mcp", label: "MCP", status: "ok", detail: "odd-peers: removed" }] });
+
+  it("re-applies through the NEW version's installer, not in-process", async () => {
+    const { home, env, source } = setup();
+    await runFullInstall({ env, homedir: home, runner: machine().runner, source, deps: false });
+    const gh = ghRunner(makeRelease("9.9.10"), (c) => (isReapply(c) ? ok(childSteps) : c.cmd === "claude" && c.args[0] === "mcp" && c.args[1] === "get" ? fail("No MCP server named x found") : undefined));
+    const seen: StepResult[] = [];
+    const r = await runUpdateFlow({ env, homedir: home, runner: gh.runner, force: true, reapplyInNewVersion: true }, (s) => seen.push(s));
+    assert.equal(r.ok, true);
+    assert.deepEqual(seen.map((s) => s.id), ["update", "hooks", "mcp"]);
+    assert.equal(seen[1]!.detail, "from child");
+    const spawned = gh.calls.filter(isReapply);
+    assert.equal(spawned.length, 1);
+    assert.deepEqual(spawned[0]!.args.slice(1), ["reapply", "--json"]);
+    assert.equal(gh.calls.some((c) => c.cmd === "claude" && c.args[0] === "mcp" && c.args[1] === "add"), false, "nothing re-applied in-process");
+  });
+
+  it("a failed step reported by the new installer fails the update", async () => {
+    const { home, env, source } = setup();
+    await runFullInstall({ env, homedir: home, runner: machine().runner, source, deps: false });
+    const bad = JSON.stringify({ ok: false, command: "reapply", steps: [{ id: "hooks", label: "Hooks", status: "failed", detail: "nope" }] });
+    const gh = ghRunner(makeRelease("9.9.10"), (c) => (isReapply(c) ? { code: 1, stdout: bad, stderr: "" } : undefined));
+    const r = await runUpdateFlow({ env, homedir: home, runner: gh.runner, force: true, reapplyInNewVersion: true });
+    assert.equal(r.ok, false);
+  });
+
+  it("falls back to the in-process re-apply with a warning when the new installer cannot run", async () => {
+    const { home, env, source } = setup();
+    await runFullInstall({ env, homedir: home, runner: machine().runner, source, deps: false });
+    for (const answer of [() => fail("unknown command reapply", 2), (): RunResult => { throw new Error("spawn ENOENT"); }]) {
+      const gh = ghRunner(makeRelease("9.9.10"), (c) => (isReapply(c) ? answer() : c.cmd === "claude" && c.args[0] === "mcp" && c.args[1] === "get" ? fail("No MCP server named x found") : undefined));
+      const seen: StepResult[] = [];
+      const r = await runUpdateFlow({ env, homedir: home, runner: gh.runner, force: true, reapplyInNewVersion: true }, (s) => seen.push(s));
+      assert.equal(r.ok, true);
+      assert.deepEqual(seen.map((s) => s.id), ["update", "reapply", "hooks", "mcp", "extras"]);
+      assert.equal(seen[1]!.status, "warning");
+    }
+  });
+
+  it("a reapply spawn that times out is a failed step with no in-process fallback", async () => {
+    const { home, env, source } = setup();
+    await runFullInstall({ env, homedir: home, runner: machine().runner, source, deps: false });
+    const gh = ghRunner(makeRelease("9.9.10"), (c) => {
+      if (!isReapply(c)) return undefined;
+      throw Object.assign(new Error("spawnSync node ETIMEDOUT"), { code: "ETIMEDOUT" });
+    });
+    const seen: StepResult[] = [];
+    const r = await runUpdateFlow({ env, homedir: home, runner: gh.runner, force: true, reapplyInNewVersion: true }, (s) => seen.push(s));
+    assert.equal(r.ok, false);
+    assert.deepEqual(seen.map((s) => s.id), ["update", "reapply"]);
+    assert.equal(seen[1]!.status, "failed");
+    assert.match(seen[1]!.detail ?? "", /v9\.9\.10 installer timed out after 300 s/);
+    assert.doesNotMatch(seen[1]!.detail ?? "", /could not start/);
+    assert.equal(gh.calls.some((c) => c.cmd === "claude" && c.args[0] === "mcp"), false, "no in-process reapply");
+  });
+
+  it("a dry run spawns nothing", async () => {
+    const { home, env, source } = setup();
+    await runFullInstall({ env, homedir: home, runner: machine().runner, source, deps: false });
+    const gh = ghRunner(makeRelease("9.9.10"));
+    const r = await runUpdateFlow({ env, homedir: home, runner: gh.runner, force: true, dryRun: true, reapplyInNewVersion: true });
+    assert.equal(r.status, "dry-run");
+    assert.equal(gh.calls.some(isReapply), false);
+  });
+
   it("reports up to date and a failed check as steps", async () => {
     const { home, env, source } = setup();
     await runFullInstall({ env, homedir: home, runner: machine().runner, source, deps: false });

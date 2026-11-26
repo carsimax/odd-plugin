@@ -6,7 +6,10 @@ import { buildSelection, type ModelSelection } from "./models.js";
 import type { ClaudeAiOptions } from "./claude-ai.js";
 
 export const COMMANDS = ["install", "update", "uninstall", "rollback", "models", "backups", "status"] as const;
-export type Command = (typeof COMMANDS)[number];
+/** Internal: run by `update` from the newly staged version; accepted by the parser but not listed in --help. */
+const INTERNAL_COMMANDS = ["reapply"] as const;
+export type PublicCommand = (typeof COMMANDS)[number];
+export type Command = PublicCommand | (typeof INTERNAL_COMMANDS)[number];
 
 export interface FlagSpec {
   name: string;
@@ -88,7 +91,7 @@ export function parseArgs(argv: readonly string[]): ParseResult {
     }
     if (!tok.startsWith("--")) {
       if (a.command !== undefined) return { ok: false, error: `unexpected argument ${tok}` };
-      if (!(COMMANDS as readonly string[]).includes(tok)) return { ok: false, error: `unknown command ${tok}` };
+      if (![...COMMANDS, ...INTERNAL_COMMANDS].includes(tok as Command)) return { ok: false, error: `unknown command ${tok}` };
       a.command = tok as Command;
       continue;
     }
@@ -149,7 +152,7 @@ export function extrasFromArgs(a: ParsedArgs): ExtrasOptions {
   };
 }
 
-const COMMAND_HELP: Record<Command, string> = {
+const COMMAND_HELP: Record<PublicCommand, string> = {
   install: "install odd-claude globally (files, models, hooks, output style, MCP, extras, dependencies)",
   update: "update from the latest GitHub release (keeps models and extras)",
   uninstall: "remove what odd-claude installed and restore your previous settings",

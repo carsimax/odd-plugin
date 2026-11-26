@@ -50,7 +50,7 @@ export function createServices(io: CliIo, args: ParsedArgs): Services {
         case "install":
           return runFullInstall(install(req), onStep);
         case "update":
-          return runUpdateFlow({ ...base, force: args.force }, onStep);
+          return runUpdateFlow({ ...base, force: args.force, reapplyInNewVersion: true }, onStep);
         case "models":
           return applyModels({ env: io.env, homedir: io.homedir, selection: req.selection }, onStep);
         case "uninstall":

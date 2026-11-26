@@ -41,6 +41,10 @@ describe("parseArgs", () => {
     assert.deepEqual([a.profile, a.models], ["max", ["worker=haiku"]]);
   });
 
+  it("accepts the internal reapply subcommand", () => {
+    assert.equal(parse("reapply").command, "reapply");
+  });
+
   it("recognizes --help and --version without a subcommand", () => {
     assert.equal(parse("--help").help, true);
     assert.equal(parse("-h").help, true);

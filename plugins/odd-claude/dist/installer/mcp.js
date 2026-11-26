@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { readOddState, writeOddState } from "./managed-settings.js";
 /** Real runner: `claude` resolved from PATH, env passed through (CLAUDE_CONFIG_DIR is honored by the CLI). */
 export const defaultRunner = (cmd, args, opts) => {
-    const r = spawnSync(cmd, args, { env: opts.env ?? process.env, encoding: "utf8", timeout: 60_000 });
+    const r = spawnSync(cmd, args, { env: opts.env ?? process.env, encoding: "utf8", timeout: opts.timeout ?? 60_000 });
     if (r.error)
         throw r.error;
     return { code: r.status, stdout: r.stdout ?? "", stderr: r.stderr ?? "" };

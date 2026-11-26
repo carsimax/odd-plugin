@@ -10,11 +10,11 @@ export interface RunResult {
   stdout: string;
   stderr: string;
 }
-export type McpRunner = (cmd: string, args: string[], opts: { env?: NodeJS.ProcessEnv }) => RunResult | Promise<RunResult>;
+export type McpRunner = (cmd: string, args: string[], opts: { env?: NodeJS.ProcessEnv; /** Milliseconds before the child is killed (default 60000). */ timeout?: number }) => RunResult | Promise<RunResult>;
 
 /** Real runner: `claude` resolved from PATH, env passed through (CLAUDE_CONFIG_DIR is honored by the CLI). */
 export const defaultRunner: McpRunner = (cmd, args, opts) => {
-  const r = spawnSync(cmd, args, { env: opts.env ?? process.env, encoding: "utf8", timeout: 60_000 });
+  const r = spawnSync(cmd, args, { env: opts.env ?? process.env, encoding: "utf8", timeout: opts.timeout ?? 60_000 });
   if (r.error) throw r.error;
   return { code: r.status, stdout: r.stdout ?? "", stderr: r.stderr ?? "" };
 };

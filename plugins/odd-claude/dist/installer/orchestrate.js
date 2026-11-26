@@ -436,8 +436,60 @@ export async function runUpdateFlow(o, onStep) {
         return { ...base, ok: true, steps };
     }
     emit("update", lbl, u.warnings && u.warnings.length > 0 ? "warning" : "ok", `${u.from ?? "none"} -> ${u.to}`);
-    const reapply = await reapplyIntegrations(o, ctx, emit);
+    let reapply;
+    if (o.reapplyInNewVersion && u.to !== undefined) {
+        const viaChild = await reapplyWithNewInstaller(o, ctx, u.to);
+        if ("timedOut" in viaChild) {
+            emit("reapply", "Re-apply with the new installer", "failed", viaChild.timedOut);
+            return { ...base, ok: false, steps };
+        }
+        if ("steps" in viaChild)
+            reapply = viaChild.steps.map((s) => emit(s.id, s.label, s.status, s.detail));
+        else
+            emit("reapply", "Re-apply with the new installer", "warning", `${viaChild.reason}; re-applied with the running version`);
+    }
+    reapply ??= await reapplyIntegrations(o, ctx, emit);
     return { ...base, ok: !reapply.some((s) => s.status === "failed"), steps };
+}
+const REAPPLY_TIMEOUT_MS = 300_000;
+/**
+ * Runs `reapply --json` from the staged version's own bin, so a release that adds migrations applies them in the
+ * same `update`. Anything but a parseable step list (spawn error, old bin without the command) falls back.
+ */
+async function reapplyWithNewInstaller(o, ctx, to) {
+    const bin = join(ctx.paths.versionsDir, to, "dist", "installer", "bin.js");
+    let r;
+    try {
+        r = await o.runner(process.execPath, [bin, "reapply", "--json"], { env: { ...o.env, HOME: o.homedir }, timeout: REAPPLY_TIMEOUT_MS });
+    }
+    catch (e) {
+        // A child killed mid-run may have half-applied a migration: never repeat it in-process on top of that.
+        if (e.code === "ETIMEDOUT")
+            return { timedOut: `the v${to} installer timed out after ${REAPPLY_TIMEOUT_MS / 1000} s; run update again` };
+        return { reason: `could not start the v${to} installer (${errMsg(e)})` };
+    }
+    try {
+        const doc = JSON.parse(r.stdout);
+        const ok = Array.isArray(doc.steps) && doc.steps.length > 0 && doc.steps.every((x) => x && typeof x.id === "string" && typeof x.label === "string" && typeof x.status === "string" && x.status in { ok: 1, skipped: 1, warning: 1, failed: 1 });
+        if (ok)
+            return { steps: doc.steps.map((x) => ({ id: x.id, label: x.label, status: x.status, detail: typeof x.detail === "string" ? x.detail : "" })) };
+    }
+    catch {
+        /* not JSON */
+    }
+    return { reason: `the v${to} installer has no usable reapply (exit ${r.code}: ${firstLine(r.stderr) || "no output"})` };
+}
+/** Internal `reapply`: hooks, MCP and extras for the installed version, with the options saved at install. */
+export async function runReapply(o, onStep) {
+    const ctx = flowContext(o);
+    const { steps, emit } = reporter(onStep);
+    const version = activeVersion(ctx.paths);
+    if (version === null) {
+        emit("reapply", "Re-apply integrations", "failed", "odd-claude is not installed; run install first");
+        return { ok: false, dryRun: o.dryRun === true, version, steps };
+    }
+    const out = o.dryRun ? [emit("reapply", "Re-apply integrations", "ok", "would refresh hooks, MCP and extras")] : await reapplyIntegrations(o, ctx, emit);
+    return { ok: !out.some((s) => s.status === "failed"), dryRun: o.dryRun === true, version, steps };
 }
 async function reapplyIntegrations(o, ctx, emit) {
     const out = [];

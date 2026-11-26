@@ -4,6 +4,8 @@ import { CUSTOM_PROFILE, PROFILE_ROLES } from "../lib/profiles.js";
 import { DEFAULT_EXTRAS } from "./extras.js";
 import { buildSelection } from "./models.js";
 export const COMMANDS = ["install", "update", "uninstall", "rollback", "models", "backups", "status"];
+/** Internal: run by `update` from the newly staged version; accepted by the parser but not listed in --help. */
+const INTERNAL_COMMANDS = ["reapply"];
 export const FLAG_SPECS = [
     { name: "source", value: "<dir>", description: "install from a local checkout (the plugins/odd-claude tree) instead of the latest GitHub release" },
     { name: "profile", value: "balanced|economy|max|custom", description: "model preset for the agents (default: the stored one, balanced on a fresh install)" },
@@ -51,7 +53,7 @@ export function parseArgs(argv) {
         if (!tok.startsWith("--")) {
             if (a.command !== undefined)
                 return { ok: false, error: `unexpected argument ${tok}` };
-            if (!COMMANDS.includes(tok))
+            if (![...COMMANDS, ...INTERNAL_COMMANDS].includes(tok))
                 return { ok: false, error: `unknown command ${tok}` };
             a.command = tok;
             continue;

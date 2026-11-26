@@ -33,6 +33,36 @@ describe("runCli", () => {
     assert.deepEqual(h.err, []);
   });
 
+  it("the internal reapply command re-applies hooks, MCP and extras, prints one JSON document with --json and stays out of --help", async () => {
+    const h = harness();
+    assert.equal(await runCli(["install", "--source", makeSource(), "--yes", "--no-deps"], h.io), 0);
+    h.out.length = 0;
+    assert.equal(await runCli(["reapply"], h.io), 0);
+    assert.deepEqual(h.out.join("").trim().split("\n").map((l) => l.split(" ")[0]), ["[ok]", "[ok]", "[ok]"]);
+    h.out.length = 0;
+    assert.equal(await runCli(["reapply", "--json"], h.io), 0);
+    const doc = JSON.parse(h.out.join("")) as { ok: boolean; command: string; steps: { id: string }[] };
+    assert.equal(doc.command, "reapply");
+    assert.deepEqual(doc.steps.map((s) => s.id), ["hooks", "mcp", "extras"]);
+    h.out.length = 0;
+    await runCli(["--help"], h.io);
+    assert.equal(h.out.join("").includes("reapply"), false);
+  });
+
+  it("reapply without an install fails before touching anything, dry run included", async () => {
+    for (const extra of [[], ["--dry-run"]]) {
+      const h = harness();
+      assert.equal(await runCli(["reapply", "--json", ...extra], h.io), 1);
+      const doc = JSON.parse(h.out.join("")) as { ok: boolean; steps: { status: string; detail: string }[] };
+      assert.equal(doc.ok, false);
+      assert.equal(doc.steps[0]!.status, "failed");
+      assert.match(doc.steps[0]!.detail, /not installed; run install first/);
+      assert.equal(h.calls.some((c) => c.cmd === "claude" && c.args.includes("add")), false);
+      assert.equal(existsSync(join(h.home, ".odd-claude")), false);
+      assert.equal(existsSync(join(h.home, ".claude", "settings.json")), false);
+    }
+  });
+
   it("--version prints the version", async () => {
     const h = harness();
     assert.equal(await runCli(["--version"], h.io), 0);

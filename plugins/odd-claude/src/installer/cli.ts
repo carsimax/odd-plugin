@@ -1,6 +1,6 @@
 // `odd-claude [command] [flags]`: the non-interactive front end over the orchestrator. The TUI is injected
 // (`startTui`) so this module stays free of React and the plain compiled CLI works without it.
-import { backupsOf, applyModels, detect, restoreBackupFlow, runFullInstall, runFullUninstall, runRollback, runUpdateFlow, type FullResult, type StepResult } from "./orchestrate.js";
+import { backupsOf, applyModels, detect, restoreBackupFlow, runFullInstall, runFullUninstall, runReapply, runRollback, runUpdateFlow, type FullResult, type StepResult } from "./orchestrate.js";
 import { extrasFromArgs, parseArgs, selectionFromArgs, usage, type ParsedArgs } from "./args.js";
 import type { McpRunner } from "./mcp.js";
 
@@ -71,7 +71,9 @@ async function dispatch(a: ParsedArgs, selection: ReturnType<typeof selectionFro
       return finish("install", r, a, io);
     }
     case "update":
-      return finish("update", await runUpdateFlow({ ...base, force: a.force, selection }, print), a, io);
+      return finish("update", await runUpdateFlow({ ...base, force: a.force, selection, reapplyInNewVersion: true }, print), a, io);
+    case "reapply":
+      return finish("reapply", await runReapply(base, print), a, io);
     case "uninstall":
       return finish("uninstall", await runFullUninstall({ ...base, purge: a.purge }, print), a, io);
     case "rollback":
