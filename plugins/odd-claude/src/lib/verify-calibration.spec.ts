@@ -52,8 +52,8 @@ test("odd-verify: calibration examples carry the qualifiers of the rules they re
 
 // The step 5 done-when assertion moved to src/conformance/always-on-context.spec.ts (it reads claude-md/03-protocol.md).
 
-test("cards/tracking.md: a task is closed only with git or Log evidence, else the finding is reported", () => {
-  const closure = read("cards/tracking.md").split("\n").find((l) => l.startsWith("At closure, run")) ?? "";
+test("rules/odd-tracking.md: a task is closed only with git or Log evidence, else the finding is reported", () => {
+  const closure = read("rules/odd-tracking.md").split("\n").find((l) => l.startsWith("At closure, run")) ?? "";
   assert.match(closure, /git or Log evidence/);
   assert.match(closure, /otherwise report the finding/);
 });

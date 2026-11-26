@@ -5,7 +5,6 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
 import { defaultHandlers, runHook, type Handlers } from "./run.js";
-import { writePersona } from "../lib/persona.js";
 import { readSessionState } from "../lib/state.js";
 
 const runJs = new URL("./run.js", import.meta.url).pathname;
@@ -108,7 +107,6 @@ test("CLI: unknown event and missing data dir env exit 0 (the home default is us
 test("SessionStart context keeps only dynamic lines for every source", () => {
   const dir = tmp();
   try {
-    writePersona("neutral", { dataDir: dir });
     for (const source of ["startup", "resume", "clear", "compact", undefined]) {
       const r = runHook("SessionStart", JSON.stringify({ session_id: "s", source }), { dataDir: dir, env: { CLAUDE_PLUGIN_ROOT: "/r/odd" } });
       const ctx = JSON.parse(r.stdout).hookSpecificOutput.additionalContext as string;

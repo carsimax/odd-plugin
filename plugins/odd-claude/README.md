@@ -116,7 +116,7 @@ Upgrade notes for 3.0.0:
 - **Balanced profile is the default.** The `balanced` preset carries the new per-role models, and it applies when no profile was chosen. Economy, max and custom remain; `clear` returns to balanced.
 - **Native RDD reviewers follow the active profile per role** (risk, resilience, readability, reliability, refuter, validator). An explicit model passed by the caller still overrides it.
 - **`odd-explore` runs on haiku in every preset**, and the orchestrator launches several explorers in parallel on distinct fronts for deeper context.
-- **One persona only: neutral**, with neutral Spanish (no voseo). The mentor persona is removed; a stored `mentor` reads as neutral and `persona mentor` is refused.
+- **One persona only: neutral**, with neutral Spanish (no voseo). The mentor persona and the persona command are removed; the neutral persona is the output style.
 
 Upgrade notes:
 
@@ -253,7 +253,7 @@ Statistics and profiles (Phase 5), unchanged in 2.0. The visual mods, the banner
 
 ## What's in v1.0
 
-- **Commands / skills** (`/<name>`): `odd`, `odd-doctor`, `odd-status`, `odd-setup`, `odd-persona`, `odd-coordinator`, `odd-background-subagents`, `odd-scratch`, `odd-stats`, `odd-profiles`, `odd-skill-registry`, `skill-creator`, `skill-improver`, `4r-review`, `judgment-day`, `branch-pr`, `chained-pr`, `work-unit-commits`, `issue-creation`, `comment-writer`, `systematic-debugging`, `receiving-review`, `odd-retro`, `cognitive-doc-design`, `tui-design`, `ui-design`.
+- **Commands / skills** (`/<name>`): `odd`, `odd-doctor`, `odd-status`, `odd-setup`, `odd-coordinator`, `odd-background-subagents`, `odd-scratch`, `odd-stats`, `odd-profiles`, `odd-skill-registry`, `skill-creator`, `skill-improver`, `4r-review`, `judgment-day`, `branch-pr`, `chained-pr`, `work-unit-commits`, `issue-creation`, `comment-writer`, `systematic-debugging`, `receiving-review`, `odd-retro`, `cognitive-doc-design`, `tui-design`, `ui-design`.
 - **Agents** (`<agent>`): `odd-explore`, `odd-verify`, `odd-worker`, `odd-jd-fix`, `odd-jd-judge-a`, `odd-jd-judge-b`, `odd-review-risk`, `odd-review-resilience`, `odd-review-readability`, `odd-review-reliability`.
 - **Hooks** (advisory; only the RDD-gated Stop reminder can block): `SessionStart` (context, scratch dir, title, status file, skill registry, optional codegraph warm-up; on `compact` and `resume` also a compact summary of the active feature document: the `odd/tasks/*.md` file whose header names the current branch, with its path, header line, `S#` ids, open tasks and last log entry, capped at 2000 characters, nothing when there is no match), `UserPromptSubmit` (context, quota advisory), `PostToolUse` (exploration budget, context backstop), `StopFailure` (quota advisory), `Stop` (status file; empty output unless RDD is on, see [RDD](#receipt-driven-review-rdd)), `PreToolUse` on `Bash` (RDD delivery notice, never blocks; silent unless RDD is on), `SubagentStart`/`SubagentStop` (record the subagent in session state; silent). `SubagentStart`, `SubagentStop` and `StopFailure` run with `async: true` (their output is never used); no hook that injects context is async. There is no `TaskCompleted` hook: Claude Code only lets it block, not add context, `SessionEnd` (scratch cleanup, resume hint, status file).
 - **Output style**: `odd`. **Cards**, **support docs** and **sounds assets** (see below).
@@ -273,10 +273,10 @@ All of these are advisory: none returns a block decision, `continue:false` or a 
 ## What v0.2 shipped
 
 - **Persona / output style `odd`** (`output-styles/odd.md`, set as `outputStyle` in `settings.json` by the installer, so no `/odd-setup` is needed): neutral persona and tone only. The ODD protocol is in the managed `~/.claude/CLAUDE.md` blocks and `~/.claude/rules/odd-tracking.md`; SessionStart and UserPromptSubmit hooks add only per-session `additionalContext` lines. Replies follow the user's language.
-- **Persona**: there is one persona, `neutral` (direct, technical, neutral Spanish), and it is always the default. `/odd-persona` shows it; any other mode (including `mentor`) is refused. Spanish replies are always neutral: no voseo or regional forms (tú or usted).
-- **Cards** (`cards/*.md`): orchestrator rules loaded on demand (delegation, tracking, verification, memory, skills, prompts, writer, quota recovery), with tool names mapped to Claude Code (`Agent`, `TodoWrite`, `AskUserQuestion`, `Bash` with `run_in_background`, `Monitor`, worktree tools). See `cards/SOURCES.md`.
+- **Persona**: there is one persona, neutral (direct, technical, neutral Spanish), carried by the output style; the persona command and its state are retired. Spanish replies are always neutral: no voseo or regional forms (tú or usted).
+- **Cards** (`cards/*.md`): orchestrator rules loaded on demand (delegation, verification, skills, prompts, writer, quota recovery; tracking and memory live in the path-scoped rule `rules/odd-tracking.md`), with tool names mapped to Claude Code (`Agent`, `TodoWrite`, `AskUserQuestion`, `Bash` with `run_in_background`, `Monitor`, worktree tools). See `cards/SOURCES.md`.
 - **Agents** (`<agent>`): `odd-explore` (read-only), `odd-verify` (runs checks), `odd-worker` (scoped writer), `odd-jd-fix`, `odd-jd-judge-a`, `odd-jd-judge-b` (Judgment Day), and the four advisory review lenses `odd-review-risk`, `odd-review-resilience`, `odd-review-readability`, `odd-review-reliability`.
-- **Skills** (`<skill>`): `odd`, `branch-pr`, `chained-pr`, `cognitive-doc-design`, `comment-writer`, `issue-creation`, `judgment-day`, `skill-creator`, `skill-improver`, `odd-skill-registry`, `systematic-debugging`, `receiving-review`, `odd-retro`, `tui-design`, `ui-design`, `work-unit-commits`, `4r-review`, plus the commands `odd-doctor`, `odd-status`, `odd-setup`, `odd-persona`, `odd-background-subagents`, `odd-coordinator`.
+- **Skills** (`<skill>`): `odd`, `branch-pr`, `chained-pr`, `cognitive-doc-design`, `comment-writer`, `issue-creation`, `judgment-day`, `skill-creator`, `skill-improver`, `odd-skill-registry`, `systematic-debugging`, `receiving-review`, `odd-retro`, `tui-design`, `ui-design`, `work-unit-commits`, `4r-review`, plus the commands `odd-doctor`, `odd-status`, `odd-setup`, `odd-background-subagents`, `odd-coordinator`.
 - **Support docs** (`support/`): test-first policy and the `odd/tasks/<feature>.md` format. **Sounds**: `assets/sounds/` (original tones, see its LICENSE).
 
 ### Background subagents
@@ -426,7 +426,7 @@ Every TUI choice has a flag. `odd-claude --help` is the reference.
 ~/.odd-claude/
   versions/<x.y.z>/     the release payload (dist, cards, agents, skills, output-styles, statusline, ...)
   current -> versions/x.y.z
-  data/                 state that used to live in CLAUDE_PLUGIN_DATA (profiles.json, persona, delegation, ...)
+  data/                 state that used to live in CLAUDE_PLUGIN_DATA (profiles.json, delegation, ...)
   manifest.json         every file installed into ~/.claude with its sha256
   settings-state.json   values replaced in settings.json, MCP servers added, update-check cache, chosen extras
   backups/<timestamp>/  copy of each ~/.claude file before it changed (and settings.json backups)

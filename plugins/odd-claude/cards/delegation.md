@@ -13,7 +13,7 @@ The seven triggers are those of the odd output style (Delegation, items 1-7). Th
 - **Ask:** `AskUserQuestion`; stop and wait.
 - **Mapping:** the trigger overrides initial size, including for read-only work; re-evaluate size after. Preparation for an already understood inline write stays inline, not further discovery. Explorers: `odd-explore`.
 - **Verification:** the change's own focused test and suite run inline, small tasks included; the independent `odd-verify` is as rare as possible. Routing: `${CLAUDE_PLUGIN_ROOT}/cards/verification.md`.
-- **Track:** feature document, Engram mirror, task list, work-unit commits (`${CLAUDE_PLUGIN_ROOT}/cards/memory.md`).
+- **Track:** feature document, Engram mirror, task list, work-unit commits (`~/.claude/rules/odd-tracking.md`).
 - **Writer:** a unit is one independent piece of behavior with its code, tests and docs together; a delivery that depends on another is not independent; several small independent changes run inline, one after another; units of about 100 changed lines or less always run inline (writing them costs less than starting workers); never for a price ratio. Launch shape: `${CLAUDE_PLUGIN_ROOT}/cards/writer.md`. Without a reason, the parent works inline, following the logbook.
 - **Incident / context backstop:** as in the output style; the backstop fires on the context advisory.
 

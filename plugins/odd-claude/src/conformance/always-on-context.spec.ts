@@ -143,3 +143,25 @@ test("identity lives in the identity block, not duplicated in the style", () => 
   assert.match(blockText("identity"), /senior architect/i);
   assert.doesNotMatch(read("output-styles/odd.md"), /I am odd-claude/);
 });
+
+// S8: the tracking and memory cards were folded into rules/odd-tracking.md; no shipped text may point at the deleted cards.
+test("no shipped card, block, skill or style references the deleted tracking/memory cards (S8)", () => {
+  assert.equal(existsSync(join(ROOT, "cards", "tracking.md")), false);
+  assert.equal(existsSync(join(ROOT, "cards", "memory.md")), false);
+  const walk = (dir: string): string[] =>
+    readdirSync(join(ROOT, dir), { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? walk(join(dir, e.name)) : e.name.endsWith(".md") ? [join(dir, e.name)] : []));
+  for (const f of ["cards", "claude-md", "skills", "agents", "rules"].flatMap(walk).concat("output-styles/odd.md", "README.md")) {
+    assert.doesNotMatch(read(f), /cards\/(tracking|memory)\.md|<cards>\/(tracking|memory)\.md/, f);
+  }
+});
+
+// S9: /odd-persona is retired; there is one neutral persona, carried by the output style, with no command or state to set it.
+test("no odd-persona skill, CLI or lib ships and no shipped text names the retired command (S9)", () => {
+  assert.equal(existsSync(join(ROOT, "skills", "odd-persona")), false);
+  for (const rel of ["src/cli/persona.ts", "src/lib/persona.ts", "dist/cli/persona.js", "dist/lib/persona.js"]) assert.equal(existsSync(join(ROOT, rel)), false, rel);
+  const walk = (dir: string): string[] =>
+    readdirSync(join(ROOT, dir), { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? walk(join(dir, e.name)) : e.name.endsWith(".md") ? [join(dir, e.name)] : []));
+  for (const f of ["cards", "claude-md", "skills", "agents", "rules"].flatMap(walk).concat("output-styles/odd.md", "README.md")) {
+    assert.doesNotMatch(read(f), /odd-persona|writePersona/, f);
+  }
+});

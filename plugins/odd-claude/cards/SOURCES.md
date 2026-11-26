@@ -6,11 +6,9 @@ Each card is a port of an upstream asset (MIT). Provenance lives here only, so t
 |---|---|
 | cards/delegation.md | upstream/gentle-shell/assets/orchestrator-delegation.md | <!-- odd-check: allow -->
 | cards/delegation-reference.md | upstream/gentle-shell/assets/orchestrator-delegation-reference.md | <!-- odd-check: allow -->
-| cards/memory.md | upstream/gentle-shell/assets/orchestrator-memory.md | <!-- odd-check: allow -->
 | cards/prompts.md | upstream/gentle-shell/assets/orchestrator-prompts.md | <!-- odd-check: allow -->
 | cards/quota-recovery.md | upstream/gentle-shell/assets/orchestrator-quota-recovery.md | <!-- odd-check: allow -->
 | cards/skills.md | upstream/gentle-shell/assets/orchestrator-skills.md | <!-- odd-check: allow -->
-| cards/tracking.md | upstream/gentle-shell/assets/orchestrator-tracking.md | <!-- odd-check: allow -->
 | cards/verification.md | upstream/gentle-shell/assets/orchestrator-verification.md | <!-- odd-check: allow -->
 | cards/writer.md | upstream/gentle-shell/assets/orchestrator-writer.md | <!-- odd-check: allow -->
 | cards/full-delegation.md | upstream/gentle-shell/assets/orchestrator-full-delegation.md + orchestrator-full-delegation-card.md | <!-- odd-check: allow -->
@@ -24,7 +22,7 @@ Managed CLAUDE.md blocks, the path-scoped rule and the output style are ports (M
 | claude-md/01-identity.md, 02-continuity.md, 04-task-size.md, 05-delegation.md, 06-language.md, 07-safety.md | upstream/gentle-ai/internal/assets/claude/orchestrator.md + the agent-routing contract in upstream/gentle-ai/internal/components/agentguidance (rendered Claude CLAUDE.md) | <!-- odd-check: allow -->
 | claude-md/03-protocol.md | upstream/gentle-ai agent-routing ODD protocol, merged with the former output-style protocol | <!-- odd-check: allow -->
 | claude-md/08-memory.md | upstream/gentle-ai/testdata/golden/engram-claude-claudemd.golden | <!-- odd-check: allow -->
-| rules/odd-tracking.md | upstream/gentle-ai agent-routing "Organic Driven Development" reference + cards/tracking.md and cards/memory.md | <!-- odd-check: allow -->
+| rules/odd-tracking.md | upstream/gentle-ai agent-routing "Organic Driven Development" reference (the former tracking and memory cards, folded in; sources orchestrator-tracking.md and orchestrator-memory.md) | <!-- odd-check: allow -->
 | output-styles/odd.md | upstream/gentle-ai/internal/assets/claude/output-style-neutral.md + persona-neutral-residual.md + upstream/gentle-shell/extensions/gentle-ai.ts (NEUTRAL_PERSONA_PROMPT) | <!-- odd-check: allow -->
 
 ## Technique sources
