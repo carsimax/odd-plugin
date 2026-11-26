@@ -219,3 +219,24 @@ test("dry-run after an install reports everything unchanged and writes nothing",
   assert.equal(readlinkSync(paths.currentLink), link);
   assert.deepEqual(listBackups(paths), []);
 });
+
+test("workflows: top-level workflows/*.js are planned under claudeDir, foreign files are kept, uninstall follows the manifest", () => {
+  const src = makeSource();
+  put(src, "workflows/odd-4r-review.js", "export const meta = { name: 'odd-4r-review', description: 'd' };\n");
+  put(src, "workflows/nested/skip.js", "// not top level\n");
+  put(src, "workflows/notes.md", "not a workflow\n");
+  const h = makeHome();
+  stagePayload(src, h.paths, "1.0.0");
+  const plan = planInstallFiles(h.paths, defaultSelection());
+  const wf = plan.actions.filter((a) => a.rel.startsWith("workflows/"));
+  assert.deepEqual(wf.map((a) => a.rel), ["workflows/odd-4r-review.js"]);
+  assert.equal(wf[0]!.target, join(h.paths.claudeDir, "workflows/odd-4r-review.js"));
+  assert.equal(wf[0]!.action, "create");
+  put(h.paths.claudeDir, "workflows/mine.js", "// mine\n");
+  applyInstallFiles(h.paths, plan);
+  assert.ok(existsSync(join(h.paths.claudeDir, "workflows/odd-4r-review.js")));
+  assert.equal(readManifest(h.paths.manifestPath)!.files["workflows/mine.js"], undefined);
+  applyUninstallFiles(h.paths);
+  assert.equal(existsSync(join(h.paths.claudeDir, "workflows/odd-4r-review.js")), false);
+  assert.equal(readFileSync(join(h.paths.claudeDir, "workflows/mine.js"), "utf8"), "// mine\n");
+});

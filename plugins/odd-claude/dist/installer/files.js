@@ -74,6 +74,11 @@ function desiredFiles(paths, selection, payloadDir) {
             files.set(`agents/${rel}`, { data: Buffer.from(text), mode: f.mode });
         }
     }
+    if (existsSync(dir("workflows"))) {
+        for (const [rel, f] of readTree(dir("workflows")))
+            if (!rel.includes("/") && rel.endsWith(".js"))
+                files.set(`workflows/${rel}`, { data: resolve(f.data), mode: f.mode });
+    }
     const style = join(dir("output-styles"), "odd.md");
     if (existsSync(style)) {
         const t = readTree(dir("output-styles")).get("odd.md");
