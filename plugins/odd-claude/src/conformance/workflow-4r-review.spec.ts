@@ -104,3 +104,57 @@ test("validation throws a clear Error on an empty diff, an unknown lens or an em
   await assert.rejects(run({ diff: "d", range: "r", lenses: ["risk", "speed"] }, () => null), /unknown lens.*speed/i);
   await assert.rejects(run({ diff: "d", range: "r", lenses: [] }, () => null), /lens/i);
 });
+
+test("a lens agent that throws is recorded as failed, not dropped", async () => {
+  const { result } = await run({ diff: "d", range: "r" }, (l) => {
+    if (l === "risk") throw new Error("boom");
+    return envelope(l, []);
+  });
+  assert.deepEqual(result.lenses_failed, ["risk"]);
+  assert.ok(!result.lenses_run.includes("risk"));
+});
+
+test("dedupe ignores claim case and surrounding spaces and keeps the highest severity", async () => {
+  const { result } = await run({ diff: "d", range: "r" }, (l) => (l === "risk" ? envelope(l, [row(l, "A", "WARNING", "a.ts:1", "Same Thing. ")]) : l === "reliability" ? envelope(l, [row(l, "B", "CRITICAL", "a.ts:1", "same thing.")]) : envelope(l, [])));
+  assert.equal(result.findings.length, 1);
+  assert.equal(result.findings[0].severity, "CRITICAL");
+  assert.deepEqual([...result.findings[0].lenses].sort(), ["reliability", "risk"]);
+});
+
+test("an unknown severity sorts after SUGGESTION; ties sort by location", async () => {
+  const { result } = await run({ diff: "d", range: "r" }, (l) => (l === "risk" ? envelope(l, [row(l, "A", "HIGH", "z.ts:1", "x"), row(l, "B", "SUGGESTION", "b.ts:9", "y"), row(l, "C", "SUGGESTION", "a.ts:2", "z")]) : envelope(l, [])));
+  assert.deepEqual(result.findings.map((f: any) => f.location), ["a.ts:2", "b.ts:9", "z.ts:1"]);
+});
+
+test("every lens keeps its status and evidence line in the result, clean or not, and a failed lens has none", async () => {
+  const { result } = await run({ diff: "d", range: "r" }, (l) => {
+    if (l === "resilience") return null;
+    const findings = l === "risk" ? [row(l, "R", "WARNING", "a.ts:1", "c")] : [];
+    return { review_result: { lens_results: [{ lens: `review-${l}`, findings, evidence: [`checked ${l} paths`] }] } };
+  });
+  const by = Object.fromEntries(result.lenses.map((x: any) => [x.lens, x]));
+  assert.deepEqual(Object.keys(by).sort(), [...LENSES].sort());
+  assert.deepEqual([by.readability.status, by.reliability.status, by.risk.status, by.resilience.status], ["clean", "clean", "findings", "failed"]);
+  assert.deepEqual(by.readability.evidence, ["checked readability paths"]);
+  assert.deepEqual(by.risk.evidence, ["checked risk paths"]);
+  assert.deepEqual(by.resilience.evidence, []);
+});
+
+test("intent reaches every lens prompt when given", async () => {
+  const { calls } = await run({ diff: "d", range: "r", intent: "make login safer" }, (l) => envelope(l, []));
+  assert.equal(calls.length, 4);
+  for (const c of calls) assert.ok(c.prompt.includes("make login safer"));
+  const none = await run({ diff: "d", range: "r" }, (l) => envelope(l, []));
+  for (const c of none.calls) assert.ok(!/intent/i.test(c.prompt));
+});
+
+test("a malformed findings value or a non-object row makes the lens failed, never iterated", async () => {
+  const { result, logs } = await run({ diff: "d", range: "r" }, (l) => {
+    if (l === "risk") return { review_result: { lens_results: [{ lens: "review-risk", findings: "oops", evidence: [] }] } };
+    if (l === "resilience") return envelope(l, ["not a row"]);
+    return envelope(l, []);
+  });
+  assert.deepEqual([...result.lenses_failed].sort(), ["resilience", "risk"]);
+  assert.deepEqual(result.findings, []);
+  assert.ok(logs.some((m) => m.includes("risk")) && logs.some((m) => m.includes("resilience")));
+});

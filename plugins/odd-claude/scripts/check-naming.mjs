@@ -11,7 +11,7 @@ import { fileURLToPath } from "node:url";
 
 const SKIP_DIRS = new Set(["node_modules", "dist-test", ".git"]);
 const SKIP_FILES = new Set(["package-lock.json"]);
-const CONTENT = new Set(["skills", "agents", "output-styles", "claude-md", "rules", "README.md", "support"]);
+const CONTENT = new Set(["skills", "agents", "output-styles", "claude-md", "rules", "workflows", "README.md", "support"]);
 const PATTERNS = [
   { name: "gentle- identifier", re: /gentle[-_]/i },
   { name: "telemetry marker", re: /telemetry/i },

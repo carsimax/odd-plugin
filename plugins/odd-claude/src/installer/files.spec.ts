@@ -285,3 +285,25 @@ test("workflows: top-level workflows/*.js are planned under claudeDir, foreign f
   assert.equal(existsSync(join(h.paths.claudeDir, "workflows/odd-4r-review.js")), false);
   assert.equal(readFileSync(join(h.paths.claudeDir, "workflows/mine.js"), "utf8"), "// mine\n");
 });
+
+test("workflows: a payload change updates, a user edit conflicts and is kept", () => {
+  const src = makeSource();
+  put(src, "workflows/odd-4r-review.js", "// v1\n");
+  const h = makeHome();
+  stagePayload(src, h.paths, "1.0.0");
+  applyInstallFiles(h.paths, planInstallFiles(h.paths, defaultSelection()));
+  const target = join(h.paths.claudeDir, "workflows/odd-4r-review.js");
+  put(src, "workflows/odd-4r-review.js", "// v2\n");
+  stagePayload(src, h.paths, "1.0.1");
+  const up = planInstallFiles(h.paths, defaultSelection()).actions.find((a) => a.rel === "workflows/odd-4r-review.js")!;
+  assert.equal(up.action, "update");
+  applyInstallFiles(h.paths, planInstallFiles(h.paths, defaultSelection()));
+  assert.equal(readFileSync(target, "utf8"), "// v2\n");
+  writeFileSync(target, "// v2\n// user edit\n");
+  put(src, "workflows/odd-4r-review.js", "// v3\n");
+  stagePayload(src, h.paths, "1.0.2");
+  const plan = planInstallFiles(h.paths, defaultSelection());
+  assert.equal(plan.actions.find((a) => a.rel === "workflows/odd-4r-review.js")!.action, "conflict");
+  applyInstallFiles(h.paths, plan);
+  assert.equal(readFileSync(target, "utf8"), "// v2\n// user edit\n");
+});
