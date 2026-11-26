@@ -27,7 +27,8 @@ for (const source of ["compact", "resume"]) {
       assert.match(c, /Active ODD feature document \(reinjected\): odd\/tasks\/f\.md/);
       assert.match(c, /Specs: S1/);
       assert.match(c, /T1 \| S1 \| worker \| pending/);
-      assert.match(c, /Persona mode/);
+      assert.match(c, /Coordinator mode: (ON|OFF)/);
+      assert.doesNotMatch(c, /Persona mode|Cards directory:|same language the user writes in/);
     } finally {
       r.done();
     }

@@ -5,17 +5,27 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { buildPromptAnchor, buildSessionContext, readDelegationMode, resolveCardsDir, writeDelegationMode } from "./context.js";
 
-const base = { persona: "neutral", delegationMode: "organic", cardsDir: "/opt/odd/cards" } as const;
+const base = { delegationMode: "organic", cardsDir: "/opt/odd/cards" } as const;
 
-test("session context carries cards path, persona, delegation mode and language rule", () => {
+test("session context keeps only dynamic lines: header, one coordinator line, background policy", () => {
   const text = buildSessionContext(base);
-  assert.match(text, /\/opt\/odd\/cards/);
-  assert.match(text, /Persona mode: neutral/);
-  assert.match(text, /Do NOT use voseo/);
-  assert.doesNotMatch(text, /Rioplatense/i);
-  assert.match(text, /Delegation mode: organic/);
-  assert.equal(text.split(/same language the user writes in/).length - 1, 1, "reply-language rule stated exactly once");
-  assert.match(text, /Only a message written by the human/);
+  assert.match(text, /^# odd-claude session context/);
+  assert.match(text, /Coordinator mode: OFF/);
+  assert.match(text, /Background subagents: off/);
+  assert.equal(text.split(/Coordinator mode:/).length - 1, 1, "coordinator mode stated as exactly one line");
+  assert.doesNotMatch(text, /Delegation mode:/);
+});
+
+test("session context no longer repeats static text now in CLAUDE.md blocks and the output style", () => {
+  for (const delegationMode of ["organic", "full"] as const) {
+    const text = buildSessionContext({ ...base, delegationMode });
+    assert.doesNotMatch(text, /Cards directory:/);
+    assert.doesNotMatch(text, /Persona mode/);
+    assert.doesNotMatch(text, /voseo|senior architect|Do not use slang/i);
+    assert.doesNotMatch(text, /same language the user writes in/);
+    assert.doesNotMatch(text, /Only a message written by the human/);
+    assert.ok(text.length < 1500, `${text.length}`);
+  }
 });
 
 test("session context mentions no mentor mode", () => {
@@ -24,17 +34,13 @@ test("session context mentions no mentor mode", () => {
 
 test("full delegation changes the text", () => {
   const text = buildSessionContext({ ...base, delegationMode: "full" });
-  assert.match(text, /Persona mode: neutral/);
-  assert.match(text, /Do NOT use voseo/);
-  assert.match(text, /Delegation mode: full/);
   assert.match(text, /Coordinator mode: ON \(full delegation\)/);
   assert.doesNotMatch(buildSessionContext(base), /full delegation\)/i);
 });
 
 test("context stays small (< 10k chars) and has no forbidden identifiers", () => {
-  for (const persona of ["neutral"] as const)
-    for (const delegationMode of ["organic", "full"] as const) {
-      const text = buildSessionContext({ persona, delegationMode, cardsDir: "/x/cards" });
+  for (const delegationMode of ["organic", "full"] as const) {
+      const text = buildSessionContext({ delegationMode, cardsDir: "/x/cards" });
       assert.ok(text.length < 10000, `${text.length}`);
       assert.doesNotMatch(text, /gentle|tele\w+try/i); // odd-check: allow
     }

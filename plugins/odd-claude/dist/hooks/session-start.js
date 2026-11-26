@@ -3,7 +3,6 @@ import { logError, updateSessionState } from "../lib/state.js";
 import { readBackgroundSubagents } from "../lib/background-subagents.js";
 import { realIntegrationDeps, runSessionIntegrations } from "../lib/session-integrations.js";
 import { buildSessionContext, readDelegationMode, resolveCardsDir } from "../lib/context.js";
-import { readPersona } from "../lib/persona.js";
 import { recordAgentStatus } from "../lib/agent-status.js";
 import { createSessionScratch, sweepStaleTombstones } from "../lib/scratch.js";
 import { titleSequence } from "../lib/terminal.js";
@@ -15,7 +14,7 @@ import { recordTranscriptPath } from "../lib/stats.js";
 import { activeFeatureDocSummary } from "../lib/feature-doc.js";
 /**
  * Records the session start in state (when a session id and data dir exist) and injects the
- * odd-claude context (persona, delegation mode, cards dir, reply-language rule) as additionalContext.
+ * odd-claude context (coordinator mode, background policy, scratch dir, profile, integrations; static protocol lives in CLAUDE.md blocks) as additionalContext.
  * Runs for every source (startup, resume, clear, compact). On compact and resume it also appends a compact summary of the active
  * feature document (the odd/tasks file naming the current branch), so the work state survives the compaction; fail-soft.
  */
@@ -70,7 +69,6 @@ export function sessionStart(input, opts = {}) {
         ? runSessionIntegrations(input.cwd, realIntegrationDeps(env.HOME || homedir(), env, (m) => logError(m, opts), opts)).extraLines
         : [];
     const baseContext = buildSessionContext({
-        persona: readPersona(opts),
         delegationMode: readDelegationMode(opts),
         cardsDir: resolveCardsDir(env),
         backgroundSubagents: readBackgroundSubagents(opts),

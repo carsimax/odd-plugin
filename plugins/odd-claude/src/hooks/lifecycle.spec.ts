@@ -49,7 +49,7 @@ test("SessionStart without a data dir env or session id still injects the contex
   try {
     const r = runHook("SessionStart", JSON.stringify({ cwd: "/w/p" }), { env: { CLAUDE_PLUGIN_ROOT: "/r/odd", ODD_CLAUDE_HOME: home, ODD_CLAUDE_NO_SKILL_REGISTRY: "1", ODD_CLAUDE_NO_CODEGRAPH_WARMUP: "1" } });
     const out = JSON.parse(r.stdout);
-    assert.match(out.hookSpecificOutput.additionalContext, /Persona mode/);
+    assert.match(out.hookSpecificOutput.additionalContext, /Coordinator mode: ON/);
     assert.doesNotMatch(out.hookSpecificOutput.additionalContext, /Session scratch/);
   } finally {
     rmSync(home, { recursive: true, force: true });
