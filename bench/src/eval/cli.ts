@@ -1,16 +1,16 @@
-// Dev-only CLI: `npm run eval -- [--tasks a,b] [--arms none,coord-on,coord-off,skills] [--model opus] [--trials 3] [--max-budget-usd 2] [--max-turns 60] [--total-budget-usd 70] [--out <dir>] [--dry-run]`
-import { existsSync, mkdtempSync, writeFileSync } from "node:fs";
+// Dev-only CLI: `npm run eval -- [--tasks a,b] [--arms none,coord-on,coord-off,skills] [--model opus] [--trials 3] [--max-budget-usd 2] [--max-turns 60] [--total-budget-usd 70] [--skills-installer <path>] [--out <dir>] [--dry-run]`
+import { existsSync, mkdtempSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { ARMS, DEFAULT_ARMS, hasAuthEnv, isPluginArm, type Arm } from "./isolation.js";
-import { planRuns, runEval } from "./runner.js";
+import { DEFAULT_SKILLS_INSTALLER, planRuns, runEval } from "./runner.js";
 import { renderReport } from "./report.js";
 import { loadTasks } from "./tasks.js";
 
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
 
-export interface CliArgs { tasks?: string[]; arms: Arm[]; trials: number; maxBudgetUsd: number; maxTurns: number; totalBudgetUsd: number; out?: string; dryRun: boolean; tasksDir: string; claudeBin: string; model: string; skipAuthCheck: boolean; keepWorkspaces: boolean }
+export interface CliArgs { tasks?: string[]; arms: Arm[]; trials: number; maxBudgetUsd: number; maxTurns: number; totalBudgetUsd: number; out?: string; dryRun: boolean; tasksDir: string; claudeBin: string; model: string; skipAuthCheck: boolean; keepWorkspaces: boolean; skillsInstaller?: string }
 
 export function parseArgs(argv: readonly string[]): CliArgs {
   const a: CliArgs = { arms: [...DEFAULT_ARMS], trials: 3, maxBudgetUsd: 2, maxTurns: 60, totalBudgetUsd: 70, dryRun: false, tasksDir: join(REPO_ROOT, "bench", "eval-tasks"), claudeBin: "claude", model: "opus", skipAuthCheck: false, keepWorkspaces: false };
@@ -29,6 +29,7 @@ export function parseArgs(argv: readonly string[]): CliArgs {
       case "--tasks-dir": a.tasksDir = resolve(val()); break;
       case "--claude-bin": a.claudeBin = val(); break;
       case "--model": a.model = val(); break;
+      case "--skills-installer": { const p = resolve(val()); if (!existsSync(p)) throw new Error(`--skills-installer: ${p} does not exist`); if (!statSync(p).isFile()) throw new Error(`--skills-installer: ${p} is not a file`); a.skillsInstaller = p; break; }
       case "--dry-run": a.dryRun = true; break;
       case "--skip-auth-check": a.skipAuthCheck = true; break;
       case "--keep-workspaces": a.keepWorkspaces = true; break;
@@ -46,6 +47,7 @@ export async function main(argv: readonly string[], write: (s: string) => void =
   const worst = plan.length * a.maxBudgetUsd;
   if (a.dryRun) {
     write(`Plan: ${tasks.length} tasks x ${a.arms.length} arms x ${a.trials} trials = ${plan.length} runs\n`);
+    if (a.arms.includes("skills")) write(`Skills installer: ${a.skillsInstaller ?? DEFAULT_SKILLS_INSTALLER}\n`);
     for (const [i, r] of plan.entries()) write(`${String(i + 1).padStart(3)}. ${r.task.id} arm=${r.arm} trial=${r.trial}\n`);
     write(`Per-run cap ${a.maxBudgetUsd} USD (worst case ${worst} USD), total budget guard ${a.totalBudgetUsd} USD${worst > a.totalBudgetUsd ? " (will stop early)" : ""}. Dry run: nothing executed.\n`);
     return 0;
@@ -56,7 +58,7 @@ export async function main(argv: readonly string[], write: (s: string) => void =
   const outDir = a.out ?? mkdtempSync(join(tmpdir(), "odd-eval-out-"));
   write(`Output: ${outDir}\n`);
   const outcome = await runEval({
-    tasks, arms: a.arms, trials: a.trials, pluginDir, claudeBin: a.claudeBin, model: a.model, maxBudgetUsd: a.maxBudgetUsd, maxTurns: a.maxTurns, totalBudgetUsd: a.totalBudgetUsd, outDir, baseEnv: env, keepWorkspaces: a.keepWorkspaces,
+    tasks, arms: a.arms, trials: a.trials, pluginDir, claudeBin: a.claudeBin, model: a.model, maxBudgetUsd: a.maxBudgetUsd, maxTurns: a.maxTurns, totalBudgetUsd: a.totalBudgetUsd, outDir, baseEnv: env, ...(a.skillsInstaller !== undefined ? { skillsInstaller: a.skillsInstaller } : {}), keepWorkspaces: a.keepWorkspaces,
     onRecord: (r) => write(`${r.run_id}: ${r.status} passed=${r.passed} cost=${r.cost_usd ?? "n/a"} subagents=${r.subagents}\n`),
   });
   writeFileSync(join(outDir, "report.md"), renderReport(outcome.records, outcome));

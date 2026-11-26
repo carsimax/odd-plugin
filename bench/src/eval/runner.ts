@@ -39,6 +39,8 @@ export interface RunRecord {
   observed_agents: string[] | null; observed_skills: string[] | null;
   /** odd-skills was installed into the run's private config before claude started (arm skills only). */
   skills_installed: boolean;
+  /** Absolute path of the install.sh used (arm skills only; absent on other arms), to tell which odd-skills version ran. */
+  skills_installer?: string;
   /** The plugin ran from a staged copy without its `dependencies` (engram is not installed in the isolated config). */
   plugin_staged: boolean;
   /** The run's argv enabled the native Bash sandbox (`--settings` `sandbox`), identical for every arm. */
@@ -166,7 +168,9 @@ export async function runOne(run: PlannedRun, o: EvalOptions): Promise<RunRecord
     prepareIsolation(dirs, arm);
     const env = buildRunEnv(o.baseEnv ?? process.env, dirs, arm);
     if (arm === "skills") {
-      const inst = await runProcess("sh", [o.skillsInstaller ?? DEFAULT_SKILLS_INSTALLER, "--target", dirs.config], { cwd: root, env, deadlineMs: 60_000 });
+      const installer = resolve(o.skillsInstaller ?? DEFAULT_SKILLS_INSTALLER);
+      rec.skills_installer = installer;
+      const inst = await runProcess("sh", [installer, "--target", dirs.config], { cwd: root, env, deadlineMs: 60_000 });
       if (inst.code !== 0 || inst.timedOut) throw new Error(`odd-skills install failed (exit ${inst.code}${inst.timedOut ? ", timed out" : ""}): ${inst.stderr.trim().slice(0, 500)}`);
       rec.skills_installed = true;
     }
