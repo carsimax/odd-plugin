@@ -1,5 +1,5 @@
 // Subagent log (R09): SubagentStart/SubagentStop hook events are recorded in the session state under
-// `subagents` (advisory, no output) so `/odd-claude:stats` can count them.
+// `subagents` (advisory, no output) so `/odd-stats` can count them.
 // Claude Code gives the plugin no runner, so this event log is the only source of truth.
 import { logError, readSessionState, updateSessionState, type StateOptions } from "./state.js";
 

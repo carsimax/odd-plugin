@@ -190,7 +190,7 @@ test("initialize negotiates the protocol version and advertises only tools; init
     const result = r.result as any;
     assert.equal(result.protocolVersion, v);
     assert.deepEqual(result.capabilities, { tools: { listChanged: false } });
-    assert.equal(result.serverInfo.name, "odd-claude-review");
+    assert.equal(result.serverInfo.name, "odd-review");
     assert.match(result.serverInfo.version, /^\d+\.\d+\.\d+/);
   }
   const unknown = (await rpc(s, { jsonrpc: "2.0", id: "x", method: "initialize", params: { protocolVersion: "1999-01-01" } }))!;

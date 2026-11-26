@@ -61,7 +61,7 @@ export function sessionStart(input: HookInput, opts: StateOptions = {}): HookOut
     sweepStaleTombstones(opts);
     try {
       const dir = createSessionScratch(input.session_id, opts);
-      scratchLines.push(`Session scratch dir (R56): ${dir}. Use it for throwaway files; it is removed when the session ends. \`/odd-claude:scratch\` shows it.`);
+      scratchLines.push(`Session scratch dir (R56): ${dir}. Use it for throwaway files; it is removed when the session ends. \`/odd-scratch\` shows it.`);
     } catch (err) {
       logError(`SessionStart scratch: ${err instanceof Error ? err.message : String(err)}`, opts);
     }

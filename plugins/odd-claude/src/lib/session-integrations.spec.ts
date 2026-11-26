@@ -174,6 +174,20 @@ test("lock: spawn failure releases the lock; no data dir means no spawn", () => 
   }
 });
 
+test("the detached child gets the resolved data dir as ODD_CLAUDE_DATA, over any inherited data env", () => {
+  const s = setup();
+  try {
+    const data = join(s.base, "data");
+    const seen: Record<string, string | undefined>[] = [];
+    const c = ctx(data, [], { env: { ODD_CLAUDE_DATA: "/other", CLAUDE_PLUGIN_DATA: "/plug", KEEP: "1" }, spawnChild: (_a, env) => { seen.push(env); return 4242; } });
+    assert.equal(launchLocked("registry", s.cwd, c), "launched");
+    assert.equal(seen[0]!.ODD_CLAUDE_DATA, data);
+    assert.equal(seen[0]!.KEEP, "1");
+  } finally {
+    s.cleanup();
+  }
+});
+
 test("SessionStart hook: does not wait for the refresh (time-bounded) and the registry is written eventually by the detached refresh", async () => {
   const s = setup();
   const data = join(s.base, "data");

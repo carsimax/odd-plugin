@@ -16,10 +16,10 @@ import { inflightKey, isMain, isObject, MAX_LINE_BYTES, rpcError, runMain, serve
 export { MAX_LINE_BYTES, SUPPORTED_PROTOCOLS };
 export type { Response };
 
-export const SERVER_NAME = "odd-claude-review";
+export const SERVER_NAME = "odd-review";
 
 const INSTRUCTIONS =
-  "Review tools of the odd-claude plugin. Start with review_status and follow only the next_transition it returns. Consent is the human's: review_start relays the question, review_answer_consent records only their explicit answer. Reviewers cost money: acknowledge a forecast before they run.";
+  "Review tools of odd-claude. Start with review_status and follow only the next_transition it returns. Consent is the human's: review_start relays the question, review_answer_consent records only their explicit answer. Reviewers cost money: acknowledge a forecast before they run.";
 
 export interface ServerOptions {
   deps?: ToolDeps;

@@ -44,11 +44,16 @@ test("SessionStart sweeps stale tombstones in the scratch root and keeps fresh o
   }
 });
 
-test("SessionStart without a data dir or session id still injects the context", () => {
-  const r = runHook("SessionStart", JSON.stringify({ cwd: "/w/p" }), { env: { CLAUDE_PLUGIN_ROOT: "/r/odd" } });
-  const out = JSON.parse(r.stdout);
-  assert.match(out.hookSpecificOutput.additionalContext, /Persona mode/);
-  assert.doesNotMatch(out.hookSpecificOutput.additionalContext, /Session scratch/);
+test("SessionStart without a data dir env or session id still injects the context (home default)", () => {
+  const home = tmp();
+  try {
+    const r = runHook("SessionStart", JSON.stringify({ cwd: "/w/p" }), { env: { CLAUDE_PLUGIN_ROOT: "/r/odd", ODD_CLAUDE_HOME: home, ODD_CLAUDE_NO_SKILL_REGISTRY: "1", ODD_CLAUDE_NO_CODEGRAPH_WARMUP: "1" } });
+    const out = JSON.parse(r.stdout);
+    assert.match(out.hookSpecificOutput.additionalContext, /Persona mode/);
+    assert.doesNotMatch(out.hookSpecificOutput.additionalContext, /Session scratch/);
+  } finally {
+    rmSync(home, { recursive: true, force: true });
+  }
 });
 
 test("UserPromptSubmit marks the status working and keeps the language anchor", () => {

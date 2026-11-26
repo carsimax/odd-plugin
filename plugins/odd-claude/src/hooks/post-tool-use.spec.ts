@@ -44,7 +44,8 @@ test("4th lookup emits one PostToolUse additionalContext notice, then stays sile
     assert.deepEqual(Object.keys(out), ["hookSpecificOutput"]);
     assert.equal(out.hookSpecificOutput.hookEventName, "PostToolUse");
     assert.match(out.hookSpecificOutput.additionalContext, /Exploration budget: 4 tracked lookups/);
-    assert.match(out.hookSpecificOutput.additionalContext, /odd-claude:odd-explore/);
+    assert.match(out.hookSpecificOutput.additionalContext, /parallel odd-explore subagents/);
+    assert.doesNotMatch(out.hookSpecificOutput.additionalContext, /odd-claude:/);
     assert.deepEqual(post(dir, read()), { exitCode: 0, stdout: "" });
     assert.deepEqual(post(dir, read()), { exitCode: 0, stdout: "" });
   } finally {
@@ -67,7 +68,7 @@ test("UserPromptSubmit resets the counters so the notice can fire again next tur
   const dir = tmp();
   try {
     for (let i = 0; i < 4; i++) post(dir, read());
-    runHook("UserPromptSubmit", JSON.stringify({ session_id: "s1", prompt: "/odd-claude:status" }), { dataDir: dir });
+    runHook("UserPromptSubmit", JSON.stringify({ session_id: "s1", prompt: "/odd-status" }), { dataDir: dir });
     assert.deepEqual(readSessionState("s1", { dataDir: dir }).exploration, { lookups: 0, bytes: 0, notified: false });
     for (let i = 0; i < 3; i++) assert.equal(post(dir, read()).stdout, "");
     assert.match(ctxOf(post(dir, read())), /Exploration budget/);
@@ -76,7 +77,7 @@ test("UserPromptSubmit resets the counters so the notice can fire again next tur
   }
 });
 
-test("tracks Read/Grep/Glob/WebFetch/WebSearch and both codegraph MCP name forms; ignores other tools", () => {
+test("tracks Read/Grep/Glob/WebFetch/WebSearch and the global and legacy plugin codegraph MCP names; ignores other tools", () => {
   const dir = tmp();
   try {
     const names = ["Read", "Grep", "Glob", "WebFetch", "WebSearch", "mcp__codegraph__codegraph_explore", "mcp__plugin_odd-claude_codegraph__codegraph_query"];
@@ -93,7 +94,7 @@ test("main thread only: agent_id / agent_type calls neither count nor notify", (
   try {
     for (let i = 0; i < 6; i++) {
       assert.equal(post(dir, read({ agent_id: "a1" })).stdout, "");
-      assert.equal(post(dir, read({ agent_type: "odd-claude:odd-explore" })).stdout, "");
+      assert.equal(post(dir, read({ agent_type: "odd-explore" })).stdout, "");
     }
     assert.equal(readSessionState("s1", { dataDir: dir }).exploration, undefined);
   } finally {

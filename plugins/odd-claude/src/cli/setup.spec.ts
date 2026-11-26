@@ -69,13 +69,13 @@ test("invalid mode exits 1; usage errors exit 2; no args lists state and modes",
   }
 });
 
-test("--apply without any data dir exits 2 and writes nothing", () => {
+test("--apply without --data-dir or data env backs up under ODD_CLAUDE_HOME/data", () => {
   const b = box();
   try {
-    const before = sha(b.settings);
-    const r = setupCli(["--mode", "plan", "--apply", "--settings", b.settings], {});
-    assert.equal(r.exitCode, 2);
-    assert.equal(sha(b.settings), before);
+    const r = setupCli(["--mode", "plan", "--apply", "--settings", b.settings], { ODD_CLAUDE_HOME: join(b.dir, "home") });
+    assert.equal(r.exitCode, 0);
+    assert.match(readFileSync(b.settings, "utf8"), /"defaultMode": "plan"/);
+    assert.equal(readdirSync(join(b.dir, "home", "data", "backups")).length, 1);
   } finally {
     b.cleanup();
   }

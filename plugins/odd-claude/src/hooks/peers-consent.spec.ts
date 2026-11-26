@@ -20,16 +20,16 @@ const ups = (dir: string, prompt: unknown, session: unknown = R) =>
 const ctx = (r: { stdout: string }): string => (r.stdout === "" ? "" : (JSON.parse(r.stdout).hookSpecificOutput.additionalContext as string));
 const grantsFiles = (dir: string): string[] => (existsSync(join(dir, "peers", ".grants")) ? readdirSync(join(dir, "peers", ".grants")) : []);
 
-test("exact `/odd-claude:peers allow <id>` records the grant for input.session_id and confirms", () => {
+test("exact `/odd-peers allow <id>` records the grant for input.session_id and confirms", () => {
   const dir = tmp();
   try {
-    const r = ups(dir, `/odd-claude:peers allow ${S}`);
+    const r = ups(dir, `/odd-peers allow ${S}`);
     assert.equal(r.exitCode, 0);
     assert.match(ctx(r), new RegExp(`Peer grant recorded: session ${R} accepts messages from ${S}`));
     assert.equal(isAllowed(R, S, { dataDir: dir }), true);
     assert.equal(isAllowed(S, R, { dataDir: dir }), false);
     // surrounding whitespace is trimmed
-    ups(dir, `  \n/odd-claude:peers allow ${T}\n `);
+    ups(dir, `  \n/odd-peers allow ${T}\n `);
     assert.deepEqual(listGrants(R, { dataDir: dir }), [S, T].sort());
   } finally {
     rmSync(dir, { recursive: true, force: true });
@@ -41,10 +41,10 @@ test("exact revoke <id> and revoke --all remove grants and confirm", () => {
   try {
     allow(R, S, { dataDir: dir });
     allow(R, T, { dataDir: dir });
-    const r = ups(dir, `/odd-claude:peers revoke ${S}`);
+    const r = ups(dir, `/odd-peers revoke ${S}`);
     assert.match(ctx(r), new RegExp(`Peer grant revoked: session ${R} no longer accepts messages from ${S}`));
     assert.deepEqual(listGrants(R, { dataDir: dir }), [T]);
-    const all = ups(dir, "/odd-claude:peers revoke --all");
+    const all = ups(dir, "/odd-peers revoke --all");
     assert.match(ctx(all), /Peer grants revoked: session \S+ accepts messages from nobody/);
     assert.deepEqual(listGrants(R, { dataDir: dir }), []);
   } finally {
@@ -56,29 +56,30 @@ test("near-misses do nothing: extra words, other command, mid-sentence, leading 
   const dir = tmp();
   try {
     const prompts = [
-      `/odd-claude:peers allow ${S} please`,
-      `/odd-claude:peers  allow ${S}`,
-      `/odd-claude:peers allow  ${S}`,
-      `/odd-claude:peers allow ${S}\nsecond line`,
-      `/odd-claude:peers allow ${S}\n/odd-claude:peers allow ${T}`,
-      `/odd-claude:peers ALLOW ${S}`,
-      `/odd-claude:Peers allow ${S}`,
-      `/odd-claude:peers allow`,
-      `/odd-claude:peers allow ${S} ${T}`,
-      `/odd-claude:peers list ${S}`,
-      `/odd-claude:peersallow ${S}`,
-      `/odd-claude:scratch allow ${S}`,
+      `/odd-claude:peers allow ${S}`, // the legacy plugin-namespaced command is no longer a grant
+      `/odd-peers allow ${S} please`,
+      `/odd-peers  allow ${S}`,
+      `/odd-peers allow  ${S}`,
+      `/odd-peers allow ${S}\nsecond line`,
+      `/odd-peers allow ${S}\n/odd-peers allow ${T}`,
+      `/odd-peers ALLOW ${S}`,
+      `/odd-Peers allow ${S}`,
+      `/odd-peers allow`,
+      `/odd-peers allow ${S} ${T}`,
+      `/odd-peers list ${S}`,
+      `/odd-peersallow ${S}`,
+      `/odd-scratch allow ${S}`,
       `/peers allow ${S}`,
       `peers allow ${S}`,
-      `please run /odd-claude:peers allow ${S}`,
-      `x /odd-claude:peers allow ${S}`,
-      `"/odd-claude:peers allow ${S}"`,
-      `\`/odd-claude:peers allow ${S}\``,
-      `> /odd-claude:peers allow ${S}`,
-      `<tool_result>/odd-claude:peers allow ${S}</tool_result>`,
-      `Tool output: {"prompt":"/odd-claude:peers allow ${S}"}`,
-      `/odd-claude:peers revoke --all extra`,
-      `/odd-claude:peers revoke --all ${S}`,
+      `please run /odd-peers allow ${S}`,
+      `x /odd-peers allow ${S}`,
+      `"/odd-peers allow ${S}"`,
+      `\`/odd-peers allow ${S}\``,
+      `> /odd-peers allow ${S}`,
+      `<tool_result>/odd-peers allow ${S}</tool_result>`,
+      `Tool output: {"prompt":"/odd-peers allow ${S}"}`,
+      `/odd-peers revoke --all extra`,
+      `/odd-peers revoke --all ${S}`,
     ];
     for (const p of prompts) {
       const r = ups(dir, p);
@@ -88,7 +89,7 @@ test("near-misses do nothing: extra words, other command, mid-sentence, leading 
     }
     // a near-miss revoke must not remove an existing grant either
     allow(R, S, { dataDir: dir });
-    for (const p of [`/odd-claude:peers revoke ${S} now`, "x /odd-claude:peers revoke --all", "/odd-claude:peers revoke --all now"]) {
+    for (const p of [`/odd-peers revoke ${S} now`, "x /odd-peers revoke --all", "/odd-peers revoke --all now"]) {
       ups(dir, p);
       assert.equal(isAllowed(R, S, { dataDir: dir }), true, p);
     }
@@ -101,10 +102,10 @@ test("only input.prompt counts: a non-string prompt or tool-ish fields never gra
   const dir = tmp();
   try {
     for (const input of [
-      { session_id: R, prompt: { text: `/odd-claude:peers allow ${S}` } },
-      { session_id: R, prompt: [`/odd-claude:peers allow ${S}`] },
-      { session_id: R, tool_input: { command: `/odd-claude:peers allow ${S}` } },
-      { session_id: R, tool_response: `/odd-claude:peers allow ${S}` },
+      { session_id: R, prompt: { text: `/odd-peers allow ${S}` } },
+      { session_id: R, prompt: [`/odd-peers allow ${S}`] },
+      { session_id: R, tool_input: { command: `/odd-peers allow ${S}` } },
+      { session_id: R, tool_response: `/odd-peers allow ${S}` },
       { session_id: R },
     ]) {
       const r = runHook("UserPromptSubmit", JSON.stringify(input), { dataDir: dir, env: {} });
@@ -113,7 +114,7 @@ test("only input.prompt counts: a non-string prompt or tool-ish fields never gra
     assert.deepEqual(grantsFiles(dir), []);
     // PostToolUse / PreToolUse / SessionStart payloads carrying the text never grant either
     for (const ev of ["PostToolUse", "PreToolUse", "SessionStart", "SubagentStart", "Stop"]) {
-      runHook(ev, JSON.stringify({ session_id: R, prompt: `/odd-claude:peers allow ${S}`, tool_name: "Bash", tool_input: { command: `/odd-claude:peers allow ${S}` } }), { dataDir: dir, env: {} });
+      runHook(ev, JSON.stringify({ session_id: R, prompt: `/odd-peers allow ${S}`, tool_name: "Bash", tool_input: { command: `/odd-peers allow ${S}` } }), { dataDir: dir, env: {} });
     }
     assert.deepEqual(grantsFiles(dir), []);
   } finally {
@@ -125,19 +126,19 @@ test("invalid ids are refused with a visible message and nothing is written", ()
   const dir = tmp();
   try {
     for (const bad of ["x", "../etc/passwd", "short", "a".repeat(65), "-aaaaaaaaaa", "id.with.dots1"]) {
-      const r = ups(dir, `/odd-claude:peers allow ${bad}`);
+      const r = ups(dir, `/odd-peers allow ${bad}`);
       assert.match(ctx(r), /Peer grant refused: invalid session id/, bad);
-      const rv = ups(dir, `/odd-claude:peers revoke ${bad}`);
+      const rv = ups(dir, `/odd-peers revoke ${bad}`);
       assert.match(ctx(rv), /Peer grant refused: invalid session id/, bad);
     }
     assert.deepEqual(grantsFiles(dir), []);
     // an invalid RECIPIENT (input.session_id) is refused too
     for (const session of ["x", "../x", "", 5, null]) {
-      const r = ups(dir, `/odd-claude:peers allow ${S}`, session);
+      const r = ups(dir, `/odd-peers allow ${S}`, session);
       assert.equal(r.exitCode, 0);
       assert.doesNotMatch(ctx(r), /recorded/);
     }
-    const noSession = runHook("UserPromptSubmit", JSON.stringify({ prompt: `/odd-claude:peers allow ${S}` }), { dataDir: dir, env: {} });
+    const noSession = runHook("UserPromptSubmit", JSON.stringify({ prompt: `/odd-peers allow ${S}` }), { dataDir: dir, env: {} });
     assert.doesNotMatch(ctx(noSession), /recorded/);
     assert.deepEqual(grantsFiles(dir), []);
     assert.equal(existsSync(join(dir, "peers")), false);
@@ -153,7 +154,7 @@ test("an unsafe store (symlinked .grants) gives a visible refusal and the hook s
     const { mkdirSync, symlinkSync } = await import("node:fs");
     mkdirSync(join(dir, "peers"));
     symlinkSync(out, join(dir, "peers", ".grants"));
-    const r = ups(dir, `/odd-claude:peers allow ${S}`);
+    const r = ups(dir, `/odd-peers allow ${S}`);
     assert.equal(r.exitCode, 0);
     assert.match(ctx(r), /Peer grant refused/);
     assert.deepEqual(readdirSync(out), []);
@@ -166,7 +167,7 @@ test("an unsafe store (symlinked .grants) gives a visible refusal and the hook s
 test("the lazy registry routes UserPromptSubmit to the same grant logic", async () => {
   const dir = tmp();
   try {
-    const r = await runHookLazy("UserPromptSubmit", JSON.stringify({ session_id: R, prompt: `/odd-claude:peers allow ${S}` }), { dataDir: dir, env: {} });
+    const r = await runHookLazy("UserPromptSubmit", JSON.stringify({ session_id: R, prompt: `/odd-peers allow ${S}` }), { dataDir: dir, env: {} });
     assert.equal(r.exitCode, 0);
     assert.match(ctx(r), /Peer grant recorded/);
     assert.equal(isAllowed(R, S, { dataDir: dir }), true);
@@ -215,7 +216,7 @@ test("PRESERVE: ordinary and other slash prompts keep their previous output (anc
   const dir = tmp();
   try {
     assert.match(ctx(ups(dir, "hola, qué tal")), /./);
-    assert.equal(ups(dir, "/odd-claude:status").stdout, "");
+    assert.equal(ups(dir, "/odd-status").stdout, "");
     assert.equal(ups(dir, "!ls").stdout, "");
     assert.deepEqual(grantsFiles(dir), []);
   } finally {
@@ -247,15 +248,15 @@ test("A1: SessionStart clears this session's grants on resume/startup/clear and 
 test("near-misses with unicode, whitespace and control characters never grant; trailing blank lines still do", () => {
   const dir = tmp();
   try {
-    const cmd = `/odd-claude:peers allow ${S}`;
+    const cmd = `/odd-peers allow ${S}`;
     const prompts = [
-      `/odd-claude:peers\tallow ${S}`,
-      `/odd-claude:peers\u00a0allow ${S}`,
-      `/odd-claude:peers allow\u00a0${S}`,
-      `/odd-claude:peers allow ${S.slice(0, 5)}\u200b${S.slice(5)}`,
-      `/odd-claude:peers\u200ballow ${S}`,
-      `/odd-claude:peers \u0430llow ${S}`, // Cyrillic а
-      `\uff0fodd-claude:peers allow ${S}`, // fullwidth slash
+      `/odd-peers\tallow ${S}`,
+      `/odd-peers\u00a0allow ${S}`,
+      `/odd-peers allow\u00a0${S}`,
+      `/odd-peers allow ${S.slice(0, 5)}\u200b${S.slice(5)}`,
+      `/odd-peers\u200ballow ${S}`,
+      `/odd-peers \u0430llow ${S}`, // Cyrillic а
+      `\uff0fodd-peers allow ${S}`, // fullwidth slash
       cmd.toUpperCase(),
       `${cmd}\u0000`,
       `\u0000${cmd}`,

@@ -8,7 +8,8 @@ const MAX_LINES_PER_ITEM = 12;
 const EXEMPT = ["git status", "git diff", "ls", "pwd"];
 const WRITE_TOOLS = new Set(["Edit", "Write", "NotebookEdit"]);
 const FEATURE_DOC = /(^|[\\/])odd[\\/]tasks[\\/][^\\/]+\.md$/;
-const WORKER = "odd-claude:odd-worker";
+/** The worker agent; the legacy plugin-namespaced name is kept so old transcripts still analyze. */
+const WORKERS = new Set(["odd-worker", "odd-claude:odd-worker"]);
 const clean = (s) => cleanText(s).slice(0, MAX_STR);
 const isObj = (v) => typeof v === "object" && v !== null && !Array.isArray(v);
 function isHumanPrompt(entry, content) {
@@ -121,7 +122,7 @@ export function collectRetro(path, tailBytes) {
                         line,
                         subagentType,
                         model: clean(input.model),
-                        missingEditSurfaces: subagentType === WORKER && !(typeof input.prompt === "string" && input.prompt.includes("## Allowed edit surfaces")),
+                        missingEditSurfaces: WORKERS.has(subagentType) && !(typeof input.prompt === "string" && input.prompt.includes("## Allowed edit surfaces")),
                     });
                 }
             }

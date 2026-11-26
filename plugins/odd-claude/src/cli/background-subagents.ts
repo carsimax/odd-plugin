@@ -34,7 +34,6 @@ export function backgroundSubagentsCli(argv: string[], env: Record<string, strin
     return { exitCode: 1, stdout: "", stderr: `error: invalid action ${JSON.stringify(action)}; available actions: ${ACTIONS.join(", ")}` };
   }
   if (action !== "status") {
-    if (!opts.env.CLAUDE_PLUGIN_DATA) return usageError("no data dir (pass --data-dir or set CLAUDE_PLUGIN_DATA)");
     const policy = writeBackgroundSubagents(action === "enable" ? "on" : "off", opts);
     return { exitCode: 0, stdout: `background subagents set to: ${policy}\nApplies from the next session start (or /clear).`, stderr: "" };
   }

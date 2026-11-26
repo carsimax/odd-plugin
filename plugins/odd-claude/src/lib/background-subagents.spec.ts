@@ -23,7 +23,7 @@ function withDir(fn: (dir: string) => void): void {
 test("default is off, source default", () =>
   withDir((dir) => {
     assert.deepEqual(resolveBackgroundSubagents({ dataDir: dir, env: {} }), { policy: "off", source: "default", malformed: false });
-    assert.equal(readBackgroundSubagents({ env: {} }), "off"); // no data dir at all
+    assert.equal(readBackgroundSubagents({ env: { ODD_CLAUDE_HOME: join(dir, "nohome") } }), "off"); // nothing stored under the home default
   }));
 
 test("set on/off round-trips through plugin state and wins over the environment", () =>
@@ -82,6 +82,7 @@ test("CLI: status, enable, disable, invalid action", () =>
     assert.equal(bad.exitCode, 1);
     assert.match(bad.stderr, /invalid action "maybe"/);
     assert.match(backgroundSubagentsCli(["--data-dir", dir], {}).stdout, /: off \(state\)/);
-    assert.equal(backgroundSubagentsCli(["--action", "enable"], {}).exitCode, 2); // no data dir
+    assert.equal(backgroundSubagentsCli(["--action", "enable"], { ODD_CLAUDE_HOME: join(dir, "home") }).exitCode, 0); // home default data dir
+    assert.match(backgroundSubagentsCli(["--action", "status"], { ODD_CLAUDE_HOME: join(dir, "home") }).stdout, /: on \(state\)/);
     assert.equal(backgroundSubagentsCli(["--bogus"], {}).exitCode, 2);
   }));

@@ -1,6 +1,6 @@
 import { join } from "node:path";
-import { fileURLToPath } from "node:url";
 import { recordAgentStatus } from "../lib/agent-status.js";
+import { oddClaudeRoot } from "../lib/root.js";
 import { logError, updateSessionState, type StateOptions } from "../lib/state.js";
 import { shellQuote } from "../review/consent.js";
 import { isGlobalModeOn, readReviewMode } from "../review/mode.js";
@@ -33,18 +33,14 @@ export function stop(input: HookInput, opts: StateOptions = {}): HookOutput | un
   }
 }
 
-/** The plugin root: CLAUDE_PLUGIN_ROOT, else two levels above this module (`<root>/dist/hooks/stop.js`). */
-function pluginRoot(opts: StateOptions): string {
-  const fromEnv = (opts.env ?? process.env).CLAUDE_PLUGIN_ROOT;
-  return typeof fromEnv === "string" && fromEnv !== "" ? fromEnv : join(fileURLToPath(import.meta.url), "..", "..", "..");
-}
+const pluginRoot = (opts: StateOptions): string => oddClaudeRoot(opts.env ?? process.env);
 
 function reminderText(root: string, status: StatusEnvelope, target: StartTarget, opts: StateOptions): string {
   const modeCommand = (verb: string): string => `node ${shellQuote(join(pluginRoot(opts), "dist", "cli", "review-mode.js"))} ${verb}`;
   const range = target.kind === "base-diff" ? ` The candidate is the committed range from base-ref ${target.baseRef} to HEAD (committed-only).` : "";
   return [
     `Review-driven development is enabled for this repository, and it holds an unreviewed candidate (target_identity ${status.target_identity}).${range}`,
-    "By the review entry rule, call the review_status tool of this plugin's review tools (MCP server `review`; Claude Code lists it as mcp__plugin_odd-claude_review__review_status) for this repository and route only from the next_transition it returns before reporting completion; never infer a command from prose or a stale reply.",
+    "By the review entry rule, call the review_status tool of the odd-claude review tools (MCP server `odd-review`; Claude Code lists it as mcp__odd-review__review_status) for this repository and route only from the next_transition it returns before reporting completion; never infer a command from prose or a stale reply.",
     "The START that status offers names review_start: call it with the arguments status gives, unchanged and never edited. It always relays consent and never answers it.",
     "If review_start returns a consent envelope, relay it to the human losslessly and never answer it on the human's behalf: only the human's explicit answer goes to review_answer_consent.",
     "This hook never runs review start itself, and it reminds once per session and candidate.",

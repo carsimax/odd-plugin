@@ -2,7 +2,7 @@
 // Every argument is validated against a whitelist (lib/profiles.ts). Exit codes: 0 ok; 1 invalid value; 2 usage / no data dir.
 import { realpathSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { clearProfile, defaultProfile, readProfile, renderPresetList, renderProfiles, setRole, useProfile } from "../lib/profiles.js";
+import { clearProfile, readProfile, renderPresetList, renderProfiles, setRole, useProfile } from "../lib/profiles.js";
 import { envWithDataDir } from "../lib/system.js";
 
 export interface CliResult {
@@ -26,19 +26,17 @@ export function profilesCli(argv: string[], env: Record<string, string | undefin
     else pos.push(a);
   }
   const opts = { env: envWithDataDir(argv, env) };
-  const hasDir = Boolean(opts.env.CLAUDE_PLUGIN_DATA);
   const [cmd = "list", ...rest] = pos;
   const ok = (stdout: string): CliResult => ({ exitCode: 0, stdout, stderr: "" });
   if (cmd === "list" || cmd === "show") {
     if (rest.length > 0) return usage(`${cmd} takes no arguments`);
-    const p = hasDir ? readProfile(opts) : defaultProfile();
+    const p = readProfile(opts);
     return ok(cmd === "list" ? renderPresetList(p.active) : renderProfiles(p));
   }
   if (cmd !== "use" && cmd !== "set" && cmd !== "clear") return usage(`unknown command ${JSON.stringify(cmd).slice(0, 40)}`);
   if (cmd === "use" && rest.length !== 1) return usage("use needs exactly one profile name");
   if (cmd === "set" && (rest.length < 2 || rest.length > 3)) return usage("set needs <role> <model> [effort]");
   if (cmd === "clear" && rest.length > 0) return usage("clear takes no arguments");
-  if (!hasDir) return usage("no data dir (pass --data-dir or set CLAUDE_PLUGIN_DATA)");
   try {
     if (cmd === "use") {
       const p = useProfile(rest[0]!, opts);

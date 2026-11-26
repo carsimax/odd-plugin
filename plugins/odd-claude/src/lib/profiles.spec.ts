@@ -60,10 +60,10 @@ test("S2: no stored profile -> balanced is the default and the context line is p
     assert.deepEqual(readProfile({}), { active: "balanced", routing: BALANCED });
     const line = profileContextLine({ dataDir: dir })!;
     assert.match(line, /Model profile: balanced/);
-    assert.match(line, /odd-claude:odd-explore=haiku/);
-    assert.match(line, /odd-claude:odd-review-risk=opus/);
+    assert.match(line, /odd-explore=haiku/);
+    assert.match(line, /odd-review-risk=opus/);
     assert.doesNotMatch(line, /review-refuter|review-validator/);
-    assert.equal((line.match(/odd-claude:odd-/g) ?? []).length, PROFILE_ROLES.length);
+    assert.equal((line.match(/(?<![\w:-])odd-[a-z-]+=/g) ?? []).length, PROFILE_ROLES.length);
     assert.equal(existsSync(join(dir, "profiles.json")), false);
   } finally {
     rmSync(dir, { recursive: true, force: true });
@@ -203,7 +203,7 @@ test("context line lists the active profile and tells the orchestrator to pass m
     const line = profileContextLine({ dataDir: dir })!;
     assert.match(line, /Model profile: economy/);
     assert.match(line, /`model`/);
-    assert.match(line, /odd-claude:odd-explore=haiku/);
+    assert.match(line, /odd-explore=haiku/);
     const out = runHook("SessionStart", JSON.stringify({ session_id: "s" }), { dataDir: dir, env: {} });
     assert.match(JSON.parse(out.stdout).hookSpecificOutput.additionalContext, /Model profile: economy/);
   } finally {
@@ -217,7 +217,7 @@ test("S2: SessionStart without a stored profile carries the balanced profile lin
     const out = runHook("SessionStart", JSON.stringify({ session_id: "s" }), { dataDir: dir, env: {} });
     const ctx = JSON.parse(out.stdout).hookSpecificOutput.additionalContext as string;
     assert.match(ctx, /Model profile: balanced/);
-    assert.match(ctx, /odd-claude:odd-explore=haiku/);
+    assert.match(ctx, /odd-explore=haiku/);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
@@ -245,8 +245,11 @@ test("profilesCli list/show/use/set/clear with strict argument whitelist", () =>
     assert.equal(run("set", "odd-worker", "nope").exitCode, 1);
     assert.equal(run("clear").exitCode, 0);
     assert.match(run("show").stdout, /active: balanced/);
-    assert.equal(profilesCli(["list"], {}).exitCode, 0);
-    assert.equal(profilesCli(["use", "max"], {}).exitCode, 2);
+    const home = { ODD_CLAUDE_HOME: join(dir, "home") };
+    assert.equal(profilesCli(["list"], home).exitCode, 0);
+    assert.equal(profilesCli(["use", "max"], home).exitCode, 0); // no data dir flag/env: the home default
+    assert.match(profilesCli(["show"], home).stdout, /active: max/);
+    assert.match(profilesCli(["show"], { ODD_CLAUDE_DATA: dir }).stdout, /active: balanced/);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

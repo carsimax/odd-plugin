@@ -10,7 +10,7 @@
 // the real `node <plugin root>/dist/cli/review-mode.js disable`.
 import { lstatSync, mkdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { oddClaudeRoot } from "../lib/root.js";
 import { canonicalJson, domainHash } from "./canonical.js";
 import { writeAtomic } from "./store.js";
 
@@ -50,11 +50,8 @@ export const reviewCommand = (verb: "start" | "capture" | "capture-group" | "run
 /** What a consent choice calls (the human's answer is the trailing `--consent granted|declined`). */
 export const INVOCATION_PREFIX: ReviewToolName = "review_answer_consent";
 
-/** Root of the installed plugin: `CLAUDE_PLUGIN_ROOT` when set, else two levels above this module (dist/review or dist-test/review). */
-export function pluginRootDir(env: NodeJS.ProcessEnv = process.env): string {
-  const fromEnv = env.CLAUDE_PLUGIN_ROOT;
-  return typeof fromEnv === "string" && fromEnv !== "" ? fromEnv : join(fileURLToPath(import.meta.url), "..", "..", "..");
-}
+/** Root of the odd-claude install (shared resolution: `CLAUDE_PLUGIN_ROOT`, else module-relative). */
+export const pluginRootDir = (env: NodeJS.ProcessEnv = process.env): string => oddClaudeRoot(env);
 /** The real off switch (user-wide). */
 export function offPathCommand(env: NodeJS.ProcessEnv = process.env): string {
   return `node ${shellQuote(join(pluginRootDir(env), "dist", "cli", "review-mode.js"))} disable`;

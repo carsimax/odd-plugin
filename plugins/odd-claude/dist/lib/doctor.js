@@ -2,6 +2,7 @@
 // Pure: every side effect (exec, env, filesystem) is injected so tests use fakes.
 // Upstream treats Engram as a warning, not a failure; here node and git are required,
 // engram, codegraph, plugin and data-dir are optional.
+import { dataDirFromEnv } from "./state.js";
 export const MIN_NODE_MAJOR = 22;
 export function parseVersion(text) {
     return /\d+\.\d+\.\d+/.exec(text)?.[0];
@@ -33,11 +34,8 @@ export function collectDoctor(deps) {
     const cg = probeBinary(deps, "codegraph", ["--version"]);
     items.push(item("codegraph", "codegraph", false, cg !== undefined, cg !== undefined ? `${cg} (plugin MCP server codegraph: serve --mcp)` : "not found on PATH (optional: the plugin codegraph MCP server stays disconnected; install @colbymchenry/codegraph to enable it)"));
     items.push(item("plugin", "odd-claude plugin", false, true, `version ${deps.pluginVersion}`));
-    const dataDir = deps.env.CLAUDE_PLUGIN_DATA;
-    if (!dataDir)
-        items.push(item("data-dir", "data dir", false, false, "CLAUDE_PLUGIN_DATA not set"));
-    else
-        items.push(item("data-dir", "data dir", false, deps.isWritable(dataDir), `${dataDir}${deps.isWritable(dataDir) ? "" : " (not writable)"}`));
+    const dataDir = dataDirFromEnv(deps.env);
+    items.push(item("data-dir", "data dir", false, deps.isWritable(dataDir), `${dataDir}${deps.isWritable(dataDir) ? "" : " (not writable)"}`));
     const missing = items.filter((i) => i.status === "missing");
     const requiredMissing = missing.filter((i) => i.required).map((i) => i.id);
     return {

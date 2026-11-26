@@ -1,14 +1,22 @@
-// Shared state-file helper. State lives under CLAUDE_PLUGIN_DATA (set by Claude Code for
-// hooks) or an explicit `dataDir` option (tests/CLI); never under ~/.claude directly.
+// Shared state-file helper. The data dir resolves, in order: an explicit `dataDir` option (tests/CLI),
+// ODD_CLAUDE_DATA, CLAUDE_PLUGIN_DATA (plugin distribution), then `${ODD_CLAUDE_HOME:-~/.odd-claude}/data`;
+// never under ~/.claude directly.
 // Layout: <dataDir>/sessions/<session>.json  and  <dataDir>/logs/hooks.log
 import { appendFileSync, chmodSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { homedir } from "node:os";
 import { dirname, isAbsolute, join } from "node:path";
 import { acquireLock, releaseOwnedLock } from "./lock.js";
 export const STATE_SCHEMA_VERSION = 1;
+/** Data dir from the environment alone: ODD_CLAUDE_DATA > CLAUDE_PLUGIN_DATA > `${ODD_CLAUDE_HOME:-~/.odd-claude}/data`. */
+export function dataDirFromEnv(env = process.env) {
+    const explicit = env.ODD_CLAUDE_DATA || env.CLAUDE_PLUGIN_DATA;
+    if (explicit)
+        return explicit;
+    const oddHome = env.ODD_CLAUDE_HOME || join(env.HOME || homedir(), ".odd-claude");
+    return join(oddHome, "data");
+}
 export function resolveDataDir(opts = {}) {
-    const dir = opts.dataDir ?? (opts.env ?? process.env).CLAUDE_PLUGIN_DATA;
-    if (!dir)
-        throw new Error("no data dir: set CLAUDE_PLUGIN_DATA or pass dataDir");
+    const dir = opts.dataDir ?? dataDirFromEnv(opts.env ?? process.env);
     // A relative dir would resolve against the hook's cwd and could make scratch removal hit the project tree.
     if (!isAbsolute(dir))
         throw new Error("data dir must be an absolute path");

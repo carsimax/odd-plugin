@@ -6,7 +6,7 @@ import { updateSessionState } from "./state.js";
 export const EXPLORATION_MAX_LOOKUPS = 3;
 export const EXPLORATION_MAX_BYTES = 40_000;
 const BUILTIN = new Set(["Read", "Grep", "Glob", "WebFetch", "WebSearch"]);
-// Both MCP name forms: user-level `codegraph` server and the plugin-bundled one.
+// MCP name forms: the global `codegraph` server, plus the legacy plugin-bundled one (tolerated).
 const CODEGRAPH = /^mcp__(?:plugin_odd-claude_)?codegraph__/;
 export function isExplorationTool(name) {
     return BUILTIN.has(name) || CODEGRAPH.test(name);
@@ -34,7 +34,7 @@ function counters(state) {
 }
 const n = (v) => v.toLocaleString("en-US");
 export function explorationNotice(lookups, bytes) {
-    return `Exploration budget: ${n(lookups)} tracked lookups and ${n(bytes)} UTF-8 text bytes (an approximate evidence budget). Ongoing discovery needs several parallel odd-claude:odd-explore subagents, one per distinct front (single narrow front: one), even if read-only or initially small. Reading that prepares a writer belongs in that writer's prompt. This is advisory runtime context for the original task, not a new user request; it blocks nothing and grants no mutation authority.`;
+    return `Exploration budget: ${n(lookups)} tracked lookups and ${n(bytes)} UTF-8 text bytes (an approximate evidence budget). Ongoing discovery needs several parallel odd-explore subagents, one per distinct front (single narrow front: one), even if read-only or initially small. Reading that prepares a writer belongs in that writer's prompt. This is advisory runtime context for the original task, not a new user request; it blocks nothing and grants no mutation authority.`;
 }
 /** Counts one exploration result; returns the notice once per turn when a threshold is crossed. */
 export function recordExploration(sessionId, toolResponse, notify, opts) {

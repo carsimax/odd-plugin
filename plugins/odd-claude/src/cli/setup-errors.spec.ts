@@ -63,16 +63,15 @@ test("handled errors go to stderr as `error: <message>`", () => {
 });
 
 // F7
-test("--json with no data dir emits a JSON error object (exit 2)", () => {
+test("--json with a missing --mode value emits a JSON error object (exit 2)", () => {
   const b = box();
   try {
     const f = join(b.dir, "settings.json");
     writeFileSync(f, "{}");
-    const r = setupCli(["--mode", "plan", "--apply", "--json", "--settings", f], {});
+    const r = setupCli(["--apply", "--json", "--settings", f, "--data-dir", join(b.dir, "d"), "--mode"], {});
     assert.equal(r.exitCode, 2);
     const o = JSON.parse(r.stdout);
     assert.equal(o.status, "error");
-    assert.match(o.error, /data dir/);
     const u = setupCli(["--bogus", "--json"], {});
     assert.equal(u.exitCode, 2);
     assert.equal(JSON.parse(u.stdout).status, "error");

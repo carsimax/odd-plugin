@@ -6,6 +6,7 @@ import { join } from "node:path";
 import {
   STATE_SCHEMA_VERSION,
   resolveDataDir,
+  dataDirFromEnv,
   sessionStatePath,
   readSessionState,
   writeSessionState,
@@ -114,10 +115,10 @@ test("updateSessionState merges via the updater", () => {
   }
 });
 
-test("resolveDataDir prefers explicit option, then CLAUDE_PLUGIN_DATA, else throws", () => {
+test("resolveDataDir prefers explicit option, then CLAUDE_PLUGIN_DATA, else the home default", () => {
   assert.equal(resolveDataDir({ dataDir: "/x", env: { CLAUDE_PLUGIN_DATA: "/y" } }), "/x");
   assert.equal(resolveDataDir({ env: { CLAUDE_PLUGIN_DATA: "/y" } }), "/y");
-  assert.throws(() => resolveDataDir({ env: {} }), /CLAUDE_PLUGIN_DATA/);
+  assert.equal(resolveDataDir({ env: { HOME: "/hh" } }), join("/hh", ".odd-claude", "data"));
 });
 
 test("resolveDataDir refuses a relative data dir (option or env)", () => {
@@ -172,4 +173,32 @@ test("updateSessionState: a lock older than 2 s (even empty) is stale and gets a
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
+});
+
+test("data dir order: explicit > ODD_CLAUDE_DATA > CLAUDE_PLUGIN_DATA > ODD_CLAUDE_HOME/data", () => {
+  const env = { ODD_CLAUDE_DATA: "/odd/data", CLAUDE_PLUGIN_DATA: "/plug/data", ODD_CLAUDE_HOME: "/odd/home", HOME: "/h" };
+  assert.equal(resolveDataDir({ dataDir: "/explicit", env }), "/explicit");
+  assert.equal(resolveDataDir({ env }), "/odd/data");
+  assert.equal(resolveDataDir({ env: { ...env, ODD_CLAUDE_DATA: undefined } }), "/plug/data");
+  assert.equal(resolveDataDir({ env: { ...env, ODD_CLAUDE_DATA: "", CLAUDE_PLUGIN_DATA: "" } }), join("/odd/home", "data"));
+  assert.equal(resolveDataDir({ env: { HOME: "/h" } }), join("/h", ".odd-claude", "data"));
+  assert.equal(dataDirFromEnv({ ODD_CLAUDE_HOME: "/odd/home" }), join("/odd/home", "data"));
+});
+
+test("without any data env the state helpers use the home default and never throw 'no data dir'", () => {
+  const home = tmp();
+  try {
+    const env = { ODD_CLAUDE_HOME: home };
+    writeSessionState("s1", { a: 1 }, { env });
+    assert.deepEqual(readSessionState("s1", { env }), { a: 1 });
+    assert.ok(existsSync(join(home, "data", "sessions", "s1.json")));
+  } finally {
+    rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test("a relative data dir from any source is still rejected", () => {
+  assert.throws(() => resolveDataDir({ env: { ODD_CLAUDE_DATA: "rel" } }), /absolute/);
+  assert.throws(() => resolveDataDir({ env: { CLAUDE_PLUGIN_DATA: "rel" } }), /absolute/);
+  assert.throws(() => resolveDataDir({ dataDir: "rel" }), /absolute/);
 });

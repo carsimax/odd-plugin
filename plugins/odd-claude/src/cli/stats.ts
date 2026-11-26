@@ -10,7 +10,6 @@ export function statsCli(argv: string[], env: Record<string, string | undefined>
     const session = flagValue(argv, "--session");
     if (session === undefined || session === "") return { exitCode: 0, stdout: "No session id (pass --session <id>); no stats to show." };
     const e = envWithDataDir(argv, env);
-    if (!e.CLAUDE_PLUGIN_DATA) return { exitCode: 0, stdout: "No data dir (pass --data-dir <dir> or set CLAUDE_PLUGIN_DATA); no stats to show." };
     const opts = { env: e };
     const path = readTranscriptPath(session, opts);
     const transcript = path === undefined ? undefined : collectTranscriptStats(path);

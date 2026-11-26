@@ -1,12 +1,12 @@
 import { readFileSync } from "node:fs";
+import { join } from "node:path";
+import { moduleRoot } from "./root.js";
 
-/** Plugin version, read from `.claude-plugin/plugin.json` (single source of truth). */
-export function pluginVersion(): string {
-  const manifest = JSON.parse(
-    readFileSync(new URL("../../.claude-plugin/plugin.json", import.meta.url), "utf8"),
-  ) as { version?: unknown };
+/** odd-claude version, read from the `package.json` of the install root (single source of truth). */
+export function pluginVersion(root: string = moduleRoot()): string {
+  const manifest = JSON.parse(readFileSync(join(root, "package.json"), "utf8")) as { version?: unknown };
   if (typeof manifest.version !== "string") {
-    throw new Error("plugin.json has no string `version`");
+    throw new Error("package.json has no string `version`");
   }
   return manifest.version;
 }

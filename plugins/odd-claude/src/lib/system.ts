@@ -45,8 +45,8 @@ export function flagValue(argv: string[], name: string): string | undefined {
   return argv.includes(name) && v !== undefined && v !== "" && !v.startsWith("--") ? v : undefined;
 }
 
-/** env with CLAUDE_PLUGIN_DATA replaced by `--data-dir` when given (skills pass the substituted path). */
+/** env with the data dir pinned to `--data-dir` when given (ODD_CLAUDE_DATA wins over every other source; skills pass the substituted path). */
 export function envWithDataDir(argv: string[], env: Record<string, string | undefined>): Record<string, string | undefined> {
   const dir = flagValue(argv, "--data-dir");
-  return dir === undefined ? env : { ...env, CLAUDE_PLUGIN_DATA: dir };
+  return dir === undefined ? env : { ...env, ODD_CLAUDE_DATA: dir };
 }

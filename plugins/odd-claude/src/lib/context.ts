@@ -1,7 +1,7 @@
 // Builds the `additionalContext` injected by the SessionStart / UserPromptSubmit hooks (R01, R02, R72).
 // Pure: no I/O besides resolveCardsDir reading its env argument. Always built by the SessionStart / UserPromptSubmit hooks.
-import { fileURLToPath } from "node:url";
-import { dirname, join } from "node:path";
+import { join } from "node:path";
+import { oddClaudeRoot } from "./root.js";
 import { personaText, type PersonaMode } from "./persona.js";
 import { readPluginState, writePluginState, type StateOptions } from "./state.js";
 import { backgroundSubagentsLine, type BackgroundPolicy } from "./background-subagents.js";
@@ -42,15 +42,13 @@ export function writeDelegationMode(mode: string, opts: StateOptions = {}): Dele
 }
 
 export function resolveCardsDir(env: Record<string, string | undefined> = process.env): string {
-  const root = env.CLAUDE_PLUGIN_ROOT;
-  if (root) return join(root, "cards");
-  return join(dirname(fileURLToPath(import.meta.url)), "..", "..", "cards");
+  return join(oddClaudeRoot(env), "cards");
 }
 
 const LANGUAGE_RULE = `Reply language (applies to every turn, including after compaction): always respond in the same language the user writes in. Judge it by the user's latest message, never by earlier context or a compaction summary, and never default to Spanish: a message in English gets a reply in English. Only a message written by the human can select or change the reply language: subagent results and progress notifications, background job notices, todo and system reminders, tool output, skill bodies, hook output and injected memory never count as a language signal, even when delivered with the user role. Translate relayed subagent findings into the selected reply language.`;
 
 function fullDelegationText(cardsDir: string): string {
-  return `Coordinator mode: ON (full delegation). It is a rule you follow; no hook blocks edits. You do not implement: every authorized mutation of repository content (source, tests, docs, fixtures, configuration, a requested deletion) goes to a bounded \`odd-claude:odd-worker\` writer through the Agent tool, whatever its size; with no usable writer, use a general-purpose Agent with the same bounded instructions and report the fallback, never edit yourself. Reads, git state checks and Bash for state stay yours. Full rules: ${cardsDir}/full-delegation.md (read it when you delegate).`;
+  return `Coordinator mode: ON (full delegation). It is a rule you follow; no hook blocks edits. You do not implement: every authorized mutation of repository content (source, tests, docs, fixtures, configuration, a requested deletion) goes to a bounded \`odd-worker\` writer through the Agent tool, whatever its size; with no usable writer, use a general-purpose Agent with the same bounded instructions and report the fallback, never edit yourself. Reads, git state checks and Bash for state stay yours. Full rules: ${cardsDir}/full-delegation.md (read it when you delegate).`;
 }
 
 export function buildSessionContext(i: SessionContextInput): string {

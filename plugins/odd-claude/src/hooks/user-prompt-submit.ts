@@ -9,9 +9,9 @@ import { isValidSessionId } from "../lib/session-id.js";
 import type { HookInput, HookOutput } from "./run.js";
 
 // Peer consent (R07 P2): only the human's own prompt, trimmed, equal to exactly one of these forms is a grant command.
-const PEER_CMD = /^\/odd-claude:peers (allow|revoke) (\S+)$/;
+const PEER_CMD = /^\/odd-peers (allow|revoke) (\S+)$/;
 
-/** Handles `/odd-claude:peers allow|revoke <id>` / `revoke --all`; undefined when the prompt is not exactly that. */
+/** Handles `/odd-peers allow|revoke <id>` / `revoke --all`; undefined when the prompt is not exactly that. */
 function peerConsent(input: HookInput, opts: StateOptions): string | undefined {
   if (typeof input.prompt !== "string") return undefined;
   const m = PEER_CMD.exec(input.prompt.trim());
@@ -27,7 +27,7 @@ function peerConsent(input: HookInput, opts: StateOptions): string | undefined {
     if (!isValidSessionId(arg)) return "Peer grant refused: invalid session id (expected 8-64 letters, digits or dashes, starting with a letter or digit). Nothing was changed.";
     if (verb === "allow") {
       allow(me, arg, opts);
-      return `Peer grant recorded: session ${me} accepts messages from ${arg}. Run /odd-claude:peers revoke ${arg} to undo; it also ends with this session.`;
+      return `Peer grant recorded: session ${me} accepts messages from ${arg}. Run /odd-peers revoke ${arg} to undo; it also ends with this session.`;
     }
     revoke(me, arg, opts);
     return `Peer grant revoked: session ${me} no longer accepts messages from ${arg}.`;

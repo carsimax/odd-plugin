@@ -2,6 +2,7 @@
 // Without --apply it is a dry run: prints the diff and writes nothing.
 // Exit codes: 0 ok (dry run, applied, unchanged, info); 1 refused/failed (invalid mode,
 // invalid JSON settings, unknown backup, write error); 2 usage error.
+import { dataDirFromEnv } from "../lib/state.js";
 import { realpathSync } from "node:fs";
 import { readFileSync, existsSync } from "node:fs";
 import { homedir } from "node:os";
@@ -82,12 +83,12 @@ function run(argv: string[], env: Env): CliResult {
   });
   if (typeof args === "string") return fail(argv, `usage: ${args}`, 2, true);
   const settingsPath = args.settings ?? join(homedir(), ".claude", "settings.json");
-  const dataDir = args.dataDir ?? (env.CLAUDE_PLUGIN_DATA || undefined);
+  const dataDir = args.dataDir ?? dataDirFromEnv(env);
 
   if (!args.restore && args.mode === undefined) {
     const text = existsSync(settingsPath) ? readFileSync(settingsPath, "utf8") : null;
     const cur = currentMode(text);
-    const backups = dataDir ? listBackups(dataDir) : [];
+    const backups = listBackups(dataDir);
     const lines = [
       `settings: ${settingsPath}${text === null ? " (missing)" : ""}`,
       `permissions.defaultMode: ${cur ?? "(not set)"}`,
@@ -97,7 +98,6 @@ function run(argv: string[], env: Env): CliResult {
     ];
     return out({ status: "info", settingsPath, currentMode: cur ?? null, modes: [...MODES], backups }, lines.join("\n"), 0);
   }
-  if (dataDir === undefined) return fail(argv, "usage: no data dir (pass --data-dir or set CLAUDE_PLUGIN_DATA)", 2, true);
   const base = { settingsPath, dataDir };
 
   if (args.restore) {

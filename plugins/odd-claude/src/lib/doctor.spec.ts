@@ -59,9 +59,13 @@ test("missing required (git, old node): ok false and requiredMissing lists them"
   assert.match(renderDoctor(r), /^missing: node, git, engram, codegraph$/m);
 });
 
-test("data dir: unset env and non-writable are both reported missing (optional)", () => {
-  const unset = collectDoctor(deps({ env: {} }));
-  assert.equal(unset.items.find((i) => i.id === "data-dir")?.status, "missing");
+test("data dir: resolved through the shared order; unset env falls back to the home default; non-writable is missing (optional)", () => {
+  const unset = collectDoctor(deps({ env: { ODD_CLAUDE_HOME: "/h/odd" } }));
+  const item = unset.items.find((i) => i.id === "data-dir");
+  assert.equal(item?.status, "ok");
+  assert.match(item?.detail ?? "", /\/h\/odd\/data/);
+  const viaEnv = collectDoctor(deps({ env: { ODD_CLAUDE_DATA: "/x/d", CLAUDE_PLUGIN_DATA: "/y/d" } }));
+  assert.match(viaEnv.items.find((i) => i.id === "data-dir")?.detail ?? "", /\/x\/d/);
   const ro = collectDoctor(deps({ isWritable: () => false }));
   assert.equal(ro.items.find((i) => i.id === "data-dir")?.status, "missing");
   assert.equal(ro.ok, true);

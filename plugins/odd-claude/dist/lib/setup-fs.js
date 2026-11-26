@@ -1,4 +1,4 @@
-// Write path of /odd-claude:setup. Real filesystem; callers (tests/CLI) pick the paths.
+// Write path of /odd-setup. Real filesystem; callers (tests/CLI) pick the paths.
 // Order on apply: validate/plan -> backup original (atomic) -> record state -> atomic write.
 import { accessSync, constants, existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, realpathSync, statSync } from "node:fs";
 import { join } from "node:path";

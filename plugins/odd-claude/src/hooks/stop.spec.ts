@@ -95,7 +95,7 @@ test("RDD on and a high-risk candidate is due: one block with a reminder, once p
     assert.ok(reason.includes(`node ${join(PLUGIN_ROOT, "dist", "cli", "review-mode.js")} disable`), "real plugin root from the hook module");
     assert.match(reason, /--scope clone --cwd/);
     assert.equal(/provisional/i.test(reason), false, "no placeholder wording");
-    for (const t of reason.match(/\breview_[a-z_]+\b/g) ?? []) assert.ok((REVIEW_TOOL_NAMES as readonly string[]).includes(t), `${t} is a registered review tool`);
+    for (const t of reason.replaceAll("mcp__odd-review__", "").match(/\breview_[a-z_]+\b/g) ?? []) assert.ok((REVIEW_TOOL_NAMES as readonly string[]).includes(t), `${t} is a registered review tool`);
     // every plugin CLI the reminder names exists (no dangling review.js)
     const named = [...reason.matchAll(/dist\/cli\/([\w-]+\.js)/g)].map((m) => m[1]!);
     assert.ok(named.length > 0);
@@ -276,6 +276,32 @@ test("session lock held by a live pid: Stop is silent, exits 0 and returns in un
     assert.ok(Date.now() - t0 < 5000);
   } finally {
     holder.kill("SIGKILL");
+    f.cleanup();
+  }
+});
+
+test("the reminder names the global mcp__odd-review__review_status tool, never the plugin-namespaced one", () => {
+  const f = fx();
+  try {
+    on(f);
+    const r = runHook("Stop", JSON.stringify({ session_id: "s-name", cwd: f.repo, stop_hook_active: false }), { dataDir: f.data, env: { CLAUDE_PLUGIN_ROOT: "/opt/odd" } });
+    const reason = (JSON.parse(r.stdout) as { reason: string }).reason;
+    assert.ok(reason.includes("mcp__odd-review__review_status"), reason);
+    assert.equal(reason.includes("plugin_odd-claude"), false);
+    assert.equal(reason.includes("this plugin's"), false);
+  } finally {
+    f.cleanup();
+  }
+});
+
+test("the reminder resolves the root without CLAUDE_PLUGIN_ROOT from the module location", () => {
+  const f = fx();
+  try {
+    on(f);
+    const r = runHook("Stop", JSON.stringify({ session_id: "s-mod", cwd: f.repo, stop_hook_active: false }), { dataDir: f.data, env: {} });
+    const reason = (JSON.parse(r.stdout) as { reason: string }).reason;
+    assert.match(reason, /review-mode\.js disable/);
+  } finally {
     f.cleanup();
   }
 });

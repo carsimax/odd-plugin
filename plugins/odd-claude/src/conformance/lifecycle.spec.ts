@@ -132,7 +132,7 @@ test("high risk (4 lenses): group capture; the notice shows until the review is 
     const block = JSON.parse(reminder.stdout);
     assert.deepEqual(Object.keys(block).sort(), ["decision", "reason"]);
     assert.equal(block.decision, "block");
-    for (const t of block.reason.match(/\breview_[a-z_]+\b/g) ?? []) assert.ok((REVIEW_TOOL_NAMES as readonly string[]).includes(t), `the Stop reason names ${t}`);
+    for (const t of block.reason.replaceAll("mcp__odd-review__", "").match(/\breview_[a-z_]+\b/g) ?? []) assert.ok((REVIEW_TOOL_NAMES as readonly string[]).includes(t), `the Stop reason names ${t}`);
     allowed(stop(w), "the Stop reminder fires once per session and candidate");
 
     const { consent, started, collect, captured, ack } = await approveThroughCapture(c, w);

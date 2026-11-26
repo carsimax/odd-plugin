@@ -33,7 +33,6 @@ export function codegraphTrustCli(argv: string[], env: Record<string, string | u
     return { exitCode: 1, stdout: "", stderr: `error: invalid action ${JSON.stringify(action)}; available actions: ${ACTIONS.join(", ")}` };
   }
   const opts = { env: envWithDataDir(argv, env) };
-  if (!opts.env.CLAUDE_PLUGIN_DATA) return usageError("no data dir (pass --data-dir or set CLAUDE_PLUGIN_DATA)");
   const cwd = flagValue(argv, "--cwd") ?? defaultCwd;
   if (action === "list") {
     const l = listTrustedProjects(opts);

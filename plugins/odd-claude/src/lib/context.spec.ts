@@ -45,6 +45,12 @@ test("resolveCardsDir prefers CLAUDE_PLUGIN_ROOT and falls back to the package l
   assert.match(resolveCardsDir({}), /cards$/);
 });
 
+test("full-delegation context names the odd-worker agent without the plugin namespace", () => {
+  const ctx = buildSessionContext({ ...base, delegationMode: "full" });
+  assert.match(ctx, /bounded `odd-worker` writer/);
+  assert.doesNotMatch(ctx, /odd-claude:/);
+});
+
 test("prompt anchor quotes the start of a human prompt, bounded", () => {
   const a = buildPromptAnchor("  hola\n\ncómo   estás  ");
   assert.ok(a);

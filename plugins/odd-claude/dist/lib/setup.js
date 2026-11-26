@@ -1,4 +1,4 @@
-// Pure logic of /odd-claude:setup: compute a change to `permissions.defaultMode` in a
+// Pure logic of /odd-setup: compute a change to `permissions.defaultMode` in a
 // settings.json text and a human-readable diff. No filesystem access here.
 // Write scope is exactly one key: permissions.defaultMode. Every other key is preserved.
 export const MODES = ["default", "acceptEdits", "auto", "plan", "bypassPermissions"];
@@ -6,7 +6,7 @@ export const MODES = ["default", "acceptEdits", "auto", "plan", "bypassPermissio
 export function modeWarning(mode) {
     if (mode !== "bypassPermissions")
         return undefined;
-    return "WARNING: bypassPermissions skips every permission prompt: Claude Code runs any tool, including destructive shell commands and edits of sensitive files, without asking. odd-claude ships no hook that blocks tools: hooks stay active in this mode (observed in the Q3 spike on Claude Code 2.1.326, docs/research/open-questions.md), but none of them denies anything, so they protect nothing here and nothing else stands between a mistaken or injected instruction and your machine. Use it only in a sandbox or a disposable checkout. Undo with `/odd-claude:setup restore`.";
+    return "WARNING: bypassPermissions skips every permission prompt: Claude Code runs any tool, including destructive shell commands and edits of sensitive files, without asking. odd-claude ships no hook that blocks tools: hooks stay active in this mode (observed in the Q3 spike on Claude Code 2.1.326, docs/research/open-questions.md), but none of them denies anything, so they protect nothing here and nothing else stands between a mistaken or injected instruction and your machine. Use it only in a sandbox or a disposable checkout. Undo with `/odd-setup restore`.";
 }
 export function isMode(v) {
     return typeof v === "string" && MODES.includes(v);

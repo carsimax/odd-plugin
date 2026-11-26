@@ -1,14 +1,26 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { pluginVersion } from "./version.js";
 
-test("pluginVersion matches plugin.json and is semver", () => {
-  const manifest = JSON.parse(
-    readFileSync(new URL("../../.claude-plugin/plugin.json", import.meta.url), "utf8"),
-  ) as { version: string };
+test("pluginVersion matches package.json and is semver", () => {
+  const manifest = JSON.parse(readFileSync(new URL("../../package.json", import.meta.url), "utf8")) as { version: string };
   assert.equal(pluginVersion(), manifest.version);
   assert.match(pluginVersion(), /^\d+\.\d+\.\d+$/);
+});
+
+test("pluginVersion reads the package.json of the given root, with no plugin.json present", () => {
+  const root = mkdtempSync(join(tmpdir(), "odd-ver-"));
+  try {
+    writeFileSync(join(root, "package.json"), JSON.stringify({ name: "x", version: "9.8.7" }));
+    assert.equal(pluginVersion(root), "9.8.7");
+    writeFileSync(join(root, "package.json"), JSON.stringify({ name: "x" }));
+    assert.throws(() => pluginVersion(root), /version/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });
 
 test("package.json, package-lock and marketplace versions equal plugin.json", () => {

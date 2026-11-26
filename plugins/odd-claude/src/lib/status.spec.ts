@@ -62,9 +62,11 @@ test("status without state or data dir: no session, no writes, no throw", () => 
     assert.equal(empty.session.id, null);
     assert.equal(empty.session.origin, "none");
     assert.match(renderStatus(empty), /session: none/);
-    const unset = collectStatus({ ...base, env: {} });
-    assert.equal(unset.dataDir, null);
-    assert.match(renderStatus(unset), /data dir: not set/);
+    const unset = collectStatus({ ...base, env: { ODD_CLAUDE_HOME: join(dir, "home") } });
+    assert.equal(unset.dataDir, join(dir, "home", "data"));
+    assert.equal(unset.session.id, null);
+    assert.match(renderStatus(unset), /data dir: .*home.data/);
+    assert.equal(collectStatus({ ...base, env: { ODD_CLAUDE_DATA: "/o/d", CLAUDE_PLUGIN_DATA: "/p/d" } }).dataDir, "/o/d");
     assert.deepEqual(listSessionIds({ dataDir: dir }), []);
   });
 });

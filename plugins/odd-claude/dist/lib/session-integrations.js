@@ -51,7 +51,7 @@ export function launchLocked(kind, cwd, ctx) {
         return "locked";
     try {
         const args = kind === "warm" ? ["codegraph-warm.js", cwd] : ["skill-registry.js", "--cwd", cwd];
-        const pid = ctx.spawnChild(args, { ...ctx.env, CLAUDE_PLUGIN_DATA: ctx.dataDir });
+        const pid = ctx.spawnChild(args, { ...ctx.env, ODD_CLAUDE_DATA: ctx.dataDir });
         if (pid === undefined)
             throw new Error("no child pid");
         setLockPid(path, pid, ctx.now);
