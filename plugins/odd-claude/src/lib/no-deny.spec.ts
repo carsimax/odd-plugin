@@ -91,18 +91,18 @@ test("lifecycle hook outputs (SessionStart, UserPromptSubmit, StopFailure, Stop,
   }
 });
 
-test("the full-delegation card exists, is listed in SOURCES and claims no enforcement", () => {
-  const card = join(root, "cards", "full-delegation.md");
+test("the delegation rule carries coordinator mode, is listed in SOURCES and claims no enforcement", () => {
+  const card = join(root, "rules", "odd-delegation.md");
   assert.ok(existsSync(card));
   const text = readFileSync(card, "utf8");
   assert.match(text, /COORDINATOR in full delegation mode/);
   assert.match(text, /no hook blocks edits/);
   assert.doesNotMatch(text, /harness denies|hook denies|PreToolUse/i);
-  assert.match(readFileSync(join(root, "cards", "SOURCES.md"), "utf8"), /cards\/full-delegation\.md .*odd-check: allow/);
+  assert.match(readFileSync(join(root, "support", "SOURCES.md"), "utf8"), /rules\/odd-delegation\.md .*odd-check: allow/);
 });
 
-test("admission cards and the Judgment Day skill state their rules without claiming a hook enforces them", () => {
-  for (const f of ["cards/writer.md", "cards/delegation.md", "cards/verification.md", "skills/judgment-day/SKILL.md"]) {
+test("admission rules and the Judgment Day skill state their rules without claiming a hook enforces them", () => {
+  for (const f of ["rules/odd-delegation.md", "rules/odd-verification.md", "skills/judgment-day/SKILL.md"]) {
     const text = readFileSync(join(root, f), "utf8");
     assert.match(text, /No hook enforces/, f);
     assert.doesNotMatch(text, /hook for this dispatch is planned|Phase 3 hook/i, f);

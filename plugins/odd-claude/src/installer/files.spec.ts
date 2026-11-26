@@ -27,7 +27,7 @@ test("install plan targets skills, agents and the output style with placeholders
   assert.deepEqual(Object.keys(byRel).sort(), ["agents/odd-explore.md", "agents/odd-jd-fix.md", "agents/odd-jd-judge-a.md", "agents/odd-jd-judge-b.md", "agents/odd-review-readability.md", "agents/odd-review-reliability.md", "agents/odd-review-resilience.md", "agents/odd-review-risk.md", "agents/odd-verify.md", "agents/odd-worker.md", "output-styles/odd.md", "skills/odd-doctor/SKILL.md", "skills/odd-doctor/refs/extra.md"]);
   assert.equal(byRel["skills/odd-doctor/SKILL.md"]!.target, join(paths.claudeDir, "skills/odd-doctor/SKILL.md"));
   assert.equal(byRel["skills/odd-doctor/SKILL.md"]!.content!.toString(), `---\nname: odd-doctor\n---\nRun \`node "${paths.currentLink}/dist/cli/doctor.js" --data-dir "${paths.dataDir}"\` for \${CLAUDE_SESSION_ID}\n`);
-  assert.equal(byRel["output-styles/odd.md"]!.content!.toString(), `style at ${paths.currentLink}/cards\n`);
+  assert.equal(byRel["output-styles/odd.md"]!.content!.toString(), `style at ${paths.currentLink}/support\n`);
   assert.match(byRel["agents/odd-verify.md"]!.content!.toString(), /\nmodel: opus\n/);
   assert.match(byRel["agents/odd-explore.md"]!.content!.toString(), /\nmodel: haiku\n/);
   assert.match(byRel["agents/odd-worker.md"]!.content!.toString(), /\nmodel: sonnet\n/);

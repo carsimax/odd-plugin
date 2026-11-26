@@ -1,4 +1,4 @@
-// Root of the odd-claude install (the dir holding package.json, dist/, cards/, agents/ ...).
+// Root of the odd-claude install (the dir holding package.json, dist/, agents/ ...).
 // Resolution: CLAUDE_PLUGIN_ROOT (set by Claude Code while the plugin distribution exists), else the
 // module location: this file is `<root>/dist/lib/root.js` (or `<root>/dist-test/lib/root.js`), so the root is three
 // path segments up from the file itself.

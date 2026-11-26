@@ -1,7 +1,5 @@
 // Builds the `additionalContext` injected by the SessionStart / UserPromptSubmit hooks (R01, R02, R72).
-// Static protocol lives in the managed CLAUDE.md blocks and the output style; only per-session dynamic lines are built here. Pure: no I/O besides resolveCardsDir reading its env argument. Always built by the SessionStart / UserPromptSubmit hooks.
-import { join } from "node:path";
-import { oddClaudeRoot } from "./root.js";
+// Static protocol lives in the managed CLAUDE.md blocks and the output style; only per-session dynamic lines are built here. Pure: no I/O. Always built by the SessionStart / UserPromptSubmit hooks.
 import { readPluginState, writePluginState, type StateOptions } from "./state.js";
 import { backgroundSubagentsLine, type BackgroundPolicy } from "./background-subagents.js";
 
@@ -10,7 +8,6 @@ export type DelegationMode = (typeof DELEGATION_MODES)[number];
 
 export interface SessionContextInput {
   delegationMode: DelegationMode;
-  cardsDir: string;
   /** Background subagents policy (R12); defaults to off. */
   backgroundSubagents?: BackgroundPolicy;
   /** Extra single-line facts (e.g. the skill registry path). */
@@ -39,18 +36,14 @@ export function writeDelegationMode(mode: string, opts: StateOptions = {}): Dele
   return mode as DelegationMode;
 }
 
-export function resolveCardsDir(env: Record<string, string | undefined> = process.env): string {
-  return join(oddClaudeRoot(env), "cards");
-}
-
-function fullDelegationText(cardsDir: string): string {
-  return `Coordinator mode: ON (full delegation). It is a rule you follow; no hook blocks edits. You do not implement: every authorized mutation of repository content (source, tests, docs, fixtures, configuration, a requested deletion) goes to a bounded \`odd-worker\` writer through the Agent tool, whatever its size; with no usable writer, use a general-purpose Agent with the same bounded instructions and report the fallback, never edit yourself. Reads, git state checks and Bash for state stay yours. Full rules: ${cardsDir}/full-delegation.md (read it when you delegate).`;
+function fullDelegationText(): string {
+  return `Coordinator mode: ON (full delegation). It is a rule you follow; no hook blocks edits. You do not implement: every authorized mutation of repository content (source, tests, docs, fixtures, configuration, a requested deletion) goes to a bounded \`odd-worker\` writer through the Agent tool, whatever its size; with no usable writer, use a general-purpose Agent with the same bounded instructions and report the fallback, never edit yourself. Reads, git state checks and Bash for state stay yours. Full rules: the always-loaded rule \`odd-delegation\` (Coordinator mode ON).`;
 }
 
 export function buildSessionContext(i: SessionContextInput): string {
   const parts = [
     "# odd-claude session context",
-    i.delegationMode === "full" ? fullDelegationText(i.cardsDir) : "Coordinator mode: OFF (organic delegation). Work inline and delegate only when a mechanism trigger fires.",
+    i.delegationMode === "full" ? fullDelegationText() : "Coordinator mode: OFF (organic delegation). Work inline and delegate only when a mechanism trigger fires.",
     backgroundSubagentsLine(i.backgroundSubagents ?? "off"),
     ...(i.extraLines ?? []),
   ];

@@ -218,14 +218,14 @@ test("old manifest without blocks still loads and installs blocks", () => {
 
 test("rules install as whole files with placeholders and obey the ledger: create, update, conflict, uninstall", () => {
   const { src, paths, install } = setup({});
-  put(src, "rules/odd-a.md", "---\npaths:\n  - \"odd/**\"\n---\nsee ${CLAUDE_PLUGIN_ROOT}/cards\n");
+  put(src, "rules/odd-a.md", "---\npaths:\n  - \"odd/**\"\n---\nsee ${CLAUDE_PLUGIN_ROOT}/support\n");
   put(src, "rules/sub/odd-b.md", "b\n");
   put(src, "rules/.gitkeep", "");
   const target = join(paths.claudeDir, "rules/odd-a.md");
   const r = install();
   assert.ok(r.written.includes("rules/odd-a.md") && r.written.includes("rules/sub/odd-b.md"));
   assert.ok(!existsSync(join(paths.claudeDir, "rules/.gitkeep")));
-  assert.ok(read(target).includes(`see ${paths.currentLink}/cards`));
+  assert.ok(read(target).includes(`see ${paths.currentLink}/support`));
   put(src, "rules/odd-a.md", "v2\n");
   put(src, "rules/sub/odd-b.md", "b2\n");
   writeFileSync(join(paths.claudeDir, "rules/sub/odd-b.md"), "mine\n");

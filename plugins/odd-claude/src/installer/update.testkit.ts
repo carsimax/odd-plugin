@@ -38,7 +38,7 @@ export function makeRelease(version: string, opts: { tamper?: boolean; omitCheck
   const dir = mkdtempSync(join(tmpdir(), "odd-rel-"));
   const stage = mkdtempSync(join(tmpdir(), "odd-relsrc-"));
   const src = makeSource();
-  put(src, "cards/version.md", `release ${version}\n`);
+  put(src, "support/version.md", `release ${version}\n`);
   cpSync(src, join(stage, `odd-claude-${version}`), { recursive: true });
   const tarball = `odd-claude-payload-${version}.tar.gz`;
   const r = spawnSync("tar", ["-czf", join(dir, tarball), "-C", stage, `odd-claude-${version}`]);

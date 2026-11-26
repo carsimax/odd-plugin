@@ -38,16 +38,15 @@ test("block sources carry no absolute path or plugin placeholder left unresolved
     assert.doesNotMatch(b.text, /\$\{CLAUDE_PLUGIN_/, `${b.id}: unresolved placeholder`);
     assert.doesNotMatch(b.text, /<cards>/, `${b.id}: <cards> pseudo path`);
   }
-  assert.match(blockText("identity"), /\/Users\/someone\/\.odd-claude\/current\/cards/);
+  assert.match(blockText("identity"), /~\/\.claude\/rules\//);
 });
 
-test("every rule has paths frontmatter and odd-tracking covers odd/tasks/** (S4, S7c, D3)", () => {
+test("odd-tracking is path-scoped to odd/tasks/**; the other rules are the always-on card rules (S4, S7c, D3)", () => {
   const dir = join(ROOT, "rules");
   const rules = readdirSync(dir).filter((n) => n.endsWith(".md"));
   assert.ok(rules.includes("odd-tracking.md"));
-  for (const r of rules) {
-    const fm = /^---\n([\s\S]*?)\n---\n/.exec(read(`rules/${r}`))?.[1] ?? "";
-    assert.match(fm, /^paths:/m, `${r}: paths frontmatter`);
+  for (const r of rules.filter((n) => n !== "odd-tracking.md")) {
+    assert.doesNotMatch(read(`rules/${r}`), /^---\n[\s\S]*?\npaths:/, `${r}: always-on, no paths frontmatter`);
   }
   const fm = /^---\n([\s\S]*?)\n---\n/.exec(read("rules/odd-tracking.md"))?.[1] ?? "";
   assert.match(fm, /^\s*-\s*["']?odd\/tasks\/\*\*["']?\s*$/m);
@@ -146,11 +145,10 @@ test("identity lives in the identity block, not duplicated in the style", () => 
 
 // S8: the tracking and memory cards were folded into rules/odd-tracking.md; no shipped text may point at the deleted cards.
 test("no shipped card, block, skill or style references the deleted tracking/memory cards (S8)", () => {
-  assert.equal(existsSync(join(ROOT, "cards", "tracking.md")), false);
-  assert.equal(existsSync(join(ROOT, "cards", "memory.md")), false);
+  assert.equal(existsSync(join(ROOT, "cards")), false);
   const walk = (dir: string): string[] =>
     readdirSync(join(ROOT, dir), { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? walk(join(dir, e.name)) : e.name.endsWith(".md") ? [join(dir, e.name)] : []));
-  for (const f of ["cards", "claude-md", "skills", "agents", "rules"].flatMap(walk).concat("output-styles/odd.md", "README.md")) {
+  for (const f of ["claude-md", "skills", "agents", "rules"].flatMap(walk).concat("output-styles/odd.md", "README.md")) {
     assert.doesNotMatch(read(f), /cards\/(tracking|memory)\.md|<cards>\/(tracking|memory)\.md/, f);
   }
 });
@@ -161,7 +159,7 @@ test("no odd-persona skill, CLI or lib ships and no shipped text names the retir
   for (const rel of ["src/cli/persona.ts", "src/lib/persona.ts", "dist/cli/persona.js", "dist/lib/persona.js"]) assert.equal(existsSync(join(ROOT, rel)), false, rel);
   const walk = (dir: string): string[] =>
     readdirSync(join(ROOT, dir), { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? walk(join(dir, e.name)) : e.name.endsWith(".md") ? [join(dir, e.name)] : []));
-  for (const f of ["cards", "claude-md", "skills", "agents", "rules"].flatMap(walk).concat("output-styles/odd.md", "README.md")) {
+  for (const f of ["claude-md", "skills", "agents", "rules"].flatMap(walk).concat("output-styles/odd.md", "README.md")) {
     assert.doesNotMatch(read(f), /odd-persona|writePersona/, f);
   }
 });

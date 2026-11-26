@@ -2,6 +2,10 @@
 
 A global Claude Code harness (installed with a TUI, no longer a plugin) that ports the ODD harness of gentle-shell (MIT) <!-- odd-check: allow --> to Claude Code. **v2.0** adds native receipt-driven review (RDD) on top of **v1.0** (the parity release): the ODD persona, orchestrator cards, agents, skills, native integrations, advisory review and lifecycle hooks. Apart from the RDD Stop settle reminder, which can block only when you turn RDD on (it is off by default), the plugin ships **no deny/ask/block hook** (user decision, v0.5, amended for v2): its hooks only add context. Coordinator mode and the admission rules are prompt text, not enforcement; otherwise the only enforcement is Claude Code's native permission system (see [Permission modes](#permission-modes)). The plugin collects no data and sends nothing anywhere.
 
+## Unreleased: cards become always-on rules
+
+The lazy cards payload is gone. Its content is fused and de-duplicated into `rules/odd-delegation.md`, `rules/odd-verification.md` and `rules/odd-skills.md`, installed under `~/.claude/rules/` without `paths:` so they load at session start like `CLAUDE.md`. The "read card X" indirection is removed; the provenance table moved to `support/SOURCES.md`, which is not loaded into context.
+
 ## What's new in 7.0.0
 
 **Breaking: the persona slash command is removed (there is one neutral persona, carried by the output style), and so are the duplicated tracking and memory orchestrator cards** (their rules now live in the managed CLAUDE.md blocks and `rules/odd-tracking.md`). The always-on context moved out of the output style and the hooks into files Claude Code loads natively.
@@ -32,7 +36,7 @@ Session retrospective and pressure-tested skills. No breaking changes.
 
 - **`/odd-retro` (`odd/tasks/retro-pressure.md`):** on-demand retrospective of a session. A local, read-only digest (`node dist/cli/retro.js [--json]`) lists, with transcript line numbers, human prompts, tool errors, repeated reads, edits and commands, subagent launches and compactions; the skill then judges it against the ODD rules and proposes harness changes (proposals only). Prompt and tool-result content is never printed and nothing leaves the machine.
 - **Pressure testing in `skill-creator` and `skill-improver`:** a discipline skill runs a RED baseline (stacked pressures such as time, sunk cost, authority, economic, exhaustion, social, pragmatic, run by a fresh subagent without the skill), then GREEN (same scenario with the skill) and REFACTOR (a counter for each new rationalization, retest). See `skills/skill-creator/references/pressure-testing.md`.
-- **Context cost:** `output-styles/odd.md` is unchanged; everything loads on demand. Techniques adapted from obra/superpowers (MIT), see `cards/SOURCES.md`. <!-- odd-check: allow -->
+- **Context cost:** `output-styles/odd.md` is unchanged; everything loads on demand. Techniques adapted from obra/superpowers (MIT), see `support/SOURCES.md`. <!-- odd-check: allow -->
 
 ## What's new in 5.1.0
 
@@ -40,7 +44,7 @@ Rule hardening and two debugging skills. No breaking changes.
 
 - **Rule hardening (`odd/tasks/harden-rules.md`):** the `odd` skill has a completion gate: no completion, fix or pass claim without evidence observed this turn (claim / requires / not-enough table and red flags). The worker has a test-first excuse table and a never-weaken rule (no deleting, skipping or loosening tests to reach green unless the spec authorizes it). The verifier no longer receives the writer's success claims, only the artifact, the contract and the writer's reported commands and output, and treats an unauthorized weakening as a blocker.
 - **New skills (`odd/tasks/debug-feedback.md`):** `/systematic-debugging` (no fix before an observed root cause; reproduce, localize, one hypothesis at a time, regression test seen failing first) and `/receiving-review` (read all items, clarify, verify each against the code, then accept, push back with evidence or ask). The worker's bug-fix rule: root cause first; after three failed attempts, counting the first fix, return `partial`.
-- **Context cost:** `output-styles/odd.md` is unchanged; all new rules load on demand (skills, agents, cards). Techniques adapted from obra/superpowers and addyosmani/agent-skills (MIT), see `cards/SOURCES.md`. <!-- odd-check: allow -->
+- **Context cost:** `output-styles/odd.md` is unchanged; all new rules load on demand (skills, agents, cards). Techniques adapted from obra/superpowers and addyosmani/agent-skills (MIT), see `support/SOURCES.md`. <!-- odd-check: allow -->
 
 ## What's new in 5.0.0
 
@@ -256,7 +260,7 @@ Statistics and profiles (Phase 5), unchanged in 2.0. The visual mods, the banner
 - **Commands / skills** (`/<name>`): `odd`, `odd-doctor`, `odd-status`, `odd-setup`, `odd-coordinator`, `odd-background-subagents`, `odd-scratch`, `odd-stats`, `odd-profiles`, `odd-skill-registry`, `skill-creator`, `skill-improver`, `4r-review`, `judgment-day`, `branch-pr`, `chained-pr`, `work-unit-commits`, `issue-creation`, `comment-writer`, `systematic-debugging`, `receiving-review`, `odd-retro`, `cognitive-doc-design`, `tui-design`, `ui-design`.
 - **Agents** (`<agent>`): `odd-explore`, `odd-verify`, `odd-worker`, `odd-jd-fix`, `odd-jd-judge-a`, `odd-jd-judge-b`, `odd-review-risk`, `odd-review-resilience`, `odd-review-readability`, `odd-review-reliability`.
 - **Hooks** (advisory; only the RDD-gated Stop reminder can block): `SessionStart` (context, scratch dir, title, status file, skill registry, optional codegraph warm-up; on `compact` and `resume` also a compact summary of the active feature document: the `odd/tasks/*.md` file whose header names the current branch, with its path, header line, `S#` ids, open tasks and last log entry, capped at 2000 characters, nothing when there is no match), `UserPromptSubmit` (context, quota advisory), `PostToolUse` (exploration budget, context backstop), `StopFailure` (quota advisory), `Stop` (status file; empty output unless RDD is on, see [RDD](#receipt-driven-review-rdd)), `PreToolUse` on `Bash` (RDD delivery notice, never blocks; silent unless RDD is on), `SubagentStart`/`SubagentStop` (record the subagent in session state; silent). `SubagentStart`, `SubagentStop` and `StopFailure` run with `async: true` (their output is never used); no hook that injects context is async. There is no `TaskCompleted` hook: Claude Code only lets it block, not add context, `SessionEnd` (scratch cleanup, resume hint, status file).
-- **Output style**: `odd`. **Cards**, **support docs** and **sounds assets** (see below).
+- **Output style**: `odd`. **Orchestrator rules**, **support docs** and **sounds assets** (see below).
 - **Not implemented, by user decision (2026-11-18):** R57 (notification sounds; the `assets/sounds/` files are only shipped assets) and R63 (GitHub star prompt). Native RDD shipped in 2.0.0; inter-session peers (R07) shipped in 2.1.0, see [Peer orchestrators](#peer-orchestrators-r07).
 - **No deny, with one scoped exception:** the only block the plugin can emit is the Stop settle reminder of [RDD](#receipt-driven-review-rdd), off by default; the delivery check (PreToolUse on `git push` / `gh pr`) only shows a notice (see [Permission modes](#permission-modes)).
 
@@ -264,7 +268,7 @@ Statistics and profiles (Phase 5), unchanged in 2.0. The visual mods, the banner
 
 All of these are advisory: none returns a block decision, `continue:false` or a deny, and the `Stop` hook output is empty so it never forces continuation, except for the RDD-gated settle reminder described in [Receipt-driven review (RDD)](#receipt-driven-review-rdd) (off by default).
 
-- **Quota advisory (R35).** `StopFailure` is fire-and-forget in Claude Code, so the hook only logs and arms one advisory shown on the next prompt (30 min cooldown for exhausted quota, 2 min for transient errors). It includes `--fallback-model` guidance (Anthropic models only; see `cards/quota-recovery.md`).
+- **Quota advisory (R35).** `StopFailure` is fire-and-forget in Claude Code, so the hook only logs and arms one advisory shown on the next prompt (30 min cooldown for exhausted quota, 2 min for transient errors). It includes `--fallback-model` guidance (Anthropic models only; see `rules/odd-verification.md`).
 - **Session scratch (R56).** A per-session directory `<data>/scratch/<session>` (mode 0700) is created at SessionStart and its path is added to the context; `/odd-scratch` shows it. It is removed at SessionEnd only when it is a real directory whose realpath is exactly `<realroot>/<session>`; symlinks are never followed. Removal first renames the dir to a tombstone `<realroot>/.rm-<pid>-<timestamp>-<session>` and then deletes it; if the process crashes in between, the tombstone stays behind and can accumulate. SessionStart sweeps them: it deletes `.rm-*` entries directly inside the real scratch root that are real directories (never symlinks) and older than 1 hour, at most 200 entries per run.
 - **Terminal title (R62).** SessionStart sets the title to `odd-claude · <project>` through `terminalSequence` (plain OSC 0).
 - **Resume hint (R64).** SessionEnd prints a resume hint and logs it to `hooks.log`.
@@ -274,7 +278,7 @@ All of these are advisory: none returns a block decision, `continue:false` or a 
 
 - **Persona / output style `odd`** (`output-styles/odd.md`, set as `outputStyle` in `settings.json` by the installer, so no `/odd-setup` is needed): neutral persona and tone only. The ODD protocol is in the managed `~/.claude/CLAUDE.md` blocks and `~/.claude/rules/odd-tracking.md`; SessionStart and UserPromptSubmit hooks add only per-session `additionalContext` lines. Replies follow the user's language.
 - **Persona**: there is one persona, neutral (direct, technical, neutral Spanish), carried by the output style; the persona command and its state are retired. Spanish replies are always neutral: no voseo or regional forms (tú or usted).
-- **Cards** (`cards/*.md`): orchestrator rules loaded on demand (delegation, verification, skills, prompts, writer, quota recovery; tracking and memory live in the path-scoped rule `rules/odd-tracking.md`), with tool names mapped to Claude Code (`Agent`, `TodoWrite`, `AskUserQuestion`, `Bash` with `run_in_background`, `Monitor`, worktree tools). See `cards/SOURCES.md`.
+- **Orchestrator rules** (`rules/odd-delegation.md`, `rules/odd-verification.md`, `rules/odd-skills.md`): the former lazy cards, fused and de-duplicated against the CLAUDE.md blocks, installed without `paths:` so they load every session (budget: at most 24,000 bytes, enforced by a test); tracking and memory live in the path-scoped rule `rules/odd-tracking.md`. Tool names are mapped to Claude Code (`Agent`, `TodoWrite`, `AskUserQuestion`, `Bash` with `run_in_background`, `Monitor`, worktree tools). Provenance: `support/SOURCES.md`.
 - **Agents** (`<agent>`): `odd-explore` (read-only), `odd-verify` (runs checks), `odd-worker` (scoped writer), `odd-jd-fix`, `odd-jd-judge-a`, `odd-jd-judge-b` (Judgment Day), and the four advisory review lenses `odd-review-risk`, `odd-review-resilience`, `odd-review-readability`, `odd-review-reliability`.
 - **Skills** (`<skill>`): `odd`, `branch-pr`, `chained-pr`, `cognitive-doc-design`, `comment-writer`, `issue-creation`, `judgment-day`, `skill-creator`, `skill-improver`, `odd-skill-registry`, `systematic-debugging`, `receiving-review`, `odd-retro`, `tui-design`, `ui-design`, `work-unit-commits`, `4r-review`, plus the commands `odd-doctor`, `odd-status`, `odd-setup`, `odd-background-subagents`, `odd-coordinator`.
 - **Support docs** (`support/`): test-first policy and the `odd/tasks/<feature>.md` format. **Sounds**: `assets/sounds/` (original tones, see its LICENSE).
@@ -285,9 +289,9 @@ All of these are advisory: none returns a block decision, `continue:false` or a 
 
 ### Coordinator mode (full delegation)
 
-`/odd-coordinator [on|off|status]` switches the delegation mode; **ON by default**. When on, the session context says `Coordinator mode: ON` and points to `cards/full-delegation.md`: the main thread does not implement and sends every authorized change to a bounded `odd-worker` (a general-purpose `Agent` is the reported fallback). When off, the orchestrator works inline and delegates only when a trigger fires. The mode is stored in the plugin data dir (`delegation.json`) and applies from the next session start (or `/clear`).
+`/odd-coordinator [on|off|status]` switches the delegation mode; **ON by default**. When on, the session context says `Coordinator mode: ON` and `rules/odd-delegation.md` holds its rules: the main thread does not implement and sends every authorized change to a bounded `odd-worker` (a general-purpose `Agent` is the reported fallback). When off, the orchestrator works inline and delegates only when a trigger fires. The mode is stored in the plugin data dir (`delegation.json`) and applies from the next session start (or `/clear`).
 
-This is a **rule the orchestrator follows, not enforcement**: no hook blocks `Edit`/`Write` in either mode. The same holds for the writer `## Allowed edit surfaces` section, the verifier `Risk:` line and the Judgment Day fix dispatch shape: `cards/writer.md`, `cards/delegation.md`, `cards/verification.md` and the `judgment-day` skill state them as rules.
+This is a **rule the orchestrator follows, not enforcement**: no hook blocks `Edit`/`Write` in either mode. The same holds for the writer `## Allowed edit surfaces` section, the verifier `Risk:` line and the Judgment Day fix dispatch shape: `rules/odd-delegation.md`, `rules/odd-verification.md` and the `judgment-day` skill state them as rules.
 
 ### Exploration budget and context backstop (advisory)
 
@@ -321,7 +325,7 @@ Memory tools are `mem_*`: `mcp__engram__mem_*` when the engram MCP is configured
 
 ### Subagents cannot ask questions
 
-Claude Code removes `AskUserQuestion` from every subagent (verified on 2.1.327). A child that needs a human decision returns `status: interaction_required` and the orchestrator relays it; see `cards/prompts.md`.
+Claude Code removes `AskUserQuestion` from every subagent (verified on 2.1.327). A child that needs a human decision returns `status: interaction_required` and the orchestrator relays it; see `rules/odd-delegation.md`.
 
 ## Requirements
 
@@ -424,7 +428,7 @@ Every TUI choice has a flag. `odd-claude --help` is the reference.
 
 ```
 ~/.odd-claude/
-  versions/<x.y.z>/     the release payload (dist, cards, agents, skills, output-styles, statusline, ...)
+  versions/<x.y.z>/     the release payload (dist, agents, skills, output-styles, statusline, ...)
   current -> versions/x.y.z
   data/                 state that used to live in CLAUDE_PLUGIN_DATA (profiles.json, delegation, ...)
   manifest.json         every file installed into ~/.claude with its sha256

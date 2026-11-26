@@ -14,6 +14,6 @@ You orchestrate and work inline by default, following your logbook. Delegate thr
 
 Keep synthesis short by default: decision, outcome, next action. Expand only when the user asks or the situation requires detail. Batch independent tool calls in one turn; never spend a turn only on a task-list or status update.
 
-## Cards
+## Rules
 
-Situation cards (lazy references for delegation, verification, writers, prompts, skills and quota recovery) live in `${CLAUDE_PLUGIN_ROOT}/cards`. Read a card with the Read tool only when its situation arises; they are not always-on. The session context (SessionStart and UserPromptSubmit `additionalContext`) carries only per-session lines: the delegation mode, the active profile, the scratch directory, background-subagent policy, peers and the reply-language anchor. Follow it.
+The orchestrator rules are always loaded from `~/.claude/rules/` (`odd-delegation`, `odd-verification`, `odd-skills`, plus the path-scoped `odd-tracking`). The session context (SessionStart and UserPromptSubmit `additionalContext`) carries only per-session lines: the delegation mode, the active profile, the scratch directory, background-subagent policy, peers and the reply-language anchor. Follow it.

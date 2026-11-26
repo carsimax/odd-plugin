@@ -69,7 +69,7 @@ export function quotaAdvice(category, now) {
         `odd-claude quota recovery (advisory): the previous turn ended with a ${category} failure; avoid that model for about ${minutes} min.`,
         "Do not retry automatically. Tell the user they can switch with `/model`, or restart with `claude --fallback-model <model>`",
         "(Anthropic models only: there is no cross-provider fallback). Retry the failed work only when the user asks.",
-        "Guidance: cards/quota-recovery.md.",
+        "Guidance: the always-loaded `odd-verification` rule (Verifier quota recovery).",
     ].join(" ");
     return { category, cooldownMs, until: now + cooldownMs, text };
 }

@@ -41,14 +41,14 @@ test("odd-verify: a success claim is not evidence, weakening is a blocker", () =
   assert.match(s, /weaken(s|ing)? .*not authorized by the spec.*blocker/i);
 });
 
-test("verification card: verify handoff carries artifact and contract, never the writer's claim", () => {
-  const s = read("cards/verification.md");
+test("verification rule: verify handoff carries artifact and contract, never the writer's claim", () => {
+  const s = read("rules/odd-verification.md");
   assert.match(s, /artifact/);
   assert.match(s, /never the writer's conclusions, success claims or summary/);
 });
 
-test("card sources: technique sources table with MIT attribution", () => {
-  const s = read("cards/SOURCES.md");
+test("sources: technique sources table with MIT attribution", () => {
+  const s = read("support/SOURCES.md");
   assert.match(s, /Technique sources/);
   assert.match(s, /Copyright \(c\) 2025 Jesse Vincent/);
   assert.match(s, /Copyright \(c\) 2025 Addy Osmani/);

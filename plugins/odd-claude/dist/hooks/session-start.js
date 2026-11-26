@@ -2,7 +2,7 @@ import { homedir } from "node:os";
 import { logError, updateSessionState } from "../lib/state.js";
 import { readBackgroundSubagents } from "../lib/background-subagents.js";
 import { realIntegrationDeps, runSessionIntegrations } from "../lib/session-integrations.js";
-import { buildSessionContext, readDelegationMode, resolveCardsDir } from "../lib/context.js";
+import { buildSessionContext, readDelegationMode } from "../lib/context.js";
 import { recordAgentStatus } from "../lib/agent-status.js";
 import { createSessionScratch, sweepStaleTombstones } from "../lib/scratch.js";
 import { titleSequence } from "../lib/terminal.js";
@@ -70,7 +70,6 @@ export function sessionStart(input, opts = {}) {
         : [];
     const baseContext = buildSessionContext({
         delegationMode: readDelegationMode(opts),
-        cardsDir: resolveCardsDir(env),
         backgroundSubagents: readBackgroundSubagents(opts),
         extraLines: [...scratchLines, ...extraLines, ...[profileContextLine(opts)].filter((l) => l !== undefined)],
     });

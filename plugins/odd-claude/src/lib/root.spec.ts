@@ -12,5 +12,5 @@ test("without the env (or empty) the root is the module-relative package root", 
   assert.equal(oddClaudeRoot({}), moduleRoot());
   assert.equal(oddClaudeRoot({ CLAUDE_PLUGIN_ROOT: "" }), moduleRoot());
   assert.ok(existsSync(join(moduleRoot(), "package.json")));
-  assert.ok(existsSync(join(moduleRoot(), "cards")));
+  assert.ok(existsSync(join(moduleRoot(), "agents")));
 });

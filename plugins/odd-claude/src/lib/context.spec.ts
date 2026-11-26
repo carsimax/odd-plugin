@@ -3,9 +3,9 @@ import assert from "node:assert/strict";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { buildPromptAnchor, buildSessionContext, readDelegationMode, resolveCardsDir, writeDelegationMode } from "./context.js";
+import { buildPromptAnchor, buildSessionContext, readDelegationMode, writeDelegationMode } from "./context.js";
 
-const base = { delegationMode: "organic", cardsDir: "/opt/odd/cards" } as const;
+const base = { delegationMode: "organic" } as const;
 
 test("session context keeps only dynamic lines: header, one coordinator line, background policy", () => {
   const text = buildSessionContext(base);
@@ -40,15 +40,10 @@ test("full delegation changes the text", () => {
 
 test("context stays small (< 10k chars) and has no forbidden identifiers", () => {
   for (const delegationMode of ["organic", "full"] as const) {
-      const text = buildSessionContext({ delegationMode, cardsDir: "/x/cards" });
+      const text = buildSessionContext({ delegationMode });
       assert.ok(text.length < 10000, `${text.length}`);
       assert.doesNotMatch(text, /gentle|tele\w+try/i); // odd-check: allow
     }
-});
-
-test("resolveCardsDir prefers CLAUDE_PLUGIN_ROOT and falls back to the package location", () => {
-  assert.equal(resolveCardsDir({ CLAUDE_PLUGIN_ROOT: "/p/odd" }), "/p/odd/cards");
-  assert.match(resolveCardsDir({}), /cards$/);
 });
 
 test("full-delegation context names the odd-worker agent without the plugin namespace", () => {
@@ -112,13 +107,14 @@ test("writeDelegationMode stores organic (off) and full (on); an invalid mode th
   }
 });
 
-test("context states the active mode: ON points to the full-delegation card as a rule, OFF does not", () => {
+test("context states the active mode: ON points to the always-loaded delegation rule as a rule, OFF does not", () => {
   const on = buildSessionContext({ ...base, delegationMode: "full" });
   assert.match(on, /Coordinator mode: ON/);
-  assert.match(on, /\/opt\/odd\/cards\/full-delegation\.md/);
+  assert.match(on, /always-loaded rule `odd-delegation`/);
+  assert.doesNotMatch(on, /cards|\.md/);
   assert.match(on, /rule you follow; no hook blocks edits/);
   assert.doesNotMatch(on, /denies|blocked by the harness|enforced by/i);
   const off = buildSessionContext(base);
   assert.match(off, /Coordinator mode: OFF/);
-  assert.doesNotMatch(off, /full-delegation\.md/);
+  assert.doesNotMatch(off, /odd-delegation/);
 });

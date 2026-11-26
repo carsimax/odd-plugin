@@ -191,8 +191,8 @@ test("odd-worker: bug-fix rule with root cause first and a counted three-attempt
   ]);
 });
 
-test("cards/skills.md: both skill hints", () => {
-  const s = read("cards/skills.md");
+test("rules/odd-skills.md: both skill hints", () => {
+  const s = read("rules/odd-skills.md");
   assert.match(s, /`\/systematic-debugging`/);
   assert.match(s, /`\/receiving-review`/);
 });
@@ -206,8 +206,8 @@ test("README lists both skills in both lists", () => {
   }
 });
 
-test("card sources: attribution rows for the new skills", () => {
-  const s = read("cards/SOURCES.md");
+test("sources: attribution rows for the new skills", () => {
+  const s = read("support/SOURCES.md");
   assert.match(s, /skills\/systematic-debugging\//);
   assert.match(s, /skills\/receiving-review\//);
   assert.match(s, /debugging-and-error-recovery/);

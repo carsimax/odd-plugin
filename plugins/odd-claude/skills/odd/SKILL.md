@@ -59,7 +59,7 @@ Trigger specifics beyond the odd output style (Delegation):
 
 - **Evidence-budget rule**: inline reads are grep and line ranges, never whole large files. A fired trigger overrides initial task size; read-only restricts mutation, not exploration. A known small targeted question within budget stays inline; do not re-read what the handoff covered beyond one spot check.
 - **Writer rule**: in full delegation every write goes to a bounded writer, whatever its size; otherwise only by the output style's Writer rule.
-- **Verification rule**: the independent verifier only for a named high-risk item (`../../cards/verification.md`).
+- **Verification rule**: the independent verifier only for a named high-risk item (the `odd-verification` rule).
 - **Incident rule**: after wrong cwd, accidental worktree/repo mutation, merge recovery, confusing test command, or environment workaround, diagnose separately.
 - **Context backstop**: keep command output bounded (counts, `--stat`, `tail`).
 

@@ -162,7 +162,7 @@ describe("extractPayload", () => {
     assert.equal(r.ok, true);
     const root = (r as { root: string }).root;
     assert.equal(root, join(dest, "odd-claude-2.0.0"));
-    assert.equal(readFileSync(join(root, "cards", "version.md"), "utf8"), "release 2.0.0\n");
+    assert.equal(readFileSync(join(root, "support", "version.md"), "utf8"), "release 2.0.0\n");
   });
 
   for (const bad of ["../evil.txt", "/etc/passwd", "odd-claude-1/../../x", "./odd-claude-1/../.."]) {
@@ -245,7 +245,7 @@ describe("runUpdate", () => {
     assert.equal(r.to, "2.0.0");
     assert.equal(activeVersion(h.paths), "2.0.0");
     assert.deepEqual(listVersions(h.paths), ["1.0.0", "2.0.0"]);
-    assert.equal(readFileSync(join(h.paths.currentLink, "cards", "version.md"), "utf8"), "release 2.0.0\n");
+    assert.equal(readFileSync(join(h.paths.currentLink, "support", "version.md"), "utf8"), "release 2.0.0\n");
     assert.equal(readFileSync(join(h.paths.oddHome, "bin", "odd-claude.mjs"), "utf8"), "// bundle 2.0.0\n");
     assert.ok(existsSync(join(h.paths.claudeDir, "output-styles", "odd.md")));
     assert.deepEqual(calls.map((c) => `${c.cmd} ${c.args[0]}`), ["gh release", "gh release", "tar -tzf", "tar -tvzf", "tar -xzf"]);
@@ -273,7 +273,7 @@ describe("runUpdate", () => {
     const r = await runUpdate({ runner, env: {}, paths: h.paths, selection, force: true });
     assert.equal(r.status, "updated");
     assert.ok(calls.some((c) => c.args[1] === "download"));
-    assert.equal(readFileSync(join(h.paths.currentLink, "cards", "version.md"), "utf8"), "release 2.0.0\n");
+    assert.equal(readFileSync(join(h.paths.currentLink, "support", "version.md"), "utf8"), "release 2.0.0\n");
   });
 
   it("dry run reports the plan and changes nothing", async () => {
@@ -314,7 +314,7 @@ describe("runUpdate", () => {
     assert.equal(r.status, "failed");
     assert.equal(r.rolledBack, true);
     assert.equal(activeVersion(h.paths), "1.0.0");
-    assert.equal(readFileSync(join(h.paths.currentLink, "cards", "memory.md"), "utf8"), "memory card\n");
+    assert.equal(readFileSync(join(h.paths.currentLink, "support", "memory.md"), "utf8"), "memory doc\n");
     assert.equal(readFileSync(join(h.paths.claudeDir, "output-styles", "odd.md"), "utf8"), before);
     assert.equal(readdirSync(h.paths.oddHome).some((n) => n.startsWith(".update")), false);
   });
@@ -323,12 +323,12 @@ describe("runUpdate", () => {
 describe("rollback", () => {
   it("switches back to the previous version and reinstalls its files", () => {
     const h = installed("1.0.0");
-    runInstall({ paths: h.paths, sourceRoot: (() => { const s = makeSource(); writeFileSync(join(s, "cards", "memory.md"), "newer card\n"); return s; })(), version: "2.0.0", selection });
+    runInstall({ paths: h.paths, sourceRoot: (() => { const s = makeSource(); writeFileSync(join(s, "support", "memory.md"), "newer doc\n"); return s; })(), version: "2.0.0", selection });
     assert.equal(activeVersion(h.paths), "2.0.0");
     const r = rollback({ paths: h.paths, selection });
     assert.deepEqual({ ok: r.ok, from: r.from, to: r.to }, { ok: true, from: "2.0.0", to: "1.0.0" });
     assert.equal(activeVersion(h.paths), "1.0.0");
-    assert.equal(readFileSync(join(h.paths.currentLink, "cards", "memory.md"), "utf8"), "memory card\n");
+    assert.equal(readFileSync(join(h.paths.currentLink, "support", "memory.md"), "utf8"), "memory doc\n");
   });
 
   it("targets an explicit version", () => {

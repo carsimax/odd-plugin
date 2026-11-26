@@ -111,7 +111,7 @@ test("SessionStart context keeps only dynamic lines for every source", () => {
       const r = runHook("SessionStart", JSON.stringify({ session_id: "s", source }), { dataDir: dir, env: { CLAUDE_PLUGIN_ROOT: "/r/odd" } });
       const ctx = JSON.parse(r.stdout).hookSpecificOutput.additionalContext as string;
       assert.match(ctx, /Coordinator mode: ON/);
-      assert.match(ctx, /\/r\/odd\/cards/);
+      assert.doesNotMatch(ctx, /cards/);
       assert.ok(ctx.length < 10000);
     }
   } finally {

@@ -1,0 +1,40 @@
+# ODD verification: tiers, handoff, setup failures, quota recovery
+
+Bind this to the parent (main-thread) session only. Applies when the Verification trigger fires or a delegated writer returns; not for small work.
+
+## Verification rule (normative)
+
+The bounded writer runs the exact parent-authorized commands under the task's `## Verification` heading, in the foreground, and reports each as `<command>: <observed result>`; `## Known environmental failures` (exact pre-existing base failures) differ from any other failing required command, which forces `status: partial` (the `odd-worker` Verification contract). After the writer returns its self-verification stands; a named high-risk item still requires an independent verifier. Review (the `review` MCP and `/4r-review`) is advisory, parent-owned, and never replaces this tier table:
+
+| Tier | Verification |
+|---|---|
+| passive | structural readback by the parent; no separate verifier, no tests |
+| medium | writer self-verification stands; no separate verifier, whatever model wrote the change |
+| high | only through a Risk line naming a high-risk item: writer self-verification plus one separate `odd-verify` run |
+
+The independent verifier runs only when the change touches a named high-risk item (a `Risk: item N` line or sentence in the handoff, a feature-document task line, or past the context backstop), never for size, check duration, or the model or effort that wrote the change. No hook enforces the Risk line or the verifier rule: they are rules the parent follows. The parent spot check (re-running one reported command before delivery) stays required in every tier; a passive change that reports no command needs only its readback. A code review is no substitute for applicable functional checks (tests, builds, browser checks for UI), and review outcomes never authorize delivery. The change's own focused test and suite run in the session that made the change.
+
+Escalation: for high-risk work name the risk in the handoff (`Risk: item <1-6>, <one line reason>`) and run the independent verifier. Escalation only raises a change to high, never lowers a tier.
+
+## Verifier preparation failure
+
+A failed verifier setup is a preparation failure, not an unavailable capability. The verifier's one self-fix of its own setup error needs no decision; if it made none, relaunch once with the corrected command, unasked. If setup still fails or lacks prerequisites, stop: name the blocker and the exact unrun checks as unverified; never repair helpers further or auto-relaunch. If setup fails before probes, preserve the failed attempt and report zero tests run. Setup failures are not code findings; tooling defects keep the correction bound. After a prerequisite is repaired the human may explicitly request one new bounded attempt: a new request, not an automatic retry, and no reset of other budgets. Confirm no child is active or uncertain first. Never bypass consent, a denial, one-run or no-retry limits or exhausted budgets, and never blindly repeat an oversized copy. Follow Authorized work continuity for setup and worker recovery; scratch: `odd-verify`.
+
+When required proof is unobtainable, one terminal disposition closes the stopped verification: name the missing proof and resume authorized in-scope work at `status: partial`, never PASS, never silently dropped.
+
+Worker, setup, recheck and user budgets stay separate; changed state earns a fresh check, not a reset. Before adding or keeping an auxiliary gate, name its acceptance criterion, concrete threat or authoritative contract; otherwise it must not block delivery. Do not build a framework for a bounded capability probe. On overengineering warnings, remove optional artifacts and checks, state what was removed and what stays indispensable; keep required functional checks and security controls and never weaken permissions.
+
+## Parallel review protocol
+
+1. **Self-review**, required by each writer prompt, in its own session before returning: spec sections by reference, the request's authorized examples, tests and typecheck; it fixes and continues (one correction per failing check, a second only if the same check still fails, then `partial`), reporting requirement by requirement. Low and medium risk need nothing else.
+2. **Independent verify per unit**, once, after its final self-review (never per worker cycle or retry), in parallel when several finish together, only for a high-risk unit: its Risk line or the worker's own escalation, never inferred from the worker's summary alone. Parent-written code over several deliveries of one feature: one verify at the feature's end.
+3. **Seam check**: after parallel units finish, one full-suite command run by the parent catches seams between units.
+4. **Verify handoff**: pass the artifact (diff, baseline) and the contract (feature document, `S#`, task), never the writer's conclusions, success claims or summary; strip its reasoning but keep contradicting evidence (failing callers, tests) and the writer's reported commands (text and observed output) so the verifier's reuse rule works. Carry the whole feature document, the assigned unit with its linked `S#` and affected interactions, the baseline commit, and the probe command forms (tests, CLI, typecheck) for probes on isolated state in a fresh `mktemp -d` scratch copy, never just "read-only"; `odd-verify` holds the checklist. Name the change kind (external tool or environment, prompt or contract text, user-reported failure); for the last, pass verbatim the exact failing command, error text, tool versions and configuration. Run yourself any real-case check the verifier leaves unverified before calling the change verified. Future or unrelated requirements are out of scope, not unmet; final feature verification covers every `S#`. Resolve every in-scope unmet item before closing the unit; the writer adds its probes as regression tests.
+5. **One correction**: verify blockers get one correction batch fixing every reported blocker, then one re-verify limited to those blockers, never a new full sweep. Advisories never start a correction. A second correction runs automatically only when the recheck shows the same blocker still failing; a new finding never earns one. Blockers still open leave the unit `status: partial`, naming any genuine human decision; independent authorized work continues. A `partial` or `blocked` writer report gets only this correction, never an extra verify run beyond the tier's verifier; leftover partial, blocked, unavailable or exhausted proof likewise.
+
+## Verifier quota recovery
+
+A temporary verifier quota failure with no verdict ends the automatic cycle. Only after the human reports restored availability and explicitly requests the missing verification, allow one new bounded attempt for the same candidate: preserve the failed attempt and still-valid passed checks, do not replay passed suites, confirm no child is active or uncertain (check background agents). This is not an automatic retry, provider or model fallback, or reset of correction budgets; consent, denials, explicit one-run or no-retry limits and terminal outcomes stay binding; failure never counts as approval.
+
+- Claude Code runs Anthropic models only: recovery means another Anthropic model, never another provider. The human can start with `claude --fallback-model <model>` (used when the primary model is overloaded) or switch with `/model`; suggest these, never switch or relaunch on your own.
+- The `StopFailure` hook classifies the API error that ended a turn (rate limit, overload, quota/billing, auth, timeout, network). Claude Code ignores its output, so it only logs and arms one advisory line for the next prompt while the cooldown runs: about 30 min for quota/billing/auth, about 2 min for transient ones. Request or context-length errors get no advice. Avoid the failed model until the cooldown ends; the advisory never retries, never blocks and never counts as approval.

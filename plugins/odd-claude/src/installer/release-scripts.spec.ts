@@ -32,7 +32,7 @@ function makeRepo() {
     writeFileSync(join(plugin, rel), body, { mode });
   };
   put("agents/odd-worker.md", "worker ${CLAUDE_PLUGIN_ROOT}\n");
-  put("cards/a/b.md", "card\n");
+  put("support/a/b.md", "doc\n");
   put("hooks/run.sh", "#!/bin/sh\n", 0o755);
   put("package.json", '{\n  "name": "odd-claude",\n  "version": "5.3.0"\n}\n');
   put("node_modules/x/index.js", "never shipped\n");
@@ -50,7 +50,7 @@ test("release-payload: tarball has the versioned top dir with only PAYLOAD_ITEMS
     assert.equal(res.status, 0, res.stderr);
     const tgz = join(out, "odd-claude-payload-5.3.0.tar.gz");
     const names = tar(["-tzf", tgz]).split("\n").filter(Boolean).filter((n) => !n.endsWith("/")).sort();
-    for (const n of ["agents/odd-worker.md", "cards/a/b.md", "hooks/run.sh", "package.json"]) assert.ok(names.includes(`odd-claude-5.3.0/${n}`), n);
+    for (const n of ["agents/odd-worker.md", "support/a/b.md", "hooks/run.sh", "package.json"]) assert.ok(names.includes(`odd-claude-5.3.0/${n}`), n);
     assert.ok(names.some((n) => n.startsWith("odd-claude-5.3.0/dist/installer/payload.js")));
     for (const n of names) {
       assert.ok(n.startsWith("odd-claude-5.3.0/"), n);

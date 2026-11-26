@@ -36,7 +36,7 @@ test("stagePayload copies the payload into versions/<v> and swaps current atomic
   const r = stagePayload(src, paths, "1.0.0");
   assert.equal(r.changed, true);
   assert.equal(r.versionDir, join(paths.versionsDir, "1.0.0"));
-  for (const rel of ["dist/hooks/run.js", "cards/memory.md", "agents/odd-worker.md", "skills/odd-doctor/refs/extra.md", "output-styles/odd.md", "support/test-first.md", "hooks/hooks.json", "package.json"]) {
+  for (const rel of ["dist/hooks/run.js", "support/memory.md", "agents/odd-worker.md", "skills/odd-doctor/refs/extra.md", "output-styles/odd.md", "support/test-first.md", "hooks/hooks.json", "package.json"]) {
     assert.ok(existsSync(join(paths.versionsDir, "1.0.0", rel)), rel);
   }
   assert.ok(lstatSync(paths.currentLink).isSymbolicLink());
@@ -46,12 +46,12 @@ test("stagePayload copies the payload into versions/<v> and swaps current atomic
   assert.deepEqual(readdirSync(paths.oddHome).sort(), ["current", "versions"]);
 });
 
-test("stagePayload resolves placeholders in cards and support, leaves skills raw for the file install", () => {
+test("stagePayload resolves placeholders in support, leaves skills raw for the file install", () => {
   const src = makeSource();
   const { paths } = makeHome();
   stagePayload(src, paths, "1.0.0");
-  const card = readFileSync(join(paths.currentLink, "cards/verification.md"), "utf8");
-  assert.equal(card, `Card: see ${paths.currentLink}/cards/memory.md and data ${paths.dataDir}\n`);
+  const doc = readFileSync(join(paths.currentLink, "support/verification.md"), "utf8");
+  assert.equal(doc, `Support: see ${paths.currentLink}/support/memory.md and data ${paths.dataDir}\n`);
   assert.match(readFileSync(join(paths.currentLink, "skills/odd-doctor/SKILL.md"), "utf8"), /\$\{CLAUDE_PLUGIN_ROOT\}/);
 });
 
@@ -61,10 +61,10 @@ test("stagePayload is idempotent, keeps older versions and switches current to t
   stagePayload(src, paths, "1.0.0");
   const again = stagePayload(src, paths, "1.0.0");
   assert.equal(again.changed, false);
-  put(src, "cards/memory.md", "changed card\n");
+  put(src, "support/memory.md", "changed doc\n");
   const changed = stagePayload(src, paths, "1.0.0");
   assert.equal(changed.changed, true);
-  assert.equal(readFileSync(join(paths.versionsDir, "1.0.0/cards/memory.md"), "utf8"), "changed card\n");
+  assert.equal(readFileSync(join(paths.versionsDir, "1.0.0/support/memory.md"), "utf8"), "changed doc\n");
   stagePayload(src, paths, "1.1.0");
   assert.deepEqual(listVersions(paths), ["1.0.0", "1.1.0"]);
   assert.equal(activeVersion(paths), "1.1.0");
@@ -84,16 +84,17 @@ test("stages the real plugin tree into a temp oddHome", () => {
   const pluginRoot = resolve(import.meta.dirname, "..", "..");
   const { paths } = makeHome();
   stagePayload(pluginRoot, paths, "5.3.0");
-  for (const rel of ["agents/odd-worker.md", "output-styles/odd.md", "cards", "skills/odd-doctor/SKILL.md", "package.json"]) assert.ok(existsSync(join(paths.currentLink, rel)), rel);
+  for (const rel of ["agents/odd-worker.md", "output-styles/odd.md", "rules/odd-delegation.md", "rules/odd-verification.md", "rules/odd-skills.md", "support/SOURCES.md", "skills/odd-doctor/SKILL.md", "package.json"]) assert.ok(existsSync(join(paths.currentLink, rel)), rel);
   assert.ok(statSync(join(paths.currentLink, "dist")).isDirectory());
-  for (const f of readdirSync(join(paths.currentLink, "cards"))) assert.doesNotMatch(readFileSync(join(paths.currentLink, "cards", f), "utf8"), /\$\{CLAUDE_PLUGIN_(ROOT|DATA)\}/, f);
+  assert.equal(existsSync(join(paths.currentLink, "cards")), false, "no cards dir in the payload");
+  for (const f of readdirSync(join(paths.currentLink, "support"))) assert.doesNotMatch(readFileSync(join(paths.currentLink, "support", f), "utf8"), /\$\{CLAUDE_PLUGIN_(ROOT|DATA)\}/, f);
 });
 
-test("resolvePlaceholders substitutes root and data in a skill line and a card line", () => {
+test("resolvePlaceholders substitutes root and data in a skill line and a support line", () => {
   const v = { root: "/o/current", data: "/o/data" };
   const skill = 'node "${CLAUDE_PLUGIN_ROOT}/dist/cli/x.js" --data-dir "${CLAUDE_PLUGIN_DATA}" --session "${CLAUDE_SESSION_ID}"';
   assert.equal(resolvePlaceholders(skill, v), 'node "/o/current/dist/cli/x.js" --data-dir "/o/data" --session "${CLAUDE_SESSION_ID}"');
-  assert.equal(resolvePlaceholders("see `${CLAUDE_PLUGIN_ROOT}/cards/memory.md`", v), "see `/o/current/cards/memory.md`");
+  assert.equal(resolvePlaceholders("see `${CLAUDE_PLUGIN_ROOT}/support/memory.md`", v), "see `/o/current/support/memory.md`");
   assert.equal(resolvePlaceholders("x", { root: "$&", data: "$1" }), "x");
   assert.equal(resolvePlaceholders("${CLAUDE_PLUGIN_ROOT}", { root: "/a$&b", data: "" }), "/a$&b");
 });
