@@ -1,6 +1,6 @@
 ---
 name: odd-profiles
-description: List, show or switch the odd-claude model profile (balanced, economy, max or custom) that routes odd-claude agents to a model per spawn. balanced is the default whenever no profile was chosen. Stored in plugin state; the agent files are never rewritten.
+description: List, show or switch the odd-claude model profile (balanced, economy, max or custom) that routes agents to a model per spawn. balanced is the default. Stored in plugin state.
 disable-model-invocation: true
 user-invocable: true
 argument-hint: "[list|show|use <balanced|economy|max>|set <role> <model> [effort]|clear]"

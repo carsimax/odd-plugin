@@ -1,6 +1,6 @@
 ---
 name: skill-creator
-description: "Trigger: skill creation, skill creator, create skill, new skill. Create LLM-first skills with valid frontmatter."
+description: "Trigger: skill creation, skill creator, create skill, new skill. Create LLM-first ODD skills (1000-token body contract, pressure test). Not the official skill-creator:skill-creator."
 disable-model-invocation: true
 license: Apache-2.0
 metadata:

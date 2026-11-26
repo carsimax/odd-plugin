@@ -1,6 +1,6 @@
 ---
 name: odd-retro
-description: "Trigger: retro, session retro, what went wrong, why did the session fail, transcript analysis, diagnosticar sesión, retrospectiva. Read a session transcript digest and judge where the harness deviated from the ODD rules."
+description: "Trigger: retro, session retro, what went wrong, why did the session fail, transcript analysis, diagnosticar sesión, retrospectiva. Judge where a session transcript digest deviated from the ODD rules."
 license: MIT
 metadata:
   author: odd-claude

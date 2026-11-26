@@ -1,6 +1,6 @@
 ---
 name: 4r-review
-description: "Trigger: 4r review, four lens review, advisory review, revisar cambios. Run the four independent lens reviewers (risk, resilience, readability, reliability) on a change and merge their findings into one advisory report."
+description: "Trigger: 4r review, four lens review, advisory review, revisar cambios. Run four independent lens reviewers (risk, resilience, readability, reliability), merge findings into one advisory report."
 argument-hint: "[git range, e.g. main..HEAD; empty = working tree]"
 metadata:
   author: odd-claude
