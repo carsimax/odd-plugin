@@ -109,10 +109,24 @@ process.on("exit", () => writeFileSync(process.env.MEASURE_MODULES_FILE, String(
     skillCount++;
   }
 
+  const dirBytes = (d) => {
+    const out = {};
+    if (!existsSync(join(root, d))) return out;
+    for (const f of readdirSync(join(root, d)).filter((n) => n.endsWith(".md")).sort()) out[f] = bytes(read(`${d}/${f}`));
+    return out;
+  };
+  const claudeMd = dirBytes("claude-md");
+  const rules = dirBytes("rules");
+  const sum = (o) => Object.values(o).reduce((a, b) => a + b, 0);
+
   const startRun = run("SessionStart");
   const promptRun = run("UserPromptSubmit");
   const bytesReport = {
     outputStyleBytes: bytes(read("output-styles/odd.md")),
+    claudeMdBlocksBytes: sum(claudeMd),
+    claudeMdBlocks: claudeMd,
+    rulesBytes: sum(rules),
+    rules,
     sessionStartAdditionalContextBytes: ctxBytes(startRun.stdout),
     userPromptSubmitAdditionalContextBytes: ctxBytes(promptRun.stdout),
     agentDescriptionBytes: agentDesc,

@@ -50,12 +50,7 @@ test("odd-verify: calibration examples carry the qualifiers of the rules they re
   assert.ok(!c.includes("a rule above"));
 });
 
-test("odd.md step 5: a failed done-when waits only its dependents or goes to the human", () => {
-  const line = read("output-styles/odd.md").split("\n").find((l) => l.startsWith("5. **Track before the first write.**")) ?? "";
-  assert.ok(line.includes("dependents"), "dependents");
-  assert.ok(/\bask\b/.test(line), "ask");
-  assert.ok(!line.includes("fix a failed one first"));
-});
+// The step 5 done-when assertion moved to src/conformance/always-on-context.spec.ts (it reads claude-md/03-protocol.md).
 
 test("cards/tracking.md: a task is closed only with git or Log evidence, else the finding is reported", () => {
   const closure = read("cards/tracking.md").split("\n").find((l) => l.startsWith("At closure, run")) ?? "";

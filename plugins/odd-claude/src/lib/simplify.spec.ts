@@ -65,9 +65,9 @@ test("the themes directory, the banner and the statusline skills, CLIs, libs and
 
 test("the `odd` output style stays", () => {
   assert.ok(existsSync(join(root, "output-styles", "odd.md")));
-  // Pinned byte-identical to its content after removing `force-for-plugin` (global-installer T8). A deliberate edit of odd.md must update this hash.
+  // Pinned byte-identical to its content (the unified neutral persona/tone style of always-on-context T4). A deliberate edit of odd.md must update this hash.
   const sha = createHash("sha256").update(readFileSync(join(root, "output-styles", "odd.md"))).digest("hex");
-  assert.equal(sha, "ca8183f6098139ae674579ea72fafb65d74a484e856b6e598a2636077b93ca40");
+  assert.equal(sha, "026bf23af08a1d2d726aaf30eaf4aede15679a5972856ffd18fea9fb60e5396c");
 });
 
 test("setup has no statusline subcommand, flag or shim", () => {

@@ -15,6 +15,18 @@ Each card is a port of an upstream asset (MIT). Provenance lives here only, so t
 | cards/writer.md | upstream/gentle-shell/assets/orchestrator-writer.md | <!-- odd-check: allow -->
 | cards/full-delegation.md | upstream/gentle-shell/assets/orchestrator-full-delegation.md + orchestrator-full-delegation-card.md | <!-- odd-check: allow -->
 
+## Always-on context sources
+
+Managed CLAUDE.md blocks, the path-scoped rule and the output style are ports (MIT) of upstream assets; revisions: gentle-ai 423d90a, gentle-shell d397fab. Port map: docs/research/always-on-context-port-map.md. <!-- odd-check: allow -->
+
+| Shipped file | Upstream path |
+|---|---|
+| claude-md/01-identity.md, 02-continuity.md, 04-task-size.md, 05-delegation.md, 06-language.md, 07-safety.md | upstream/gentle-ai/internal/assets/claude/orchestrator.md + the agent-routing contract in upstream/gentle-ai/internal/components/agentguidance (rendered Claude CLAUDE.md) | <!-- odd-check: allow -->
+| claude-md/03-protocol.md | upstream/gentle-ai agent-routing ODD protocol, merged with the former output-style protocol | <!-- odd-check: allow -->
+| claude-md/08-memory.md | upstream/gentle-ai/testdata/golden/engram-claude-claudemd.golden | <!-- odd-check: allow -->
+| rules/odd-tracking.md | upstream/gentle-ai agent-routing "Organic Driven Development" reference + cards/tracking.md and cards/memory.md | <!-- odd-check: allow -->
+| output-styles/odd.md | upstream/gentle-ai/internal/assets/claude/output-style-neutral.md + persona-neutral-residual.md + upstream/gentle-shell/extensions/gentle-ai.ts (NEUTRAL_PERSONA_PROMPT) | <!-- odd-check: allow -->
+
 ## Technique sources
 
 Ideas adapted in our own words (MIT); short phrases may echo the originals.

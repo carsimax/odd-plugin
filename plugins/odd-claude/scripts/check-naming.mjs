@@ -1,7 +1,7 @@
 // Naming/telemetry guard (S4/S5): fails when authored files under the plugin contain
 // forbidden `gentle-`/`gentle_`/`GENTLE_` identifiers or telemetry markers, or the retired
 // plugin-namespaced references (`odd-claude:<name>`, `mcp__plugin_odd-claude_`) in the shipped
-// content (skills, cards, agents, output-styles, support, README.md); the global install uses bare
+// content (skills, cards, agents, output-styles, claude-md, rules, support, README.md); the global install uses bare
 // agent/skill names and `mcp__odd-*` tool names.
 // Attributed notices are allowed on lines containing `odd-check: allow` or in files
 // named LICENSE / NOTICE*.
@@ -11,7 +11,7 @@ import { fileURLToPath } from "node:url";
 
 const SKIP_DIRS = new Set(["node_modules", "dist-test", ".git"]);
 const SKIP_FILES = new Set(["package-lock.json"]);
-const CONTENT = new Set(["skills", "cards", "agents", "output-styles", "README.md", "support"]);
+const CONTENT = new Set(["skills", "cards", "agents", "output-styles", "claude-md", "rules", "README.md", "support"]);
 const PATTERNS = [
   { name: "gentle- identifier", re: /gentle[-_]/i },
   { name: "telemetry marker", re: /telemetry/i },
