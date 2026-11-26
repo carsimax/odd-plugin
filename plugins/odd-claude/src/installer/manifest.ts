@@ -1,0 +1,53 @@
+// Ownership ledger: which files under the Claude dir this installer wrote, with the hash it wrote.
+import { createHash } from "node:crypto";
+import { chmodSync, existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { dirname } from "node:path";
+import type { ModelSelection } from "./models.js";
+
+export const MANIFEST_VERSION = 1;
+
+export interface Manifest {
+  version: 1;
+  oddVersion: string;
+  installedAt: string;
+  /** Path relative to the Claude dir (posix separators) -> sha256 hex of the installed content. */
+  files: Record<string, string>;
+  models: ModelSelection;
+}
+
+export function sha256(data: Buffer | string): string {
+  return createHash("sha256").update(data).digest("hex");
+}
+
+export function atomicWriteFile(path: string, data: Buffer | string, mode = 0o644): void {
+  mkdirSync(dirname(path), { recursive: true });
+  const tmp = `${path}.tmp-${process.pid}-${Math.random().toString(36).slice(2)}`;
+  try {
+    writeFileSync(tmp, data, { mode });
+    chmodSync(tmp, mode);
+    renameSync(tmp, path);
+  } catch (e) {
+    rmSync(tmp, { force: true });
+    throw e;
+  }
+}
+
+/** Null when absent. A present but unreadable ledger throws: guessing could overwrite or delete user files. */
+export function readManifest(path: string): Manifest | null {
+  if (!existsSync(path)) return null;
+  let raw: unknown;
+  try {
+    raw = JSON.parse(readFileSync(path, "utf8"));
+  } catch {
+    throw new Error(`manifest ${path} is not valid JSON; fix or remove it before continuing`);
+  }
+  const m = raw as Partial<Manifest> | null;
+  if (typeof m !== "object" || m === null || m.version !== MANIFEST_VERSION || typeof m.files !== "object" || m.files === null) {
+    throw new Error(`manifest ${path} has an unsupported shape; fix or remove it before continuing`);
+  }
+  return m as Manifest;
+}
+
+export function writeManifest(path: string, manifest: Manifest): void {
+  atomicWriteFile(path, JSON.stringify(manifest, null, 2) + "\n", 0o644);
+}
