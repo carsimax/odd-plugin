@@ -81,25 +81,3 @@ test("PreToolUse and Stop load the delivery notice and the settle engine once th
   const stop = loaded("Stop", { ...base, stop_hook_active: false }, on);
   assert.ok(stop.files.includes("hooks/stop.js"), stop.files.join(", "));
 });
-
-// R07 P4: the delivery module (and the mailbox scan behind it) is loaded only when the session has a mailbox with queued messages.
-const PEER_R = "rrrrrrrr-1111-4111-8111-rrrrrrrrrrrr";
-for (const [event, extra] of [["UserPromptSubmit", { prompt: "hola" }], ["SessionStart", { source: "compact" }]] as const) {
-  test(`${event}: peers-delivery loads only when the session has queued mail`, { skip }, () => {
-    const input = { session_id: PEER_R, cwd: projectDir, ...extra };
-    const none = loaded(event, input);
-    assert.ok(!none.files.includes("lib/peers-delivery.js"), none.files.join(", "));
-    assert.ok(!none.stdout.includes("peer-messages"));
-    const withMail = loaded(event, input, (data) => {
-      mkdirSync(join(data, "peers", PEER_R), { recursive: true });
-      writeFileSync(join(data, "peers", PEER_R, "0000000001.json"), "{}");
-    });
-    assert.ok(withMail.files.includes("lib/peers-delivery.js"), withMail.files.join(", "));
-  });
-}
-
-// T4: UserPromptSubmit needs only the session-id check and the grant store, not the mailbox module.
-test("UserPromptSubmit does not load lib/peers.js", { skip }, () => {
-  const { files } = loaded("UserPromptSubmit", { ...base, prompt: "hola" });
-  assert.ok(!files.includes("lib/peers.js"), files.join(", "));
-});

@@ -1,4 +1,4 @@
-// Shared stdio JSON-RPC plumbing for the plugin's MCP servers (review, peers): types, error builder, newline-delimited line loop
+// Shared stdio JSON-RPC plumbing for the plugin's MCP servers (review): types, error builder, newline-delimited line loop
 // and the "run only as entry point" check. No SDK, no I/O besides the given streams.
 import { realpathSync } from "node:fs";
 import { pathToFileURL } from "node:url";

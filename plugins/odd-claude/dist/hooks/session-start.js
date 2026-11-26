@@ -7,9 +7,6 @@ import { recordAgentStatus } from "../lib/agent-status.js";
 import { createSessionScratch, sweepStaleTombstones } from "../lib/scratch.js";
 import { titleSequence } from "../lib/terminal.js";
 import { profileContextLine } from "../lib/profiles.js";
-import { revokeAll } from "../lib/peer-grants.js";
-import { isValidSessionId } from "../lib/peers.js";
-import { recordCurrentSession } from "../lib/peers-session.js";
 import { recordTranscriptPath } from "../lib/stats.js";
 import { activeFeatureDocSummary } from "../lib/feature-doc.js";
 /**
@@ -32,25 +29,6 @@ export function sessionStart(input, opts = {}) {
         }
     }
     recordTranscriptPath(input, opts);
-    // R07: let this session's peers MCP server find its own id (keyed by the Claude Code pid, our parent). Never blocks.
-    if (typeof input.session_id === "string" && input.session_id !== "") {
-        try {
-            recordCurrentSession(input.session_id, process.ppid, opts);
-        }
-        catch {
-            // not a valid peer id or no data dir: the peers tools then answer "unknown"
-        }
-    }
-    // R07 A1: peer consent must not outlive a session that died without SessionEnd (crash, kill -9). A resumed session reuses its
-    // session_id, so on startup/resume/clear the grants start closed. `compact` is the same live conversation: its grants stay.
-    if (input.source !== "compact" && isValidSessionId(input.session_id)) {
-        try {
-            revokeAll(input.session_id, opts);
-        }
-        catch (err) {
-            logError(`SessionStart peer grants: ${err instanceof Error ? err.message : String(err)}`, opts);
-        }
-    }
     const env = opts.env ?? process.env;
     const scratchLines = [];
     if (typeof input.session_id === "string" && input.session_id !== "") {

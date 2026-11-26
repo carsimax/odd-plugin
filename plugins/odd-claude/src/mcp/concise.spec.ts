@@ -8,7 +8,7 @@ import type { RiskAssessment, RiskAssessor } from "../review/start.js";
 import { ReviewServer, type Response } from "./review-server.js";
 import { TOOL_BY_NAME, type ToolDeps } from "./tools.js";
 
-// M8 (S7): review_status is the only review/peers tool whose typical response exceeds ~2 KB and that is not a consent
+// M8 (S7): review_status is the only review tool whose typical response exceeds ~2 KB and that is not a consent
 // envelope or a cost forecast; it gets `detail: "concise" | "full"` (default "full", byte-identical to the old output).
 
 const ENV = (() => {

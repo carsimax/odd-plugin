@@ -16,4 +16,4 @@ Keep synthesis short by default: decision, outcome, next action. Expand only whe
 
 ## Rules
 
-The orchestrator rules are always loaded from `~/.claude/rules/` (`odd-delegation`, `odd-verification`, `odd-skills`, plus the path-scoped `odd-tracking`). The session context (SessionStart and UserPromptSubmit `additionalContext`) carries only per-session lines: the delegation mode, the active profile, the scratch directory, background-subagent policy, peers and the reply-language anchor. Follow it.
+The orchestrator rules are always loaded from `~/.claude/rules/` (`odd-delegation`, `odd-verification`, `odd-skills`, plus the path-scoped `odd-tracking`). The session context (SessionStart and UserPromptSubmit `additionalContext`) carries only per-session lines: the delegation mode, the active profile, the scratch directory, background-subagent policy and the reply-language anchor. Follow it.
