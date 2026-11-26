@@ -6,7 +6,7 @@ import type { InstallPaths } from "./paths.js";
 import { resolvePlaceholders } from "./placeholders.js";
 
 /** What a release carries, relative to the source root. */
-export const PAYLOAD_ITEMS = ["dist", "cards", "agents", "skills", "output-styles", "support", "hooks", "package.json"] as const;
+export const PAYLOAD_ITEMS = ["dist", "cards", "agents", "skills", "output-styles", "support", "hooks", "statusline", "package.json"] as const;
 /** Payload dirs whose text is read straight from `current` by the model, so placeholders are resolved when staging. */
 const RESOLVED_AT_STAGE = new Set(["cards", "support"]);
 
