@@ -2,6 +2,17 @@
 
 A global Claude Code harness (installed with a TUI, no longer a plugin) that ports the ODD harness of gentle-shell (MIT) <!-- odd-check: allow --> to Claude Code. **v2.0** adds native receipt-driven review (RDD) on top of **v1.0** (the parity release): the ODD persona, orchestrator cards, agents, skills, native integrations, advisory review and lifecycle hooks. Apart from the RDD Stop settle reminder, which can block only when you turn RDD on (it is off by default), the plugin ships **no deny/ask/block hook** (user decision, v0.5, amended for v2): its hooks only add context. Coordinator mode and the admission rules are prompt text, not enforcement; otherwise the only enforcement is Claude Code's native permission system (see [Permission modes](#permission-modes)). The plugin collects no data and sends nothing anywhere.
 
+## Unreleased: always-on context in `~/.claude/CLAUDE.md` and `rules/`
+
+The always-on context moved out of the output style and the hooks into files Claude Code loads natively. No new commands.
+
+- **Managed CLAUDE.md blocks.** The installer writes eight blocks into `~/.claude/CLAUDE.md` (`identity`, `protocol` and six more, sources in `claude-md/01-identity.md` ... `08-memory.md`), each wrapped as `<!-- odd-claude:ID -->` ... `<!-- /odd-claude:ID -->`. Text you wrote outside the markers is never touched, and the file is created if absent. Install and update are idempotent; a block you edited by hand is a conflict: it is reported and kept, not overwritten. Uninstall removes only the blocks it owns and that are unedited, and deletes `CLAUDE.md` only if nothing else is left in it. <!-- odd-check: allow -->
+- **Budget.** The managed blocks total about 32 KB, and a test fails if they exceed 80,000 bytes (about 20k tokens at 4 bytes per token).
+- **Rules.** `~/.claude/rules/odd-tracking.md` carries the feature-document tracking rules and is path-scoped (`paths: odd/tasks/**`, `odd/**/*.md`), so it loads only when Claude reads matching files. It is installed as a whole file through the manifest like any other file; an edited copy is kept on uninstall.
+- **Output style `odd`.** Same name (`outputStyle: "odd"` stays valid) but now only a neutral persona and tone (about 4.6 KB, neutral Spanish, no voseo); the ODD protocol lives in the CLAUDE.md blocks.
+- **Read-only agents.** `odd-explore`, `odd-review-*` and `odd-jd-judge-*` set `omitClaudeMd: true` so they do not load CLAUDE.md (needs Claude Code 2.1.271 or later). `odd-worker`, `odd-verify` and `odd-jd-fix` keep it. The user-only skills `odd-skill-registry`, `skill-creator` and `skill-improver` set `disable-model-invocation: true`.
+- **Session context.** `SessionStart` now injects only per-session lines (coordinator mode, background policy, scratch dir, profile, integrations, reinjection after compact/resume, peers); `SessionStart` context went from 3,122 to 1,476 bytes. `UserPromptSubmit` is unchanged.
+
 ## What's new in 6.0.0
 
 **Breaking: odd-claude is no longer a Claude Code plugin.** It installs globally with a TUI or scripts (see [Install](#install)). The plugin manifest, the marketplace and `.mcp.json` are gone; the installer registers hooks, the output style, skills, agents and MCP servers in `~/.claude`. Names lost the plugin namespace: see [Migrating from the plugin](#migrating-from-the-plugin).
@@ -261,7 +272,7 @@ All of these are advisory: none returns a block decision, `continue:false` or a 
 
 ## What v0.2 shipped
 
-- **Persona / output style `odd`** (`output-styles/odd.md`, set as `outputStyle` in `settings.json` by the installer, so no `/odd-setup` is needed). SessionStart and UserPromptSubmit hooks add `additionalContext` with the rest of the prompt and the path of the cards. Replies follow the user's language.
+- **Persona / output style `odd`** (`output-styles/odd.md`, set as `outputStyle` in `settings.json` by the installer, so no `/odd-setup` is needed): neutral persona and tone only. The ODD protocol is in the managed `~/.claude/CLAUDE.md` blocks and `~/.claude/rules/odd-tracking.md`; SessionStart and UserPromptSubmit hooks add only per-session `additionalContext` lines. Replies follow the user's language.
 - **Persona**: there is one persona, `neutral` (direct, technical, neutral Spanish), and it is always the default. `/odd-persona` shows it; any other mode (including `mentor`) is refused. Spanish replies are always neutral: no voseo or regional forms (tú or usted).
 - **Cards** (`cards/*.md`): orchestrator rules loaded on demand (delegation, tracking, verification, memory, skills, prompts, writer, quota recovery), with tool names mapped to Claude Code (`Agent`, `TodoWrite`, `AskUserQuestion`, `Bash` with `run_in_background`, `Monitor`, worktree tools). See `cards/SOURCES.md`.
 - **Agents** (`<agent>`): `odd-explore` (read-only), `odd-verify` (runs checks), `odd-worker` (scoped writer), `odd-jd-fix`, `odd-jd-judge-a`, `odd-jd-judge-b` (Judgment Day), and the four advisory review lenses `odd-review-risk`, `odd-review-resilience`, `odd-review-readability`, `odd-review-reliability`.
@@ -381,9 +392,9 @@ The TUI keys are: up/down to move, enter to continue, esc to go back, space to t
 
 | Command | What it does |
 |---|---|
-| `install` | migrates from the plugin (uninstalls it, copies its state), stages the payload, installs files, hooks, output style, MCP servers, extras and dependencies, in that order |
+| `install` | migrates from the plugin (uninstalls it, copies its state), stages the payload, installs files (including the `CLAUDE.md` blocks and `rules/`), hooks, output style, MCP servers, extras and dependencies, in that order |
 | `update` | downloads the latest GitHub release (checksums verified), swaps `current`, re-applies hooks, MCP and extras with the options saved at install; models are kept |
-| `uninstall` | reverse order: extras, MCP, output style, hooks, files; never uninstalls Engram or codegraph |
+| `uninstall` | reverse order: extras, MCP, output style, hooks, files (owned unedited `CLAUDE.md` blocks and rules); never uninstalls Engram or codegraph |
 | `rollback` | points `current` back at the previous (or `--to`) installed version |
 | `models` | applies `--profile` / `--model` to the installed version |
 | `backups` | lists the backups, or restores one with `--restore <id>` |
@@ -422,6 +433,8 @@ Every TUI choice has a flag. `odd-claude --help` is the reference.
   bin/odd-claude.mjs    the installer bundle of the installed release
 ~/.claude/
   skills/, agents/, output-styles/odd.md    copied, with absolute paths resolved
+  CLAUDE.md             + 8 managed marker blocks (<= 80,000 B); your own text outside them is never touched
+  rules/odd-tracking.md path-scoped rule (odd/tasks/**, odd/**/*.md)
   settings.json         + 9 hooks, outputStyle "odd", statusLine, the claude.ai keys, enabledPlugins for builtins
   MCP (user scope)      odd-review, odd-peers, codegraph
 ```
@@ -431,6 +444,7 @@ Every TUI choice has a flag. `odd-claude --help` is the reference.
 ### Uninstall guarantees
 
 - A file in `~/.claude` is removed only when its hash still matches the manifest; edited or foreign files are reported and kept.
+- `CLAUDE.md`: only blocks whose markers and hash still match are removed; an edited block is reported and kept, text outside the markers is never touched, and the file is deleted only when it ends up empty. Rules files follow the file rule above.
 - Only our hook entries are removed; other hooks keep their place and order.
 - `outputStyle`, `statusLine`, the three claude.ai keys and the `enabledPlugins` entries return to their previous values (absent keys are removed again); a value you changed after the install is kept.
 - Only the MCP servers odd-claude added are removed; servers that already existed are never touched.
