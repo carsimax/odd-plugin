@@ -12,6 +12,8 @@ export interface Manifest {
   installedAt: string;
   /** Path relative to the Claude dir (posix separators) -> sha256 hex of the installed content. */
   files: Record<string, string>;
+  /** CLAUDE.md block id -> sha256 hex of the normalized inner text we wrote. Absent in manifests from before managed blocks. */
+  blocks?: Record<string, string>;
   models: ModelSelection;
 }
 
@@ -42,7 +44,7 @@ export function readManifest(path: string): Manifest | null {
     throw new Error(`manifest ${path} is not valid JSON; fix or remove it before continuing`);
   }
   const m = raw as Partial<Manifest> | null;
-  if (typeof m !== "object" || m === null || m.version !== MANIFEST_VERSION || typeof m.files !== "object" || m.files === null) {
+  if (typeof m !== "object" || m === null || m.version !== MANIFEST_VERSION || typeof m.files !== "object" || m.files === null || (m.blocks !== undefined && (typeof m.blocks !== "object" || m.blocks === null))) {
     throw new Error(`manifest ${path} has an unsupported shape; fix or remove it before continuing`);
   }
   return m as Manifest;

@@ -50,6 +50,7 @@ export function installPlan(opts: InstallOptions): InstallPlan {
     { area: "payload", action: !existsSync(versionDir) ? "create" : payloadWouldChange(sourceRoot, paths, version) ? "update" : "unchanged", path: versionDir },
     { area: "payload", action: activeVersion(paths) === version ? "unchanged" : existsSync(paths.currentLink) ? "update" : "create", path: paths.currentLink, detail: `-> versions/${version}` },
     ...files.actions.map((a): PlanAction => ({ area: "file", action: a.action, path: a.target, ...(a.reason ? { detail: a.reason } : {}) })),
+    ...files.blocks.map((b): PlanAction => ({ area: "file", action: b.action, path: `${files.claudeMd}#${b.id}`, ...(b.reason ? { detail: b.reason } : {}) })),
     { area: "profile", action: profileUnchanged(paths, selection) ? "unchanged" : existsSync(profilesFile(paths)) ? "update" : "create", path: profilesFile(paths), detail: selection.profile },
     { area: "manifest", action: existsSync(paths.manifestPath) ? "update" : "create", path: paths.manifestPath },
   ];
@@ -62,7 +63,7 @@ export function uninstallPlan(opts: { paths: InstallPaths; purge?: boolean }): U
   const actions: PlanAction[] = [
     ...files.actions
       .filter((a) => a.action !== "missing")
-      .map((a): PlanAction => ({ area: "file", action: a.action === "remove" ? "remove" : "keep", path: a.target, ...(a.reason ? { detail: a.reason } : {}) })),
+      .map((a): PlanAction => ({ area: "file", action: a.action === "remove" ? "remove" : "keep", path: a.rel.startsWith("CLAUDE.md#") ? `${a.target}${a.rel.slice("CLAUDE.md".length)}` : a.target, ...(a.reason ? { detail: a.reason } : {}) })),
     { area: "payload", action: "remove", path: paths.currentLink },
     { area: "payload", action: "remove", path: paths.versionsDir },
     { area: "manifest", action: files.actions.some((a) => a.action === "keep") ? "update" : "remove", path: paths.manifestPath },

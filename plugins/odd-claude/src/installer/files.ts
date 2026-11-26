@@ -3,6 +3,7 @@
 import { existsSync, lstatSync, readFileSync, readdirSync, rmSync, rmdirSync } from "node:fs";
 import { dirname, join, posix } from "node:path";
 import { backupFiles } from "./backup.js";
+import { CLAUDE_MD, applyBlocks, parseBlocks, planBlocks, readDesiredBlocks, type BlockAction, type DesiredBlock } from "./claude-md.js";
 import { atomicWriteFile, readManifest, sha256, writeManifest, type Manifest } from "./manifest.js";
 import { agentFileForRole, applyAgentModel, roleCoverage, type ModelSelection } from "./models.js";
 import { activeVersion, readTree } from "./payload.js";
@@ -29,6 +30,9 @@ export interface FilePlan {
   selection: ModelSelection;
   oddVersion: string;
   coverage: ReturnType<typeof roleCoverage>;
+  /** Managed CLAUDE.md blocks; applied to the file as it is when the plan runs. */
+  blocks: BlockAction[];
+  claudeMd: string;
 }
 
 export interface InstallResult {
@@ -45,6 +49,17 @@ const fileHash = (p: string): string | null => {
     return null;
   }
 };
+/** Text of CLAUDE.md, null when absent; `special` when something other than a regular file sits there. */
+function readClaudeMd(target: string): { text: string | null; special: boolean } {
+  try {
+    if (!lstatSync(target).isFile()) return { text: null, special: true };
+    return { text: readFileSync(target, "utf8"), special: false };
+  } catch {
+    return { text: null, special: false };
+  }
+}
+/** Rel names a block in results and plans: `CLAUDE.md#<id>`. */
+export const blockRel = (id: string): string => `${CLAUDE_MD}#${id}`;
 const safeRel = (rel: string): boolean => rel !== "" && !rel.startsWith("/") && !rel.split("/").includes("..");
 
 /** Removes now-empty parents of `file`, stopping at (excluding) the Claude dir. */
@@ -60,12 +75,14 @@ function pruneEmptyDirs(claudeDir: string, file: string): void {
 }
 
 /** Desired files, from `payloadDir` (default: the `current` link), keyed by Claude-dir-relative path. */
-function desiredFiles(paths: InstallPaths, selection: ModelSelection, payloadDir: string): { files: Map<string, { data: Buffer; mode: number }>; agentFiles: string[] } {
-  const resolve = (b: Buffer): Buffer => Buffer.from(resolvePlaceholders(b.toString("utf8"), { root: paths.currentLink, data: paths.dataDir }));
+function desiredFiles(paths: InstallPaths, selection: ModelSelection, payloadDir: string): { files: Map<string, { data: Buffer; mode: number }>; agentFiles: string[]; blocks: DesiredBlock[] } {
+  const resolveText = (t: string): string => resolvePlaceholders(t, { root: paths.currentLink, data: paths.dataDir });
+  const resolve = (b: Buffer): Buffer => Buffer.from(resolveText(b.toString("utf8")));
   const files = new Map<string, { data: Buffer; mode: number }>();
   const agentFiles: string[] = [];
   const dir = (name: string): string => join(payloadDir, name);
   if (existsSync(dir("skills"))) for (const [rel, f] of readTree(dir("skills"))) files.set(`skills/${rel}`, { data: resolve(f.data), mode: f.mode });
+  if (existsSync(dir("rules"))) for (const [rel, f] of readTree(dir("rules"))) if (rel.split("/").at(-1) !== ".gitkeep") files.set(`rules/${rel}`, { data: resolve(f.data), mode: f.mode });
   if (existsSync(dir("agents"))) {
     for (const [rel, f] of readTree(dir("agents"))) {
       if (rel.includes("/") || !rel.endsWith(".md")) continue;
@@ -82,13 +99,13 @@ function desiredFiles(paths: InstallPaths, selection: ModelSelection, payloadDir
     const t = readTree(dir("output-styles")).get("odd.md");
     if (t) files.set("output-styles/odd.md", { data: resolve(t.data), mode: t.mode });
   }
-  return { files, agentFiles };
+  return { files, agentFiles, blocks: readDesiredBlocks(payloadDir, resolveText) };
 }
 
 export function planInstallFiles(paths: InstallPaths, selection: ModelSelection, opts: { payloadDir?: string; oddVersion?: string } = {}): FilePlan {
   const manifest = readManifest(paths.manifestPath);
   const owned = manifest?.files ?? {};
-  const { files, agentFiles } = desiredFiles(paths, selection, opts.payloadDir ?? paths.currentLink);
+  const { files, agentFiles, blocks: desired } = desiredFiles(paths, selection, opts.payloadDir ?? paths.currentLink);
   const coverage = roleCoverage(agentFiles);
   const warnings = [
     ...coverage.rolesWithoutAgentFile.filter((r) => !r.startsWith("review-")).map((r) => `no agent file for role ${r}`),
@@ -114,14 +131,21 @@ export function planInstallFiles(paths: InstallPaths, selection: ModelSelection,
     if (cur === null) continue;
     actions.push(cur === hash ? { action: "remove", rel, target } : { action: "conflict", rel, target, reason: "no longer shipped but edited since install; kept" });
   }
-  return { actions, warnings, selection, oddVersion: opts.oddVersion ?? activeVersion(paths) ?? "unknown", coverage };
+  const claudeMd = join(paths.claudeDir, CLAUDE_MD);
+  const md = readClaudeMd(claudeMd);
+  const blocks: BlockAction[] = md.special
+    ? [...desired.map((d): BlockAction => ({ action: "conflict", id: d.id, text: d.text })), ...Object.keys(manifest?.blocks ?? {}).filter((id) => !desired.some((d) => d.id === id)).map((id): BlockAction => ({ action: "conflict", id }))].map((a) => ({ ...a, reason: "CLAUDE.md exists and is not a regular file" }))
+    : planBlocks(md.text, desired, manifest?.blocks ?? {});
+  return { actions, warnings, selection, oddVersion: opts.oddVersion ?? activeVersion(paths) ?? "unknown", coverage, blocks, claudeMd };
 }
 
 /** Backs up what it overwrites or removes, writes create/update, skips conflicts, then rewrites the ledger. */
 export function applyInstallFiles(paths: InstallPaths, plan: FilePlan): InstallResult {
   const prev = readManifest(paths.manifestPath);
-  const touched = plan.actions.filter((a) => a.action === "update" || a.action === "remove");
-  const backupDir = backupFiles(paths, touched.map((a) => a.target));
+  const touched = plan.actions.filter((a) => a.action === "update" || a.action === "remove").map((a) => a.target);
+  const mdChanges = plan.blocks.some((b) => b.action === "create" || b.action === "update" || b.action === "remove");
+  if (mdChanges) touched.push(plan.claudeMd);
+  const backupDir = backupFiles(paths, touched);
   const files: Record<string, string> = {};
   const result: InstallResult = { backupDir, written: [], conflicts: [], removed: [] };
   for (const a of plan.actions) {
@@ -141,7 +165,26 @@ export function applyInstallFiles(paths: InstallPaths, plan: FilePlan): InstallR
       if (old !== undefined) files[a.rel] = old;
     }
   }
-  const manifest: Manifest = { version: 1, oddVersion: plan.oddVersion, installedAt: new Date().toISOString(), files, models: plan.selection };
+  const blocks: Record<string, string> = {};
+  if (mdChanges) {
+    const cur = readClaudeMd(plan.claudeMd).text;
+    const next = applyBlocks(cur, plan.blocks);
+    if (next.trim() === "") rmSync(plan.claudeMd, { force: true });
+    else atomicWriteFile(plan.claudeMd, next, 0o644);
+  }
+  for (const b of plan.blocks) {
+    if (b.action === "create" || b.action === "update") {
+      result.written.push(blockRel(b.id));
+      blocks[b.id] = sha256(b.text!);
+    } else if (b.action === "unchanged") blocks[b.id] = sha256(b.text!);
+    else if (b.action === "remove") result.removed.push(blockRel(b.id));
+    else {
+      result.conflicts.push(blockRel(b.id));
+      const old = prev?.blocks?.[b.id];
+      if (old !== undefined) blocks[b.id] = old;
+    }
+  }
+  const manifest: Manifest = { version: 1, oddVersion: plan.oddVersion, installedAt: new Date().toISOString(), files, ...(Object.keys(blocks).length > 0 ? { blocks } : {}), models: plan.selection };
   writeManifest(paths.manifestPath, manifest);
   return result;
 }
@@ -171,6 +214,21 @@ export function planUninstallFiles(paths: InstallPaths): UninstallFilesPlan {
     else if (cur === hash) actions.push({ action: "remove", rel, target });
     else actions.push({ action: "keep", rel, target, reason: "file was edited since odd-claude installed it" });
   }
+  const claudeMd = join(paths.claudeDir, CLAUDE_MD);
+  const owned = Object.entries(manifest?.blocks ?? {}).sort(([a], [b]) => a.localeCompare(b));
+  if (owned.length > 0) {
+    const md = readClaudeMd(claudeMd);
+    const parsed = parseBlocks(md.text ?? "");
+    for (const [id, hash] of owned) {
+      const rel = blockRel(id);
+      const cur = parsed.blocks.get(id);
+      if (md.special) actions.push({ action: "keep", rel, target: claudeMd, reason: "CLAUDE.md is not a regular file" });
+      else if (parsed.malformed) actions.push({ action: "keep", rel, target: claudeMd, reason: `CLAUDE.md has malformed odd-claude markers (${parsed.malformed})` });
+      else if (!cur) actions.push({ action: "missing", rel, target: claudeMd });
+      else if (cur.hash === hash) actions.push({ action: "remove", rel, target: claudeMd });
+      else actions.push({ action: "keep", rel, target: claudeMd, reason: "block was edited since odd-claude installed it" });
+    }
+  }
   return { actions };
 }
 
@@ -180,8 +238,24 @@ export function applyUninstallFiles(paths: InstallPaths, opts: { purge?: boolean
   const plan = planUninstallFiles(paths);
   const result: UninstallResult = { removed: [], kept: [] };
   const left: Record<string, string> = {};
+  const leftBlocks: Record<string, string> = {};
+  const mdRemovals = plan.actions.filter((a) => a.rel.startsWith(`${CLAUDE_MD}#`) && a.action === "remove");
+  if (mdRemovals.length > 0) {
+    const target = join(paths.claudeDir, CLAUDE_MD);
+    backupFiles(paths, [target]);
+    const next = applyBlocks(readClaudeMd(target).text, mdRemovals.map((a) => ({ action: "remove", id: a.rel.slice(CLAUDE_MD.length + 1) })));
+    if (next.trim() === "") rmSync(target, { force: true });
+    else atomicWriteFile(target, next, 0o644);
+  }
   for (const a of plan.actions) {
-    if (a.action === "remove") {
+    if (a.rel.startsWith(`${CLAUDE_MD}#`)) {
+      const id = a.rel.slice(CLAUDE_MD.length + 1);
+      if (a.action === "remove") result.removed.push(a.rel);
+      else if (a.action === "keep") {
+        result.kept.push(a.rel);
+        leftBlocks[id] = manifest!.blocks![id]!;
+      }
+    } else if (a.action === "remove") {
       rmSync(a.target, { force: true });
       pruneEmptyDirs(paths.claudeDir, a.target);
       result.removed.push(a.rel);
@@ -192,7 +266,10 @@ export function applyUninstallFiles(paths: InstallPaths, opts: { purge?: boolean
   }
   rmSync(paths.currentLink, { force: true });
   rmSync(paths.versionsDir, { recursive: true, force: true });
-  if (result.kept.length > 0 && manifest) writeManifest(paths.manifestPath, { ...manifest, files: left });
+  if (result.kept.length > 0 && manifest) {
+    const { blocks: _blocks, ...rest } = manifest;
+    writeManifest(paths.manifestPath, { ...rest, files: left, ...(Object.keys(leftBlocks).length > 0 ? { blocks: leftBlocks } : {}) });
+  }
   else rmSync(paths.manifestPath, { force: true });
   if (opts.purge) {
     rmSync(paths.dataDir, { recursive: true, force: true });

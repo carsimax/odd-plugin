@@ -31,7 +31,7 @@ export function readManifest(path) {
         throw new Error(`manifest ${path} is not valid JSON; fix or remove it before continuing`);
     }
     const m = raw;
-    if (typeof m !== "object" || m === null || m.version !== MANIFEST_VERSION || typeof m.files !== "object" || m.files === null) {
+    if (typeof m !== "object" || m === null || m.version !== MANIFEST_VERSION || typeof m.files !== "object" || m.files === null || (m.blocks !== undefined && (typeof m.blocks !== "object" || m.blocks === null))) {
         throw new Error(`manifest ${path} has an unsupported shape; fix or remove it before continuing`);
     }
     return m;

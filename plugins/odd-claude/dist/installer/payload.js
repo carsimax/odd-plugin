@@ -4,7 +4,7 @@ import { basename, dirname, join, posix, sep } from "node:path";
 import { sha256 } from "./manifest.js";
 import { resolvePlaceholders } from "./placeholders.js";
 /** What a release carries, relative to the source root. */
-export const PAYLOAD_ITEMS = ["dist", "cards", "agents", "skills", "output-styles", "support", "hooks", "statusline", "package.json"];
+export const PAYLOAD_ITEMS = ["dist", "cards", "agents", "skills", "claude-md", "rules", "output-styles", "support", "hooks", "statusline", "package.json"];
 /** Payload dirs whose text is read straight from `current` by the model, so placeholders are resolved when staging. */
 const RESOLVED_AT_STAGE = new Set(["cards", "support"]);
 const VERSION_RE = /^[0-9A-Za-z][0-9A-Za-z._+-]*$/;
