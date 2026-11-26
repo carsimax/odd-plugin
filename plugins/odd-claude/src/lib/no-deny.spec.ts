@@ -37,10 +37,10 @@ test("no source or hook config returns or declares a deny/ask/block decision", (
   }
 });
 
-test("hooks.json registers the advisory events plus the delivery notice (PreToolUse on Bash only; never PermissionRequest)", () => {
+test("hooks.json registers the advisory events plus the delivery notice (PreToolUse on Bash and the write tools only; never PermissionRequest)", () => {
   const cfg = JSON.parse(readFileSync(join(root, "hooks", "hooks.json"), "utf8")) as { hooks: Record<string, { matcher?: string }[]> };
   assert.deepEqual(Object.keys(cfg.hooks).sort(), ["PostToolUse", "PreToolUse", "SessionEnd", "SessionStart", "Stop", "StopFailure", "SubagentStart", "SubagentStop", "UserPromptSubmit"]);
-  assert.deepEqual(cfg.hooks.PreToolUse!.map((g) => g.matcher), ["Bash"]);
+  assert.deepEqual(cfg.hooks.PreToolUse!.map((g) => g.matcher), ["Bash|Edit|Write|NotebookEdit"]);
 });
 
 test("PostToolUse outputs are advisory: only hookSpecificOutput.additionalContext, exit 0, never a decision", () => {

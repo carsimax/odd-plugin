@@ -151,13 +151,13 @@ test("runHookLazy logs the same handler error as runHook for a non-object stdin 
   }
 });
 
-test("PreToolUse only handles the Bash delivery notice, so skipping it with RDD off drops nothing", () => {
+test("PreToolUse with RDD off still answers the advisory notices; the Bash delivery notice needs RDD on", () => {
   const raw = JSON.parse(readFileSync(new URL("../../hooks/hooks.json", import.meta.url), "utf8")) as { hooks: Record<string, { matcher?: string }[]> };
-  assert.deepEqual(raw.hooks.PreToolUse!.map((e) => e.matcher), ["Bash"]);
+  assert.deepEqual(raw.hooks.PreToolUse!.map((e) => e.matcher), ["Bash|Edit|Write|NotebookEdit"]);
   const dir = mkdtempSync(join(tmpdir(), "odd-lazy-"));
   const cwd = join(dir, "project");
   try {
-    for (const tool_name of ["Read", "Write", "Edit", "Agent", "mcp__x__y", "bash", ""]) {
+    for (const tool_name of ["Read", "Agent", "mcp__x__y", "bash", ""]) {
       assert.equal(preToolUse({ session_id: "s1", cwd, tool_name, tool_input: { command: ["git", "push", "origin", "main"].join(" ") } }, { dataDir: dir }), undefined, tool_name);
     }
   } finally {

@@ -8,7 +8,7 @@ import { buildHookEntries, installHooks, mergeHooks, uninstallHooks, unmergeHook
 const HOOKS_JSON = {
   hooks: {
     SessionStart: [{ hooks: [{ type: "command", command: 'node "${CLAUDE_PLUGIN_ROOT}/dist/hooks/run.js" SessionStart' }] }],
-    PreToolUse: [{ matcher: "Bash", hooks: [{ type: "command", command: 'node "${CLAUDE_PLUGIN_ROOT}/dist/hooks/run.js" PreToolUse', timeout: 30 }] }],
+    PreToolUse: [{ matcher: "Bash|Edit|Write|NotebookEdit", hooks: [{ type: "command", command: 'node "${CLAUDE_PLUGIN_ROOT}/dist/hooks/run.js" PreToolUse', timeout: 30 }] }],
     PostToolUse: [
       {
         matcher: "Read|Grep|mcp__codegraph__.*|mcp__plugin_odd-claude_codegraph__.*",
@@ -50,7 +50,7 @@ test("buildHookEntries mirrors events, matchers, timeouts and async from hooks.j
     assert.deepEqual(Object.keys(e), ["SessionStart", "PreToolUse", "PostToolUse", "SubagentStart"]);
     const run = `node "${s.oddRoot}/dist/hooks/run.js"`;
     assert.deepEqual(e.SessionStart, [{ hooks: [{ type: "command", command: `${run} SessionStart` }] }]);
-    assert.deepEqual(e.PreToolUse, [{ matcher: "Bash", hooks: [{ type: "command", command: `${run} PreToolUse`, timeout: 30 }] }]);
+    assert.deepEqual(e.PreToolUse, [{ matcher: "Bash|Edit|Write|NotebookEdit", hooks: [{ type: "command", command: `${run} PreToolUse`, timeout: 30 }] }]);
     assert.deepEqual(e.SubagentStart[0].hooks[0], { type: "command", command: `${run} SubagentStart`, timeout: 5, async: true });
   } finally {
     s.cleanup();
