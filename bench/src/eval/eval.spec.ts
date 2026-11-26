@@ -239,7 +239,7 @@ describe("installed arm, output style and proof fields", () => {
       assert.equal(settings.outputStyle, "odd"); assert.ok(settings.hooks && Object.keys(settings.hooks).length > 0);
       assert.ok(existsSync(join(c.env.ODD_CLAUDE_HOME, "current")), "versioned install under the isolated ODD_CLAUDE_HOME");
       assert.ok(!settings.statusLine, "status line off");
-      assert.equal(logOf(a.log + ".mcp").filter((m) => m.argv[1] === "add").length, 3, "odd-review, odd-peers, codegraph");
+      assert.equal(logOf(a.log + ".mcp").filter((m) => m.argv[1] === "add").length, 2, "odd-review, codegraph");
     } finally { rmSync(dirname(c.env.CLAUDE_CONFIG_DIR), { recursive: true, force: true }); }
   });
   test("--settings carries only the sandbox for every arm; records say whether odd-claude was installed", async () => {
