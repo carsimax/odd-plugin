@@ -2,6 +2,14 @@
 
 A global Claude Code harness (installed with a TUI, no longer a plugin) that ports the ODD harness of gentle-shell (MIT) <!-- odd-check: allow --> to Claude Code. **v2.0** adds native receipt-driven review (RDD) on top of **v1.0** (the parity release): the ODD persona, orchestrator rules, agents, skills, native integrations, advisory review and lifecycle hooks. Apart from the RDD Stop settle reminder, which can block only when you turn RDD on (it is off by default), the plugin ships **no deny/ask/block hook and no `permissions.deny` by default** (user decision, v0.5, amended for v2): its hooks only add context. Coordinator mode and the admission rules are prompt text, not enforcement; otherwise the only enforcement is Claude Code's native permission system (see [Permission modes](#permission-modes)). The plugin collects no data and sends nothing anywhere.
 
+## What's new in 8.3.0
+
+Not breaking. The installer does not change any setting; you get the new rules after `update`:
+
+- Same-file writers no longer use `EnterWorktree` (it moves the main session, not a subagent): units that need the same file now run one at a time in the same tree.
+- An isolated writer (Agent `isolation: "worktree"`) is used only when your settings set `worktree.baseRef` to `"head"`; otherwise the worktree starts from the remote default branch and misses the feature branch. The parent integrates kept worktree changes (no automatic merge).
+- The Coordinator mode ON rule notes that `/rewind` does not undo subagent or Bash-only edits, so the parent captures `git status` before launching writers.
+
 ## What's new in 8.2.1
 
 Not breaking. The shipped payload is unchanged, so there is no behavior change for users:
