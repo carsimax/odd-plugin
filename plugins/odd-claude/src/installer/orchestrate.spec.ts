@@ -195,8 +195,18 @@ describe("runFullUninstall", () => {
     assert.deepEqual(seen, ["extras", "mcp", "output-style", "hooks", "files"]);
     assert.equal(r.ok, true);
     assert.ok(!u.calls.some((c) => c.cmd === "brew" || c.cmd === "npm" || c.cmd === "engram"));
-    assert.deepEqual(u.calls.filter((c) => c.args[1] === "remove").map((c) => c.args[c.args.length - 1]), ["odd-review", "odd-peers", "codegraph"]);
+    assert.deepEqual(u.calls.filter((c) => c.args[1] === "remove").map((c) => c.args[c.args.length - 1]), ["odd-review", "codegraph"]);
     assert.equal(activeVersion(flowContext({ env, homedir: home }).paths), null);
+  });
+
+  it("uninstall keeps working on an old state file that still lists odd-peers", async () => {
+    const { home, env, source, ctx } = setup();
+    await runFullInstall({ env, homedir: home, runner: machine().runner, source, deps: false });
+    writeFileSync(ctx.managed.statePath, JSON.stringify({ ...JSON.parse(readFileSync(ctx.managed.statePath, "utf8")), mcp: { added: ["odd-review", "odd-peers", "codegraph"] } }));
+    const u = machine();
+    const r = await runFullUninstall({ env, homedir: home, runner: u.runner });
+    assert.equal(r.ok, true);
+    assert.deepEqual(u.calls.filter((c) => c.args[1] === "remove").map((c) => c.args[c.args.length - 1]), ["odd-review", "odd-peers", "codegraph"]);
   });
 
   it("dry run writes nothing and removes nothing", async () => {
@@ -251,7 +261,7 @@ describe("end to end with the real plugin tree", () => {
     assert.ok(manifest.files["agents/odd-worker.md"]);
     assert.equal(manifest.oddVersion, JSON.parse(readFileSync(join(PLUGIN_ROOT, "package.json"), "utf8")).version);
     assert.ok(m.calls.some((c) => c.cmd === "brew" && c.args[0] === "install"));
-    assert.deepEqual(m.calls.filter((c) => c.args[0] === "mcp" && c.args[1] === "add").map((c) => c.args[4]), ["odd-review", "odd-peers", "codegraph"]);
+    assert.deepEqual(m.calls.filter((c) => c.args[0] === "mcp" && c.args[1] === "add").map((c) => c.args[4]), ["odd-review", "codegraph"]);
 
     const u = await runFullUninstall({ env, homedir: home, runner: machine().runner });
     assert.equal(u.ok, true, JSON.stringify(u.steps));
@@ -276,6 +286,48 @@ describe("applyModels", () => {
     const r = applyModels({ env, homedir: home, selection: defaultSelection() });
     assert.equal(r.ok, false);
     assert.match(r.steps[0]!.detail, /not installed/);
+  });
+});
+
+describe("odd-peers retirement on install and update", () => {
+  const legacy = (ctx: ReturnType<typeof flowContext>): void => {
+    mkdirSync(join(ctx.paths.dataDir, "peers", "mailbox"), { recursive: true });
+    writeFileSync(join(ctx.paths.dataDir, "peers", "grants.json"), "{}");
+    mkdirSync(dirname(ctx.managed.statePath), { recursive: true });
+    writeFileSync(ctx.managed.statePath, JSON.stringify({ version: 1, mcp: { added: ["odd-review", "odd-peers"] } }));
+  };
+  const removed = (calls: Call[]): string[] => calls.filter((c) => c.args[0] === "mcp" && c.args[1] === "remove").map((c) => c.args[c.args.length - 1]!);
+
+  it("install removes our recorded odd-peers and the peers/ directory", async () => {
+    const { home, env, source, ctx } = setup();
+    legacy(ctx);
+    const m = machine();
+    const r = await runFullInstall({ env, homedir: home, runner: m.runner, source, deps: false });
+    assert.deepEqual(removed(m.calls), ["odd-peers"]);
+    assert.ok(!m.calls.some((c) => c.args[1] === "add" && c.args.includes("odd-peers")));
+    assert.match(r.steps.find((s) => s.id === "mcp")!.detail, /odd-peers: removed/);
+    assert.deepEqual(JSON.parse(readFileSync(ctx.managed.statePath, "utf8")).mcp.added.includes("odd-peers"), false);
+    assert.equal(existsSync(join(ctx.paths.dataDir, "peers")), false);
+  });
+
+  it("update removes our recorded odd-peers and the peers/ directory", async () => {
+    const { home, env, source, ctx } = setup();
+    await runFullInstall({ env, homedir: home, runner: machine().runner, source, deps: false });
+    legacy(ctx);
+    const rel = makeRelease("9.9.10");
+    const gh = ghRunner(rel, (c) => (c.cmd === "claude" && c.args[0] === "mcp" && c.args[1] === "get" ? fail("No MCP server named x found") : undefined));
+    const r = await runUpdateFlow({ env, homedir: home, runner: gh.runner, force: true });
+    assert.equal(r.status, "updated");
+    assert.deepEqual(removed(gh.calls), ["odd-peers"]);
+    assert.equal(JSON.parse(readFileSync(ctx.managed.statePath, "utf8")).mcp.added.includes("odd-peers"), false);
+    assert.equal(existsSync(join(ctx.paths.dataDir, "peers")), false);
+  });
+
+  it("install without a recorded odd-peers never removes one", async () => {
+    const { home, env, source } = setup();
+    const m = machine();
+    await runFullInstall({ env, homedir: home, runner: m.runner, source, deps: false });
+    assert.deepEqual(removed(m.calls), []);
   });
 });
 

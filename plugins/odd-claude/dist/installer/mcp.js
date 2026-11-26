@@ -1,6 +1,8 @@
 // MCP registration in Claude Code user scope via the `claude mcp` CLI (injected runner; tests never run the real CLI).
 // We only remove servers we added (recorded in the state file); servers that already exist are never touched.
 import { spawnSync } from "node:child_process";
+import { rmSync } from "node:fs";
+import { join } from "node:path";
 import { readOddState, writeOddState } from "./managed-settings.js";
 /** Real runner: `claude` resolved from PATH, env passed through (CLAUDE_CONFIG_DIR is honored by the CLI). */
 export const defaultRunner = (cmd, args, opts) => {
@@ -15,7 +17,6 @@ function wanted(oddRoot) {
     const root = oddRoot.replace(/\/+$/, "");
     return [
         { name: "odd-review", argv: addArgv("odd-review", ["node", `${root}/dist/mcp/review-server.js`]) },
-        { name: "odd-peers", argv: addArgv("odd-peers", ["node", `${root}/dist/mcp/peers-server.js`]) },
         { name: "codegraph", argv: addArgv("codegraph", ["codegraph", "serve", "--mcp"]) },
     ];
 }
@@ -53,9 +54,30 @@ export async function planMcp(opts) {
     }
     return { servers };
 }
+/** Servers retired by a release: removed on install/update only when the state records us as their owner. */
+const RETIRED_SERVERS = ["odd-peers"];
+const RETIRED_DETAIL = "retired: native cross-session messaging";
 export async function applyMcp(opts) {
-    const plan = await planMcp(opts);
     const results = [];
+    if (opts.dataDir)
+        rmSync(join(opts.dataDir, "peers"), { recursive: true, force: true });
+    const recordedBefore = readOddState(opts.statePath).mcp?.added;
+    const retire = RETIRED_SERVERS.filter((n) => Array.isArray(recordedBefore) && recordedBefore.includes(n));
+    const retired = [];
+    for (const name of retire) {
+        const r = await run(opts.runner, removeArgv(name), opts.env);
+        if (r.code === 0) {
+            retired.push(name);
+            results.push({ name, status: "removed", detail: RETIRED_DETAIL });
+        }
+        else
+            results.push({ name, status: "failed", detail: text(r) });
+    }
+    if (retired.length > 0) {
+        const state = readOddState(opts.statePath);
+        writeOddState(opts.statePath, { ...state, mcp: { ...state.mcp, added: (state.mcp?.added ?? []).filter((n) => !retired.includes(n)) } });
+    }
+    const plan = await planMcp(opts);
     const added = [];
     for (const s of plan.servers) {
         if (s.action === "skip-existing")

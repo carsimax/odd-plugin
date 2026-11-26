@@ -282,7 +282,7 @@ export async function runFullInstall(o, onStep) {
                 step("mcp", unknown.length > 0 ? "warning" : "ok", `would register ${add.join(", ") || "nothing"}${unknown.length > 0 ? `; ${unknown[0].detail}` : ""}`);
             }
             else {
-                const { results } = await applyMcp({ runner: o.runner, env: ctx.env, oddRoot: ctx.oddRoot, statePath: ctx.managed.statePath });
+                const { results } = await applyMcp({ runner: o.runner, env: ctx.env, oddRoot: ctx.oddRoot, statePath: ctx.managed.statePath, dataDir: ctx.paths.dataDir });
                 const bad = results.filter((r) => r.status === "failed" || r.status === "unknown");
                 step("mcp", bad.length > 0 ? "warning" : "ok", results.map((r) => `${r.name}: ${r.status}${r.status === "failed" || r.status === "unknown" ? ` (${r.detail})` : ""}`).join(", "));
             }
@@ -450,7 +450,7 @@ async function reapplyIntegrations(o, ctx, emit) {
         add("hooks", "failed", errMsg(e));
     }
     try {
-        const { results } = await applyMcp({ runner: o.runner, env: ctx.env, oddRoot: ctx.oddRoot, statePath: ctx.managed.statePath });
+        const { results } = await applyMcp({ runner: o.runner, env: ctx.env, oddRoot: ctx.oddRoot, statePath: ctx.managed.statePath, dataDir: ctx.paths.dataDir });
         add("mcp", results.some((r) => r.status === "failed" || r.status === "unknown") ? "warning" : "ok", results.map((r) => `${r.name}: ${r.status}`).join(", "));
     }
     catch (e) {

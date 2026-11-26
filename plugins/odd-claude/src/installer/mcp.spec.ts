@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, writeFileSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -43,19 +43,18 @@ function tmpState() {
   return { statePath: join(dir, "settings-state.json"), cleanup: () => rmSync(dir, { recursive: true, force: true }) };
 }
 
-test("apply registers odd-review, odd-peers and codegraph with the exact argv, passing env through", async () => {
+test("apply registers odd-review and codegraph with the exact argv, passing env through", async () => {
   const f = fake([]);
   const s = tmpState();
   try {
     const r = await applyMcp({ runner: f.runner, env, oddRoot: "/o/current", statePath: s.statePath });
     assert.deepEqual(mut(f.calls), [
       ["mcp", "add", "-s", "user", "odd-review", "--", "node", "/o/current/dist/mcp/review-server.js"],
-      ["mcp", "add", "-s", "user", "odd-peers", "--", "node", "/o/current/dist/mcp/peers-server.js"],
       ["mcp", "add", "-s", "user", "codegraph", "--", "codegraph", "serve", "--mcp"],
     ]);
-    assert.deepEqual(r.results.map((x) => x.status), ["added", "added", "added"]);
+    assert.deepEqual(r.results.map((x) => x.status), ["added", "added"]);
     assert.ok(f.calls.every((c) => c.env === env && c.cmd === "claude"));
-    assert.deepEqual(JSON.parse(readFileSync(s.statePath, "utf8")).mcp.added, ["odd-review", "odd-peers", "codegraph"]);
+    assert.deepEqual(JSON.parse(readFileSync(s.statePath, "utf8")).mcp.added, ["odd-review", "codegraph"]);
   } finally {
     s.cleanup();
   }
@@ -66,23 +65,23 @@ test("existing servers are skipped and never recorded as ours", async () => {
   const s = tmpState();
   try {
     const plan = await planMcp({ runner: f.runner, env, oddRoot: "/o/current" });
-    assert.deepEqual(plan.servers.map((x) => [x.name, x.action]), [["odd-review", "add"], ["odd-peers", "add"], ["codegraph", "skip-existing"]]);
+    assert.deepEqual(plan.servers.map((x) => [x.name, x.action]), [["odd-review", "add"], ["codegraph", "skip-existing"]]);
     assert.deepEqual(mut(f.calls), []);
     await applyMcp({ runner: f.runner, env, oddRoot: "/o/current", statePath: s.statePath });
-    assert.deepEqual(JSON.parse(readFileSync(s.statePath, "utf8")).mcp.added, ["odd-review", "odd-peers"]);
+    assert.deepEqual(JSON.parse(readFileSync(s.statePath, "utf8")).mcp.added, ["odd-review"]);
   } finally {
     s.cleanup();
   }
 });
 
 test("a failing add is reported and the others continue", async () => {
-  const f = fake([], { addFails: "odd-peers" });
+  const f = fake([], { addFails: "codegraph" });
   const s = tmpState();
   try {
     const r = await applyMcp({ runner: f.runner, env, oddRoot: "/o/current", statePath: s.statePath });
-    assert.deepEqual(r.results.map((x) => x.status), ["added", "failed", "added"]);
+    assert.deepEqual(r.results.map((x) => x.status), ["added", "failed"]);
     assert.match(r.results[1].detail, /add failed/);
-    assert.deepEqual(JSON.parse(readFileSync(s.statePath, "utf8")).mcp.added, ["odd-review", "codegraph"]);
+    assert.deepEqual(JSON.parse(readFileSync(s.statePath, "utf8")).mcp.added, ["odd-review"]);
   } finally {
     s.cleanup();
   }
@@ -93,7 +92,7 @@ test("when detection fails the server is reported as unknown and nothing is adde
   const s = tmpState();
   try {
     const r = await applyMcp({ runner: f.runner, env, oddRoot: "/o/current", statePath: s.statePath });
-    assert.deepEqual(r.results.map((x) => x.status), ["unknown", "unknown", "unknown"]);
+    assert.deepEqual(r.results.map((x) => x.status), ["unknown", "unknown"]);
     assert.deepEqual(mut(f.calls), []);
     assert.equal(existsSync(s.statePath), false);
   } finally {
@@ -104,7 +103,7 @@ test("when detection fails the server is reported as unknown and nothing is adde
 test("detection falls back to claude mcp list when get fails ambiguously", async () => {
   const f = fake(["odd-review"], { getFails: true });
   const plan = await planMcp({ runner: f.runner, env, oddRoot: "/o/current" });
-  assert.deepEqual(plan.servers.map((x) => x.action), ["skip-existing", "add", "add"]);
+  assert.deepEqual(plan.servers.map((x) => x.action), ["skip-existing", "add"]);
   assert.ok(f.calls.some((c) => c.args[1] === "list"));
 });
 
@@ -115,8 +114,8 @@ test("removeMcp removes only the servers we recorded, then forgets them", async 
     await applyMcp({ runner: f.runner, env, oddRoot: "/o/current", statePath: s.statePath });
     f.calls.length = 0;
     const r = await removeMcp({ runner: f.runner, env, statePath: s.statePath });
-    assert.deepEqual(mut(f.calls), [["mcp", "remove", "-s", "user", "odd-review"], ["mcp", "remove", "-s", "user", "odd-peers"]]);
-    assert.deepEqual(r.results.map((x) => x.status), ["removed", "removed"]);
+    assert.deepEqual(mut(f.calls), [["mcp", "remove", "-s", "user", "odd-review"]]);
+    assert.deepEqual(r.results.map((x) => x.status), ["removed"]);
     assert.deepEqual([...f.reg], ["codegraph"]);
     assert.deepEqual((await removeMcp({ runner: f.runner, env, statePath: s.statePath })).results, []);
   } finally {
@@ -137,25 +136,106 @@ test("real CLI output: `get` exit 1 with 'No MCP server named' is absent, exit 0
         ? { code: 1, stdout: "", stderr: REAL_MISSING }
         : { code: 9, stdout: "", stderr: "list must not be needed" };
   const plan = await planMcp({ runner, env, oddRoot: "/o/current" });
-  assert.deepEqual(plan.servers.map((x) => x.action), ["add", "add", "skip-existing"]);
+  assert.deepEqual(plan.servers.map((x) => x.action), ["add", "skip-existing"]);
 });
 
 test("real CLI output: list fallback matches the exact name followed by ': ' at line start", async () => {
   const runner: McpRunner = (_c, args) => (args[1] === "get" ? { code: 1, stdout: "", stderr: "boom" } : { code: 0, stdout: REAL_LIST, stderr: "" });
   const plan = await planMcp({ runner, env, oddRoot: "/o/current" });
   // "plugin:odd-claude:review" must not count as "odd-review"; codegraph is listed.
-  assert.deepEqual(plan.servers.map((x) => x.action), ["add", "add", "skip-existing"]);
+  assert.deepEqual(plan.servers.map((x) => x.action), ["add", "skip-existing"]);
 });
 
-test("planMcp registers odd-review, odd-peers and codegraph with argv pointing at existing build outputs", async () => {
+test("planMcp registers odd-review and codegraph (no odd-peers) with argv pointing at existing build outputs", async () => {
   const root = fileURLToPath(new URL("../../", import.meta.url));
   const { runner } = fake([]);
   const plan = await planMcp({ runner, env, oddRoot: root });
-  assert.deepEqual(plan.servers.map((x) => x.name), ["odd-review", "odd-peers", "codegraph"]);
+  assert.deepEqual(plan.servers.map((x) => x.name), ["odd-review", "codegraph"]);
   const argv = (name: string) => plan.servers.find((x) => x.name === name)!.argv;
   const r = root.replace(/\/+$/, "");
   assert.deepEqual(argv("odd-review"), ["mcp", "add", "-s", "user", "odd-review", "--", "node", `${r}/dist/mcp/review-server.js`]);
-  assert.deepEqual(argv("odd-peers"), ["mcp", "add", "-s", "user", "odd-peers", "--", "node", `${r}/dist/mcp/peers-server.js`]);
   assert.deepEqual(argv("codegraph"), ["mcp", "add", "-s", "user", "codegraph", "--", "codegraph", "serve", "--mcp"]);
-  for (const f of ["review-server.js", "peers-server.js"]) assert.ok(existsSync(join(root, "dist", "mcp", f)), f);
+  for (const f of ["review-server.js"]) assert.ok(existsSync(join(root, "dist", "mcp", f)), f);
+});
+
+function stateWith(statePath: string, added: string[]): void {
+  writeFileSync(statePath, JSON.stringify({ version: 1, mcp: { added } }));
+}
+const addedOf = (statePath: string): string[] => JSON.parse(readFileSync(statePath, "utf8")).mcp.added;
+
+test("apply retires an odd-peers we added: removes it from user scope, drops it from the state and reports it", async () => {
+  const f = fake(["odd-peers", "codegraph"]);
+  const s = tmpState();
+  try {
+    stateWith(s.statePath, ["odd-peers", "codegraph"]);
+    const r = await applyMcp({ runner: f.runner, env, oddRoot: "/o/current", statePath: s.statePath });
+    assert.deepEqual(mut(f.calls), [["mcp", "remove", "-s", "user", "odd-peers"], ["mcp", "add", "-s", "user", "odd-review", "--", "node", "/o/current/dist/mcp/review-server.js"]]);
+    assert.deepEqual(r.results.find((x) => x.name === "odd-peers"), { name: "odd-peers", status: "removed", detail: "retired: native cross-session messaging" });
+    assert.deepEqual(addedOf(s.statePath), ["codegraph", "odd-review"]);
+    assert.deepEqual([...f.reg].sort(), ["codegraph", "odd-review"]);
+  } finally {
+    s.cleanup();
+  }
+});
+
+test("apply never touches an odd-peers server that is not recorded as ours", async () => {
+  const f = fake(["odd-peers"]);
+  const s = tmpState();
+  try {
+    stateWith(s.statePath, ["codegraph"]);
+    const r = await applyMcp({ runner: f.runner, env, oddRoot: "/o/current", statePath: s.statePath });
+    assert.ok(!mut(f.calls).some((a) => a[1] === "remove"));
+    assert.ok(!r.results.some((x) => x.name === "odd-peers"));
+    assert.ok(f.reg.has("odd-peers"));
+  } finally {
+    s.cleanup();
+  }
+});
+
+test("a failed odd-peers removal is reported as failed, stays recorded and does not abort the apply", async () => {
+  const f = fake([]);
+  const runner: McpRunner = (cmd, args, o) => (args[1] === "remove" ? { code: 1, stdout: "", stderr: "remove failed" } : f.runner(cmd, args, o));
+  const s = tmpState();
+  try {
+    stateWith(s.statePath, ["odd-peers"]);
+    const r = await applyMcp({ runner, env, oddRoot: "/o/current", statePath: s.statePath });
+    assert.deepEqual(r.results.find((x) => x.name === "odd-peers"), { name: "odd-peers", status: "failed", detail: "remove failed" });
+    assert.ok(r.results.some((x) => x.name === "odd-review" && x.status === "added"));
+    assert.deepEqual(addedOf(s.statePath), ["odd-peers", "odd-review", "codegraph"]);
+  } finally {
+    s.cleanup();
+  }
+});
+
+test("removeMcp (uninstall) still removes an odd-peers recorded by an old state file", async () => {
+  const f = fake(["odd-review", "odd-peers", "codegraph"]);
+  const s = tmpState();
+  try {
+    stateWith(s.statePath, ["odd-review", "odd-peers", "codegraph"]);
+    const r = await removeMcp({ runner: f.runner, env, statePath: s.statePath });
+    assert.deepEqual(mut(f.calls).map((a) => a[4]), ["odd-review", "odd-peers", "codegraph"]);
+    assert.deepEqual(r.results.map((x) => x.status), ["removed", "removed", "removed"]);
+    assert.deepEqual(addedOf(s.statePath), []);
+  } finally {
+    s.cleanup();
+  }
+});
+
+test("apply removes the legacy peers/ directory under the data dir; a missing directory is fine", async () => {
+  const f = fake(["odd-review", "codegraph"]);
+  const s = tmpState();
+  const data = mkdtempSync(join(tmpdir(), "odd-mcp-data-"));
+  try {
+    mkdirSync(join(data, "peers", "mailbox"), { recursive: true });
+    writeFileSync(join(data, "peers", "grants.json"), "{}");
+    writeFileSync(join(data, "keep.json"), "{}");
+    await applyMcp({ runner: f.runner, env, oddRoot: "/o/current", statePath: s.statePath, dataDir: data });
+    assert.equal(existsSync(join(data, "peers")), false);
+    assert.ok(existsSync(join(data, "keep.json")));
+    await applyMcp({ runner: f.runner, env, oddRoot: "/o/current", statePath: s.statePath, dataDir: data });
+    await applyMcp({ runner: f.runner, env, oddRoot: "/o/current", statePath: s.statePath, dataDir: join(data, "absent") });
+  } finally {
+    s.cleanup();
+    rmSync(data, { recursive: true, force: true });
+  }
 });
