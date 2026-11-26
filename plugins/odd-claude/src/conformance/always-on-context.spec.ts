@@ -103,7 +103,7 @@ test("task-size, language, safety and memory blocks carry their ported rules", (
   assert.match(blockText("language"), /Reply language/);
   const s = blockText("safety");
   assert.match(s, /Remote operation authorization/);
-  assert.match(s, /EnterWorktree/);
+  assert.match(s, /isolation: \"worktree\"/);
   const m = blockText("memory");
   assert.match(m, /mem_current_project/);
   assert.match(m, /ambiguous_project/);
