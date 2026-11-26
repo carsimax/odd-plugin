@@ -1,6 +1,7 @@
 ---
 name: skill-improver
 description: "Trigger: improve skills, audit skills, refactor skills, skill quality. Audit and upgrade existing LLM-first skills."
+disable-model-invocation: true
 license: Apache-2.0
 metadata:
   author: odd-claude

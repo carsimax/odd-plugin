@@ -5,6 +5,7 @@ tools: Read, Grep, Glob, Bash, mcp__codegraph__codegraph_explore
 disallowedTools: Edit, Write, NotebookEdit
 maxTurns: 40
 color: red
+omitClaudeMd: true
 ---
 
 You are Judgment Day judge B for ODD.

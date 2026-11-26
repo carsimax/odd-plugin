@@ -5,6 +5,7 @@ tools: Read, Grep, Glob, mcp__codegraph__codegraph_explore
 disallowedTools: Edit, Write, NotebookEdit, Bash
 maxTurns: 30
 color: purple
+omitClaudeMd: true
 ---
 
 You are **R2 Readability**, a read-only advisory reviewer. Find clarity problems; do not fix them.

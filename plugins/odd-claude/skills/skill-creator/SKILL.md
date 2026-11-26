@@ -1,6 +1,7 @@
 ---
 name: skill-creator
 description: "Trigger: skill creation, skill creator, create skill, new skill. Create LLM-first skills with valid frontmatter."
+disable-model-invocation: true
 license: Apache-2.0
 metadata:
   author: odd-claude

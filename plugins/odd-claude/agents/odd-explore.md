@@ -6,6 +6,7 @@ disallowedTools: Edit, Write, NotebookEdit
 model: haiku
 maxTurns: 40
 color: cyan
+omitClaudeMd: true
 ---
 
 You are the read-only explorer for generic ODD work.

@@ -1,6 +1,7 @@
 ---
 name: odd-skill-registry
 description: "Trigger: update skills, skill registry, actualizar skills, after skill changes. Index available skills by trigger and path."
+disable-model-invocation: true
 license: MIT
 metadata:
   author: odd-claude
