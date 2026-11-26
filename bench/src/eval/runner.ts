@@ -4,15 +4,14 @@ import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { tmpdir } from "node:os";
 import { dirname, join, relative, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
 import { runProcess } from "../process.js";
 import { buildClaudeArgv, ODD_OUTPUT_STYLE } from "./argv.js";
 import { ARM_MODE, buildRunEnv, isPluginArm, PLUGIN_ID, prepareIsolation, runDirs, type Arm } from "./isolation.js";
 import { parseStream, type TokenCounts } from "./stream.js";
 import type { EvalTask } from "./tasks.js";
 
-/** odd-skills installer of this repository (bench/dist/eval -> repo root). */
-export const DEFAULT_SKILLS_INSTALLER = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..", "..", "odd-skills", "install.sh");
+/** Error for the skills arm without `--skills-installer` (odd-skills lives in its own repository). */
+export const SKILLS_INSTALLER_REQUIRED = "--skills-installer is required for the skills arm (odd-skills now lives in its own repository, e.g. ../odd-skills/install.sh)";
 export const SKILLS_AGENT = "odd-worker";
 
 export const RUN_SCHEMA = "odd-claude.eval-run/v1";
@@ -39,7 +38,7 @@ export interface RunRecord {
   observed_agents: string[] | null; observed_skills: string[] | null;
   /** odd-skills was installed into the run's private config before claude started (arm skills only). */
   skills_installed: boolean;
-  /** Absolute path of the install.sh used (arm skills only; absent on other arms), to tell which odd-skills version ran. */
+  /** Path of the install.sh used, relative to the cwd of the eval (arm skills only; absent on other arms), to tell which odd-skills version ran. */
   skills_installer?: string;
   /** The plugin ran from a staged copy without its `dependencies` (engram is not installed in the isolated config). */
   plugin_staged: boolean;
@@ -70,7 +69,7 @@ export interface EvalOptions {
   outDir: string;
   /** Set by runEval when `pluginDir` is the staged copy; recorded as `plugin_staged` on plugin-arm records. */
   pluginStaged?: boolean;
-  /** install.sh of odd-skills run for arm `skills` (defaults to the repository's). */
+  /** install.sh of odd-skills run for arm `skills` (required: odd-skills lives in its own repository). */
   skillsInstaller?: string;
   /** Parent environment the run env is derived from (defaults to process.env). */
   baseEnv?: NodeJS.ProcessEnv;
@@ -168,8 +167,9 @@ export async function runOne(run: PlannedRun, o: EvalOptions): Promise<RunRecord
     prepareIsolation(dirs, arm);
     const env = buildRunEnv(o.baseEnv ?? process.env, dirs, arm);
     if (arm === "skills") {
-      const installer = resolve(o.skillsInstaller ?? DEFAULT_SKILLS_INSTALLER);
-      rec.skills_installer = installer;
+      if (o.skillsInstaller === undefined) throw new Error(SKILLS_INSTALLER_REQUIRED);
+      const installer = resolve(o.skillsInstaller);
+      rec.skills_installer = relative(process.cwd(), installer);
       const inst = await runProcess("sh", [installer, "--target", dirs.config], { cwd: root, env, deadlineMs: 60_000 });
       if (inst.code !== 0 || inst.timedOut) throw new Error(`odd-skills install failed (exit ${inst.code}${inst.timedOut ? ", timed out" : ""}): ${inst.stderr.trim().slice(0, 500)}`);
       rec.skills_installed = true;

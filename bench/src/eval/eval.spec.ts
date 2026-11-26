@@ -1,13 +1,13 @@
 import assert from "node:assert/strict";
 import { existsSync, mkdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { isAbsolute, join, relative } from "node:path";
 import { afterEach, describe, test } from "node:test";
 import { chmodSync } from "node:fs";
 import { buildClaudeArgv } from "./argv.js";
 import { main, parseArgs } from "./cli.js";
 import { buildRunEnv, hasAuthEnv, prepareIsolation, runDirs } from "./isolation.js";
 import { renderReport } from "./report.js";
-import { DEFAULT_SKILLS_INSTALLER, planRuns, runEval, runOne, type EvalOptions, type RunRecord } from "./runner.js";
+import { planRuns, runEval, runOne, type EvalOptions, type RunRecord } from "./runner.js";
 import { parseStream } from "./stream.js";
 import { summarize } from "./stats.js";
 import { loadTasks } from "./tasks.js";
@@ -361,8 +361,14 @@ describe("named grade checks", () => {
   });
 });
 
+const markerInstaller = (root: string): string => {
+  const f = join(root, "marker-install.sh");
+  writeFileSync(f, '#!/bin/sh\nset -e\nt="$2"\nmkdir -p "$t/agents" "$t/skills/x"\necho m > "$t/agents/odd-worker.md"\necho m > "$t/agents/marker-agent.md"\necho m > "$t/skills/x/SKILL.md"\necho m > "$t/CLAUDE.md"\necho {} > "$t/settings.json"\n');
+  chmodSync(f, 0o755); return f;
+};
+
 describe("skills arm", () => {
-  const sk = (proof: Record<string, unknown> = {}) => { const a = setup({ proof }); a.opts.arms = ["skills"]; return a; };
+  const sk = (proof: Record<string, unknown> = {}) => { const a = setup({ proof }); a.opts.arms = ["skills"]; a.opts.skillsInstaller = markerInstaller(a.root); return a; };
   test("argv: no plugin-dir, sandbox-only --settings, --setting-sources user", () => {
     const a = buildClaudeArgv({ prompt: "P", pluginDir: "/p", model: "sonnet", maxTurns: 9, maxBudgetUsd: 1, arm: "skills" });
     assert.ok(!a.includes("--plugin-dir") && !a.includes("--bare"));
@@ -417,18 +423,13 @@ describe("skills arm", () => {
   test("dry-run accepts the arm: 6 tasks x 2 arms x 3 trials = 36 runs", async () => {
     const root = tmp(), tasksDir = join(root, "tasks");
     for (let i = 1; i <= 6; i++) makeTask(tasksDir, `task${i}`);
-    let out = ""; const code = await main(["--dry-run", "--tasks-dir", tasksDir, "--arms", "none,skills"], (s) => { out += s; }, {});
+    let out = ""; const code = await main(["--dry-run", "--tasks-dir", tasksDir, "--arms", "none,skills", "--skills-installer", markerInstaller(root)], (s) => { out += s; }, {});
     assert.equal(code, 0); assert.match(out, /6 tasks x 2 arms x 3 trials = 36 runs/); assert.match(out, /arm=skills/);
   });
 });
 
 describe("--skills-installer", () => {
-  const markerInstaller = (root: string): string => {
-    const f = join(root, "marker-install.sh");
-    writeFileSync(f, '#!/bin/sh\nset -e\nt="$2"\nmkdir -p "$t/agents" "$t/skills/x"\necho m > "$t/agents/odd-worker.md"\necho m > "$t/agents/marker-agent.md"\necho m > "$t/skills/x/SKILL.md"\necho m > "$t/CLAUDE.md"\necho {} > "$t/settings.json"\n');
-    chmodSync(f, 0o755); return f;
-  };
-  test("parseArgs: absent -> undefined; relative resolves against cwd; value is absolute", () => {
+  test("parseArgs: absent (non-skills arms) -> undefined; relative resolves against cwd; value is absolute", () => {
     const root = tmp(); const f = markerInstaller(root);
     assert.equal(parseArgs([]).skillsInstaller, undefined);
     assert.equal(parseArgs(["--skills-installer", f]).skillsInstaller, f);
@@ -447,7 +448,7 @@ describe("--skills-installer", () => {
     await assert.rejects(main(["--tasks-dir", tasksDir, "--claude-bin", bin, "--out", outDir, "--arms", "skills", "--skills-installer", join(root, "nope.sh")], () => {}, { PATH: process.env.PATH, ANTHROPIC_API_KEY: "k" }), /--skills-installer: .* does not exist/);
     assert.equal(logOf(log).length, 0); assert.ok(!existsSync(outDir));
   });
-  test("the flag routes the skills arm to the given installer; the record carries its absolute path", async () => {
+  test("the flag routes the skills arm to the given installer; the record carries its path relative to the cwd", async () => {
     const root = tmp(), tasksDir = join(root, "tasks"), log = join(root, "c.log"), outDir = join(root, "o"), inst = markerInstaller(root);
     makeTask(tasksDir, "t1"); const bin = installFakeClaude(root, { logFile: log, stdout: goodStream(), proof: {} });
     const code = await main(["--tasks-dir", tasksDir, "--claude-bin", bin, "--out", outDir, "--trials", "1", "--arms", "none,skills", "--skills-installer", inst], () => {}, { PATH: process.env.PATH, ANTHROPIC_API_KEY: "k" });
@@ -456,24 +457,40 @@ describe("--skills-installer", () => {
     assert.equal(calls.filter((c) => c.installed.agents?.includes("marker-agent.md")).length, 1);
     const rows = readFileSync(join(outDir, "runs.jsonl"), "utf8").trim().split("\n").map((l) => JSON.parse(l));
     const sk = rows.find((r) => r.arm === "skills"), none = rows.find((r) => r.arm === "none");
-    assert.equal(sk.status, "ok", String(sk.error)); assert.equal(sk.skills_installer, inst);
+    assert.equal(sk.status, "ok", String(sk.error)); assert.equal(sk.skills_installer, relative(process.cwd(), inst));
     assert.ok(none.skills_installer === undefined || none.skills_installer === null);
   });
-  test("the installer path is recorded even when the installer fails; default installer recorded when the option is absent", async () => {
+  test("the installer path is recorded relative to the cwd, also when the installer fails", async () => {
     const a = setup(); a.opts.arms = ["skills"];
     const bad = join(a.root, "bad.sh"); writeFileSync(bad, "#!/bin/sh\nexit 3\n"); chmodSync(bad, 0o755);
     a.opts.skillsInstaller = bad;
-    assert.equal((await runOne({ task: a.opts.tasks[0], arm: "skills", trial: 1 }, a.opts) as unknown as Record<string, unknown>).skills_installer, bad);
-    const b = setup(); b.opts.arms = ["skills"];
-    assert.equal((await runOne({ task: b.opts.tasks[0], arm: "skills", trial: 1 }, b.opts) as unknown as Record<string, unknown>).skills_installer, DEFAULT_SKILLS_INSTALLER);
+    const got = (await runOne({ task: a.opts.tasks[0], arm: "skills", trial: 1 }, a.opts) as unknown as Record<string, unknown>).skills_installer;
+    assert.equal(got, relative(process.cwd(), bad)); assert.ok(!isAbsolute(String(got)));
+  });
+  test("runOne: skills arm without an installer is an error record, claude never spawned", async () => {
+    const a = setup(); a.opts.arms = ["skills"];
+    const rec = await runOne({ task: a.opts.tasks[0], arm: "skills", trial: 1 }, a.opts);
+    assert.equal(rec.status, "error"); assert.match(String(rec.error), /--skills-installer is required for the skills arm/); assert.equal(logOf(a.log).length, 0);
+  });
+  test("parseArgs and main: skills arm without the flag fails with the exact message, even on --dry-run, before any run", async () => {
+    const msg = "--skills-installer is required for the skills arm (odd-skills now lives in its own repository, e.g. ../odd-skills/install.sh)";
+    assert.throws(() => parseArgs(["--arms", "none,skills"]), (e: Error) => e.message === msg);
+    const root = tmp(), tasksDir = join(root, "tasks"), log = join(root, "c.log"), outDir = join(root, "o");
+    makeTask(tasksDir, "t1"); const bin = installFakeClaude(root, { logFile: log });
+    await assert.rejects(main(["--dry-run", "--tasks-dir", tasksDir, "--arms", "none,skills"], () => {}, {}), (e: Error) => e.message === msg);
+    await assert.rejects(main(["--tasks-dir", tasksDir, "--claude-bin", bin, "--out", outDir, "--arms", "skills"], () => {}, { PATH: process.env.PATH, ANTHROPIC_API_KEY: "k" }), (e: Error) => e.message === msg);
+    assert.equal(logOf(log).length, 0); assert.ok(!existsSync(outDir));
+  });
+  test("non-skills arms need no flag", async () => {
+    assert.doesNotThrow(() => parseArgs(["--arms", "none,coord-on,coord-off"]));
+    const root = tmp(), tasksDir = join(root, "tasks"); makeTask(tasksDir, "t1");
+    const code = await main(["--dry-run", "--tasks-dir", tasksDir, "--arms", "none,coord-off"], () => {}, {}); assert.equal(code, 0);
   });
   test("dry-run prints the installer in the plan header only when the skills arm is selected", async () => {
     const root = tmp(), tasksDir = join(root, "tasks"), inst = markerInstaller(root);
     makeTask(tasksDir, "t1");
     let out = ""; await main(["--dry-run", "--tasks-dir", tasksDir, "--arms", "none,skills", "--skills-installer", inst], (s) => { out += s; }, {});
     assert.match(out.split("\n")[1], new RegExp(`^Skills installer: ${inst.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`));
-    out = ""; await main(["--dry-run", "--tasks-dir", tasksDir, "--arms", "none,skills"], (s) => { out += s; }, {});
-    assert.ok(out.includes(`Skills installer: ${DEFAULT_SKILLS_INSTALLER}`));
     out = ""; await main(["--dry-run", "--tasks-dir", tasksDir, "--arms", "none", "--skills-installer", inst], (s) => { out += s; }, {});
     assert.ok(!out.includes("Skills installer"));
   });

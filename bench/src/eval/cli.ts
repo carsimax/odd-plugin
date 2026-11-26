@@ -1,10 +1,10 @@
-// Dev-only CLI: `npm run eval -- [--tasks a,b] [--arms none,coord-on,coord-off,skills] [--model opus] [--trials 3] [--max-budget-usd 2] [--max-turns 60] [--total-budget-usd 70] [--skills-installer <path>] [--out <dir>] [--dry-run]`
+// Dev-only CLI: `npm run eval -- [--tasks a,b] [--arms none,coord-on,coord-off,skills] [--model opus] [--trials 3] [--max-budget-usd 2] [--max-turns 60] [--total-budget-usd 70] [--skills-installer <path> (required with the skills arm)] [--out <dir>] [--dry-run]`
 import { existsSync, mkdtempSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { ARMS, DEFAULT_ARMS, hasAuthEnv, isPluginArm, type Arm } from "./isolation.js";
-import { DEFAULT_SKILLS_INSTALLER, planRuns, runEval } from "./runner.js";
+import { planRuns, SKILLS_INSTALLER_REQUIRED, runEval } from "./runner.js";
 import { renderReport } from "./report.js";
 import { loadTasks } from "./tasks.js";
 
@@ -37,6 +37,7 @@ export function parseArgs(argv: readonly string[]): CliArgs {
     }
   }
   if (a.arms.length === 0) throw new Error("--arms needs at least one arm");
+  if (a.arms.includes("skills") && a.skillsInstaller === undefined) throw new Error(SKILLS_INSTALLER_REQUIRED);
   return a;
 }
 
@@ -47,7 +48,7 @@ export async function main(argv: readonly string[], write: (s: string) => void =
   const worst = plan.length * a.maxBudgetUsd;
   if (a.dryRun) {
     write(`Plan: ${tasks.length} tasks x ${a.arms.length} arms x ${a.trials} trials = ${plan.length} runs\n`);
-    if (a.arms.includes("skills")) write(`Skills installer: ${a.skillsInstaller ?? DEFAULT_SKILLS_INSTALLER}\n`);
+    if (a.arms.includes("skills")) write(`Skills installer: ${a.skillsInstaller}\n`);
     for (const [i, r] of plan.entries()) write(`${String(i + 1).padStart(3)}. ${r.task.id} arm=${r.arm} trial=${r.trial}\n`);
     write(`Per-run cap ${a.maxBudgetUsd} USD (worst case ${worst} USD), total budget guard ${a.totalBudgetUsd} USD${worst > a.totalBudgetUsd ? " (will stop early)" : ""}. Dry run: nothing executed.\n`);
     return 0;
