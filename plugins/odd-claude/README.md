@@ -2,6 +2,15 @@
 
 A global Claude Code harness (installed with a TUI, no longer a plugin) that ports the ODD harness of gentle-shell (MIT) <!-- odd-check: allow --> to Claude Code. **v2.0** adds native receipt-driven review (RDD) on top of **v1.0** (the parity release): the ODD persona, orchestrator rules, agents, skills, native integrations, advisory review and lifecycle hooks. Apart from the RDD Stop settle reminder, which can block only when you turn RDD on (it is off by default), the plugin ships **no deny/ask/block hook and no `permissions.deny` by default** (user decision, v0.5, amended for v2): its hooks only add context. Coordinator mode and the admission rules are prompt text, not enforcement; otherwise the only enforcement is Claude Code's native permission system (see [Permission modes](#permission-modes)). The plugin collects no data and sends nothing anywhere.
 
+## What's new in 8.2.0
+
+Not breaking. Enforcement stays opt-in (`odd/tasks/enforcement-opt-in.md`):
+
+- Advisory PreToolUse notices, never blocking: a coordinator write (`Edit`, `Write`, `NotebookEdit`) from the main thread while Coordinator mode is ON, and a subagent `git commit`, `git push`, `gh pr create` or `gh pr merge`. The subagent match is lexical.
+- Opt-in `/odd-setup deny-profile install|remove`: 14 `permissions.deny` rules (secrets and `git push`/`gh pr merge`). You run it, it is reversible (`remove` deletes only the rules it added, `restore` still works), and the installer never writes it. Limits: `Read` deny is best-effort for Grep/Glob and Bash file commands, and `Bash(...)` rules are not a security boundary.
+- Agent frontmatter is unchanged: Claude Code has no documented way to restrict Bash partially in subagent frontmatter, and `odd-verify` needs Bash for its probes. The documented route is the deny profile.
+- Specs for the `StopFailure` and `SessionEnd` handlers; the README now matches the code on the statusline (the installer still installs it by default).
+
 ## What's new in 8.1.1
 
 Not breaking. Two odd-4r-review fixes found in the first live run of the workflow:
