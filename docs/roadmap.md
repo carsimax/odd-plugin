@@ -28,7 +28,7 @@ Spikes and decisions from [open-questions.md](research/open-questions.md). Each 
 | Q4 | RDD: reuse the Go review binary, reimplement, or ship v1 without native review? **Decided 2026-11-18: "v1 sin RDD nativo; review con agentes"** (native RDD → v2; v1 is option C with agent-based review, see below) | **user decision** | Phase 4 shaped as advisory agent review; native RDD items moved to Phase 8 |
 | Q5 | Inter-session messaging: `$.store` (mods) vs MCP channels (preview)? **Decided 2026-11-18: inter-session messaging → v2** | **user decision** | Phase 8 / v2 (R07); nothing else |
 | Q6 | How are plugin MCP tools (engram, codegraph) named and granted in plugin agent `tools:`? **Yes**: `mcp__plugin_<plugin>_<server>__<tool>` in `tools:` | spike | Phase 1 doctor/engram dependency; Phase 2 agents A01–A06, R13; Phase 8 / v2 review MCP (R29) |
-| Q7 | Exact mod types for this build (generated `.d.ts`)? **Answered**: types written to `<plugin>/.claude-plugin/types/` on the first interactive `--plugin-dir` load | spike (only if Q1 = yes) | Phase 5; any mod path |
+| Q7 | Exact mod types for this build (generated `.d.ts`)? **Answered**: types written to `<plugin>/.claude-plugin/types/` on the first interactive `--plugin-dir` load (historical finding: the plugin distribution was removed, so this path no longer applies to odd-claude) | spike (only if Q1 = yes) | Phase 5; any mod path |
 
 ### Q4: decided (2026-11-18)
 

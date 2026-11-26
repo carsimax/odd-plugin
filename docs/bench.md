@@ -262,3 +262,19 @@ subjects, except the events a subject declares for its steps (prompts, commands,
 
 - First recorded baseline (K=3, odd 2.0.0 vs oracle 4.6.0): [`docs/bench/baseline-2026-11-20/`](bench/baseline-2026-11-20/README.md).
 - What it says about S2 ("as efficient as upstream"), the cells that are worse and the proposed follow-ups: [`docs/bench/findings.md`](bench/findings.md).
+
+## Eval arms: odd-claude installed (since T10)
+
+The paid eval (`npm run eval`, details in `docs/eval/README.md`) no longer loads odd-claude with `--plugin-dir`: the plugin distribution was removed, so the
+`coord-on` / `coord-off` arms measure what is distributed. Arm names, `--arms` values and the delegation modes (`full` / `organic`) are unchanged, so historical
+reports stay comparable by arm name.
+
+- Per run, inside the run's isolated dirs, the runner installs odd-claude with the real installer from this checkout: `runFullInstall` from
+  `plugins/odd-claude/dist/installer/orchestrate.js` with `source = plugins/odd-claude`, `CLAUDE_CONFIG_DIR` and `ODD_CLAUDE_HOME` inside the run root, `HOME` = the run's private home.
+  Dependencies (Engram, codegraph), the status line and the plugin migration are off. claude.ai sync keeps the installer default (disabled; there is no login in the private config) and the
+  `@builtin` plugins are kept (`--keep-builtin-plugins`), so the arm differs from `none` by odd-claude only. The installer's `claude mcp` calls run through `--claude-bin` with the same private env.
+- `claude` then starts with `--setting-sources user` (like `skills`), so the installed `settings.json` (hooks, output style `odd`) loads; `--settings` carries only the sandbox. No `--plugin-dir`, no `CLAUDE_PLUGIN_DATA`.
+- The delegation mode is seeded in `<ODD_CLAUDE_HOME>/data/delegation.json`. Proof: `invalid` unless init `agents` include `odd-worker`, the output style is `odd` and the observed mode matches; any arm that shows `odd-claude@inline` is `invalid`.
+- Records: `plugin_staged` is replaced by `odd_installed` (schema stays `odd-claude.eval-run/v1`).
+- Prerequisite: the installer source (`plugins/odd-claude/package.json` and `dist/installer/orchestrate.js`); otherwise the eval stops with `odd-claude installer source not found at <dir> (missing ...)`.
+- Specs use a fake installer source and a fake `claude`; one spec runs the real installer from this checkout into a temp dir. No spec calls the model.

@@ -3,7 +3,8 @@ import { existsSync, mkdtempSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { ARMS, DEFAULT_ARMS, hasAuthEnv, isPluginArm, type Arm } from "./isolation.js";
+import { installerSourceError } from "./install.js";
+import { ARMS, DEFAULT_ARMS, hasAuthEnv, isInstalledArm, type Arm } from "./isolation.js";
 import { planRuns, SKILLS_INSTALLER_REQUIRED, runEval } from "./runner.js";
 import { renderReport } from "./report.js";
 import { loadTasks } from "./tasks.js";
@@ -53,13 +54,14 @@ export async function main(argv: readonly string[], write: (s: string) => void =
     write(`Per-run cap ${a.maxBudgetUsd} USD (worst case ${worst} USD), total budget guard ${a.totalBudgetUsd} USD${worst > a.totalBudgetUsd ? " (will stop early)" : ""}. Dry run: nothing executed.\n`);
     return 0;
   }
-  const pluginDir = join(REPO_ROOT, "plugins", "odd-claude");
-  if (a.arms.some(isPluginArm) && !existsSync(join(pluginDir, ".claude-plugin", "plugin.json"))) throw new Error(`plugin not found at ${pluginDir}`);
+  const sourceDir = join(REPO_ROOT, "plugins", "odd-claude");
+  const sourceError = a.arms.some(isInstalledArm) ? installerSourceError(sourceDir) : null;
+  if (sourceError) throw new Error(sourceError);
   if (!a.skipAuthCheck && !hasAuthEnv(env)) throw new Error("no credential in the environment: runs use a private CLAUDE_CONFIG_DIR, so your stored login is not available. Set ANTHROPIC_API_KEY or CLAUDE_CODE_OAUTH_TOKEN (see `claude setup-token`), or pass --skip-auth-check.");
   const outDir = a.out ?? mkdtempSync(join(tmpdir(), "odd-eval-out-"));
   write(`Output: ${outDir}\n`);
   const outcome = await runEval({
-    tasks, arms: a.arms, trials: a.trials, pluginDir, claudeBin: a.claudeBin, model: a.model, maxBudgetUsd: a.maxBudgetUsd, maxTurns: a.maxTurns, totalBudgetUsd: a.totalBudgetUsd, outDir, baseEnv: env, ...(a.skillsInstaller !== undefined ? { skillsInstaller: a.skillsInstaller } : {}), keepWorkspaces: a.keepWorkspaces,
+    tasks, arms: a.arms, trials: a.trials, sourceDir, claudeBin: a.claudeBin, model: a.model, maxBudgetUsd: a.maxBudgetUsd, maxTurns: a.maxTurns, totalBudgetUsd: a.totalBudgetUsd, outDir, baseEnv: env, ...(a.skillsInstaller !== undefined ? { skillsInstaller: a.skillsInstaller } : {}), keepWorkspaces: a.keepWorkspaces,
     onRecord: (r) => write(`${r.run_id}: ${r.status} passed=${r.passed} cost=${r.cost_usd ?? "n/a"} subagents=${r.subagents}\n`),
   });
   writeFileSync(join(outDir, "report.md"), renderReport(outcome.records, outcome));

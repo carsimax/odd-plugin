@@ -1,12 +1,13 @@
 // One eval run = fresh workspace + isolated Claude Code state + `claude -p` + hidden-test grading; `runEval` loops with a global budget guard.
-import { appendFileSync, cpSync, existsSync, writeFileSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
+import { appendFileSync, cpSync, writeFileSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { tmpdir } from "node:os";
-import { dirname, join, relative, resolve } from "node:path";
+import { join, relative, resolve } from "node:path";
 import { runProcess } from "../process.js";
 import { buildClaudeArgv, ODD_OUTPUT_STYLE } from "./argv.js";
-import { ARM_MODE, buildRunEnv, isPluginArm, PLUGIN_ID, prepareIsolation, runDirs, type Arm } from "./isolation.js";
+import { installOdd, type InstallContext } from "./install.js";
+import { ARM_MODE, buildRunEnv, isInstalledArm, LEGACY_PLUGIN_ID, prepareIsolation, runDirs, type Arm } from "./isolation.js";
 import { parseStream, type TokenCounts } from "./stream.js";
 import type { EvalTask } from "./tasks.js";
 
@@ -40,8 +41,8 @@ export interface RunRecord {
   skills_installed: boolean;
   /** Path of the install.sh used, relative to the cwd of the eval (arm skills only; absent on other arms), to tell which odd-skills version ran. */
   skills_installer?: string;
-  /** The plugin ran from a staged copy without its `dependencies` (engram is not installed in the isolated config). */
-  plugin_staged: boolean;
+  /** odd-claude was installed into the run's private config by the real installer before claude started (arms coord-on / coord-off). Replaces the former `plugin_staged`. */
+  odd_installed: boolean;
   /** The run's argv enabled the native Bash sandbox (`--settings` `sandbox`), identical for every arm. */
   sandboxed: boolean;
   /** Entries of the result message's `permission_denials`; null when absent. */
@@ -60,15 +61,16 @@ export interface EvalOptions {
   tasks: EvalTask[];
   arms: readonly Arm[];
   trials: number;
-  pluginDir: string;
+  /** The plugins/odd-claude checkout the installer installs from (`--source`). */
+  sourceDir: string;
   claudeBin: string;
   model: string;
   maxBudgetUsd: number;
   maxTurns: number;
   totalBudgetUsd: number;
   outDir: string;
-  /** Set by runEval when `pluginDir` is the staged copy; recorded as `plugin_staged` on plugin-arm records. */
-  pluginStaged?: boolean;
+  /** Installs odd-claude into a run's private dirs; defaults to the real installer (`installOdd`). Specs inject a recorder. */
+  installOdd?: (ctx: InstallContext) => Promise<void>;
   /** install.sh of odd-skills run for arm `skills` (required: odd-skills lives in its own repository). */
   skillsInstaller?: string;
   /** Parent environment the run env is derived from (defaults to process.env). */
@@ -119,36 +121,21 @@ function git(args: string[], cwd: string, env: NodeJS.ProcessEnv): void {
 
 /** Differences between what the arm promises and what the init/hook messages showed. */
 export function proofMismatches(arm: Arm, r: Pick<RunRecord, "observed_plugins" | "observed_output_style" | "observed_delegation"> & { observed_agents?: string[] | null }): string[] {
-  const loaded = r.observed_plugins?.includes(PLUGIN_ID) ?? false, out: string[] = [];
+  const legacy = r.observed_plugins?.includes(LEGACY_PLUGIN_ID) ?? false, out: string[] = [];
   const worker = r.observed_agents?.includes(SKILLS_AGENT) ?? false;
+  if (legacy) out.push(`arm ${arm} loaded the legacy plugin ${LEGACY_PLUGIN_ID}`);
   if (arm === "none") {
-    if (loaded) out.push(`arm none loaded ${PLUGIN_ID}`);
     if (worker) out.push(`arm none lists the ${SKILLS_AGENT} agent`);
     return out;
   }
   if (arm === "skills") {
     if (!worker) out.push(`init agents ${JSON.stringify(r.observed_agents)} lack ${SKILLS_AGENT}`);
-    if (loaded) out.push(`arm skills loaded ${PLUGIN_ID}`);
     return out;
   }
-  if (!loaded) out.push(`init plugins ${JSON.stringify(r.observed_plugins)} lack ${PLUGIN_ID}`);
+  if (!worker) out.push(`init agents ${JSON.stringify(r.observed_agents)} lack ${SKILLS_AGENT} (odd-claude not installed)`);
   if (r.observed_output_style !== ODD_OUTPUT_STYLE) out.push(`output style ${JSON.stringify(r.observed_output_style)}, expected "${ODD_OUTPUT_STYLE}"`);
   if (r.observed_delegation !== ARM_MODE[arm]) out.push(`delegation mode ${JSON.stringify(r.observed_delegation)}, expected "${ARM_MODE[arm]}"`);
   return out;
-}
-
-/** Copy of the plugin in a fresh temp dir with `dependencies` removed from its manifest: the isolated config has no engram, and Claude Code disables a plugin with an unsatisfied dependency. */
-export function stagePlugin(pluginDir: string): string {
-  const root = mkdtempSync(join(tmpdir(), "odd-eval-plugin-"));
-  try {
-    const dest = join(root, "odd-claude");
-    cpSync(pluginDir, dest, { recursive: true });
-    const manifest = join(dest, ".claude-plugin", "plugin.json");
-    const json = JSON.parse(readFileSync(manifest, "utf8")) as Record<string, unknown>;
-    delete json.dependencies;
-    writeFileSync(manifest, JSON.stringify(json, null, 2) + "\n");
-    return dest;
-  } catch (e) { rmSync(root, { recursive: true, force: true }); throw e; }
 }
 
 export async function runOne(run: PlannedRun, o: EvalOptions): Promise<RunRecord> {
@@ -159,7 +146,7 @@ export async function runOne(run: PlannedRun, o: EvalOptions): Promise<RunRecord
     schema: RUN_SCHEMA, run_id: `${task.id}.${arm}.${trial}`, task: task.id, kind: task.kind, size: task.size, arm, trial, model: o.model,
     started_at: started.toISOString(), status: "ok", error: null, exit_code: null, timed_out: false, wall_ms: 0,
     cost_usd: null, tokens: null, tokens_by_model: null, num_turns: null, duration_ms: null, subagents: 0,
-    is_error: null, result_subtype: null, result_found: false, observed_delegation: null, observed_plugins: null, observed_output_style: null, plugin_staged: isPluginArm(arm) && o.pluginStaged === true, observed_agents: null, observed_skills: null, skills_installed: false, sandboxed: true, permission_denials: null, passed: null, grade_exit_code: null, visible_tests_modified: null,
+    is_error: null, result_subtype: null, result_found: false, observed_delegation: null, observed_plugins: null, observed_output_style: null, observed_agents: null, observed_skills: null, skills_installed: false, odd_installed: false, sandboxed: true, permission_denials: null, passed: null, grade_exit_code: null, visible_tests_modified: null,
     ...(task.difficulty !== undefined ? { difficulty: task.difficulty } : {}),
   };
   try {
@@ -174,13 +161,17 @@ export async function runOne(run: PlannedRun, o: EvalOptions): Promise<RunRecord
       if (inst.code !== 0 || inst.timedOut) throw new Error(`odd-skills install failed (exit ${inst.code}${inst.timedOut ? ", timed out" : ""}): ${inst.stderr.trim().slice(0, 500)}`);
       rec.skills_installed = true;
     }
+    if (isInstalledArm(arm)) {
+      await (o.installOdd ?? installOdd)({ sourceDir: o.sourceDir, dirs, env, claudeBin: o.claudeBin });
+      rec.odd_installed = true;
+    }
     cpSync(join(task.dir, "repo"), ws, { recursive: true });
     git(["init", "-q", "-b", "main"], ws, env);
     git(["add", "-A"], ws, env);
     git(["commit", "-q", "-m", "eval: initial"], ws, env);
     const before = hashTests(ws);
 
-    const argv = buildClaudeArgv({ prompt: task.prompt, arm, pluginDir: o.pluginDir, model: o.model, maxTurns: o.maxTurns, maxBudgetUsd: o.maxBudgetUsd, extraTools: task.allowed_tools });
+    const argv = buildClaudeArgv({ prompt: task.prompt, arm, model: o.model, maxTurns: o.maxTurns, maxBudgetUsd: o.maxBudgetUsd, extraTools: task.allowed_tools });
     const t0 = performance.now();
     const res = await runProcess(o.claudeBin, argv, { cwd: ws, env, deadlineMs: task.timeout_s * 1000 });
     rec.wall_ms = Math.round(performance.now() - t0);
@@ -224,16 +215,7 @@ export async function runOne(run: PlannedRun, o: EvalOptions): Promise<RunRecord
   return rec;
 }
 
-export async function runEval(opts: EvalOptions): Promise<EvalOutcome> {
-  const staged = opts.arms.some(isPluginArm) ? stagePlugin(opts.pluginDir) : null;
-  try {
-    return await runEvalStaged(staged ? { ...opts, pluginDir: staged, pluginStaged: true } : opts);
-  } finally {
-    if (staged) rmSync(dirname(staged), { recursive: true, force: true });
-  }
-}
-
-async function runEvalStaged(o: EvalOptions): Promise<EvalOutcome> {
+export async function runEval(o: EvalOptions): Promise<EvalOutcome> {
   mkdirSync(o.outDir, { recursive: true });
   const file = join(o.outDir, "runs.jsonl");
   const plan = planRuns(o.tasks, o.arms, o.trials);

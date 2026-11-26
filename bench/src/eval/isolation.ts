@@ -7,20 +7,18 @@ export const ARMS: readonly Arm[] = ["none", "coord-on", "coord-off", "skills"];
 /** Arms run when `--arms` is not given (the plugin eval); `skills` is opt-in. */
 export const DEFAULT_ARMS: readonly Arm[] = ["none", "coord-on", "coord-off"];
 export const ARM_MODE: Record<Arm, "full" | "organic" | null> = { none: null, "coord-on": "full", "coord-off": "organic", skills: null };
-/** Arms that load the odd-claude plugin with --plugin-dir. */
-export const isPluginArm = (arm: Arm): boolean => arm === "coord-on" || arm === "coord-off";
+/** Arms that run odd-claude installed by the real installer into the run's private config dir (the layout that is distributed). */
+export const isInstalledArm = (arm: Arm): boolean => arm === "coord-on" || arm === "coord-off";
 
-/** Plugin manifest name of plugins/odd-claude, loaded with --plugin-dir as `<name>@inline`. */
-export const PLUGIN_ID = "odd-claude@inline";
-/** Documented data dir name: the plugin id with every character other than a letter, digit, `_` or `-` replaced by `-`. */
-export const pluginDataName = (id: string): string => id.replace(/[^A-Za-z0-9_-]/g, "-");
+/** Id the legacy `--plugin-dir` arm loaded odd-claude under; no arm may show it any more (the plugin distribution was removed). */
+export const LEGACY_PLUGIN_ID = "odd-claude@inline";
 
-export interface RunDirs { root: string; home: string; config: string; pluginData: string }
+export interface RunDirs { root: string; home: string; config: string; /** ODD_CLAUDE_HOME of the installed arms. */ oddHome: string; /** `<oddHome>/data`: where the runtime keeps `delegation.json`. */ dataDir: string }
 
 /** Layout of one run's private directories; everything lives under `root`. */
 export function runDirs(root: string): RunDirs {
-  const config = join(root, "claude-config");
-  return { root, home: join(root, "home"), config, pluginData: join(config, "plugins", "data", pluginDataName(PLUGIN_ID)) };
+  const oddHome = join(root, "odd-claude");
+  return { root, home: join(root, "home"), config: join(root, "claude-config"), oddHome, dataDir: join(oddHome, "data") };
 }
 
 /** Variables that carry credentials or provider routing; the only parent variables a run inherits besides PATH, TMPDIR and proxy/CA settings. */
@@ -32,7 +30,7 @@ export function hasAuthEnv(base: NodeJS.ProcessEnv): boolean {
   return Boolean(base.ANTHROPIC_API_KEY || base.ANTHROPIC_AUTH_TOKEN || base.CLAUDE_CODE_OAUTH_TOKEN || base.CLAUDE_CODE_USE_BEDROCK || base.CLAUDE_CODE_USE_VERTEX || base.CLAUDE_CODE_USE_FOUNDRY);
 }
 
-/** Environment built from scratch: private HOME/config/XDG/plugin-data, no inherited CLAUDE_* location variables, fixed git identity. */
+/** Environment built from scratch: private HOME/config/XDG/ODD_CLAUDE_HOME, no inherited CLAUDE_* location variables, fixed git identity. */
 export function buildRunEnv(base: NodeJS.ProcessEnv, dirs: RunDirs, arm: Arm): NodeJS.ProcessEnv {
   const env: NodeJS.ProcessEnv = {
     PATH: base.PATH ?? "/usr/bin:/bin", TMPDIR: base.TMPDIR, LANG: "C",
@@ -42,17 +40,17 @@ export function buildRunEnv(base: NodeJS.ProcessEnv, dirs: RunDirs, arm: Arm): N
     GIT_AUTHOR_NAME: "odd-eval", GIT_AUTHOR_EMAIL: "eval@example.invalid", GIT_COMMITTER_NAME: "odd-eval", GIT_COMMITTER_EMAIL: "eval@example.invalid",
   };
   for (const [k, v] of Object.entries(base)) if (v !== undefined && INHERIT.test(k) && !NEVER.test(k)) env[k] = v;
-  // Belt and braces: Claude Code exports its own value to hooks; setting ours points at the same private dir if it honors the variable.
-  if (isPluginArm(arm)) env.CLAUDE_PLUGIN_DATA = dirs.pluginData;
+  // The installed runtime (hooks, MCP servers) resolves its data dir from ODD_CLAUDE_HOME; the installer reads it too.
+  if (isInstalledArm(arm)) env.ODD_CLAUDE_HOME = dirs.oddHome;
   return env;
 }
 
-/** Creates the run's private dirs and, for a coordinator arm, writes the plugin `delegation` state in the plugin state format
- *  (plugins/odd-claude/src/lib/state.ts writePluginState: `<dataDir>/delegation.json` = {version:1, sessionId:"delegation", data:{mode}}). */
+/** Creates the run's private dirs and, for a coordinator arm, writes the `delegation` state in the runtime state format
+ *  (plugins/odd-claude/src/lib/state.ts writePluginState: `<ODD_CLAUDE_HOME>/data/delegation.json` = {version:1, sessionId:"delegation", data:{mode}}). */
 export function prepareIsolation(dirs: RunDirs, arm: Arm): void {
   for (const d of [dirs.home, dirs.config, join(dirs.root, "xdg", "config"), join(dirs.root, "xdg", "data"), join(dirs.root, "xdg", "cache"), join(dirs.root, "xdg", "state")]) mkdirSync(d, { recursive: true });
   const mode = ARM_MODE[arm];
   if (mode === null) return;
-  mkdirSync(dirs.pluginData, { recursive: true });
-  writeFileSync(join(dirs.pluginData, "delegation.json"), JSON.stringify({ version: 1, sessionId: "delegation", data: { mode } }, null, 2) + "\n");
+  mkdirSync(dirs.dataDir, { recursive: true });
+  writeFileSync(join(dirs.dataDir, "delegation.json"), JSON.stringify({ version: 1, sessionId: "delegation", data: { mode } }, null, 2) + "\n");
 }

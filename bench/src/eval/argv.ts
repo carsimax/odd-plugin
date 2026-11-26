@@ -1,6 +1,7 @@
-import { isPluginArm, type Arm } from "./isolation.js";
+import { isInstalledArm, type Arm } from "./isolation.js";
 
-export const ODD_OUTPUT_STYLE = "odd-claude:odd";
+/** Output style the installer sets in the private settings.json (the installed arms load it through `--setting-sources user`). */
+export const ODD_OUTPUT_STYLE = "odd";
 export const DEFAULT_TOOLS = ["Agent", "Read", "Edit", "Write", "Glob", "Grep", "Bash"];
 
 /**
@@ -10,19 +11,17 @@ export const DEFAULT_TOOLS = ["Agent", "Read", "Edit", "Write", "Glob", "Grep", 
  */
 export const SANDBOX_SETTINGS = { enabled: true, autoAllowBashIfSandboxed: true, allowUnsandboxedCommands: false, failIfUnavailable: true } as const;
 
-export interface ArgvInput { prompt: string; arm: Arm; pluginDir: string; model: string; maxTurns: number; maxBudgetUsd: number; extraTools?: readonly string[] }
+export interface ArgvInput { prompt: string; arm: Arm; model: string; maxTurns: number; maxBudgetUsd: number; extraTools?: readonly string[] }
 
-/** Argv of one `claude -p` run. Never `--bare` (plugin hooks must run) and never a permission-bypass flag. */
+/** Argv of one `claude -p` run. Never `--bare` (the installed hooks must run) and never a permission-bypass flag. */
 export function buildClaudeArgv(i: ArgvInput): string[] {
   const tools = [...DEFAULT_TOOLS, ...(i.extraTools ?? [])].join(",");
   const argv = [
     "-p", "--output-format", "stream-json", "--verbose", "--model", i.model, "--permission-mode", "dontAsk", "--allowedTools", tools,
-    "--max-turns", String(i.maxTurns), "--max-budget-usd", String(i.maxBudgetUsd), "--no-session-persistence", "--setting-sources", i.arm === "skills" ? "user" : "",
+    "--max-turns", String(i.maxTurns), "--max-budget-usd", String(i.maxBudgetUsd), "--no-session-persistence", "--setting-sources", i.arm === "skills" || isInstalledArm(i.arm) ? "user" : "",
   ];
-  // One --settings argument for every arm: the sandbox, plus the odd output style for plugin arms (it is not active under --setting-sources "" unless set explicitly).
-  const settings: Record<string, unknown> = isPluginArm(i.arm) ? { outputStyle: ODD_OUTPUT_STYLE, sandbox: SANDBOX_SETTINGS } : { sandbox: SANDBOX_SETTINGS };
-  if (isPluginArm(i.arm)) argv.push("--plugin-dir", i.pluginDir);
-  argv.push("--settings", JSON.stringify(settings));
+  // One --settings argument, the sandbox, for every arm. The installed arms read the rest (hooks, output style) from the private settings.json the installer wrote.
+  argv.push("--settings", JSON.stringify({ sandbox: SANDBOX_SETTINGS }));
   argv.push(i.prompt);
   return argv;
 }
