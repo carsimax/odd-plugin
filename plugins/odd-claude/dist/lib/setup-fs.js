@@ -1,7 +1,8 @@
 // Write path of /odd-setup. Real filesystem; callers (tests/CLI) pick the paths.
 // Order on apply: validate/plan -> backup original (atomic) -> record state -> atomic write.
 import { accessSync, constants, existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, realpathSync, statSync } from "node:fs";
-import { join } from "node:path";
+import { basename, join } from "node:path";
+import { denyRulesIn, planDenyProfile } from "./deny-profile.js";
 import { atomicWriteFile, readPluginState, writePluginState } from "./state.js";
 import { BACKUP_NAME_RE, NO_CHANGES, backupFileName, planModeChange, unifiedDiff, } from "./setup.js";
 function readCurrent(path) {
@@ -67,7 +68,7 @@ export function fileMode(path) {
     return existsSync(path) ? statSync(path).mode & 0o7777 : undefined;
 }
 /** Shared tail of apply/restore: backup current, record state, atomic write keeping the mode. */
-function commit(opts, target, content, diff, what) {
+function commit(opts, target, content, diff, what, afterWrite) {
     let backupPath;
     try {
         const cur = readCurrent(target);
@@ -76,6 +77,20 @@ function commit(opts, target, content, diff, what) {
             record(opts.dataDir, backupPath);
         }
         atomicWriteFile(target, content, fileMode(target));
+        if (afterWrite) {
+            try {
+                afterWrite();
+            }
+            catch (err) {
+                const undo = backupPath ? `run \`--restore ${basename(backupPath)} --apply\` to undo it` : "undo it by hand (there was no previous file to restore)";
+                return {
+                    status: "error",
+                    diff,
+                    error: `${what}: settings were written, but ownership of the deny profile rules was not recorded (${err.message}); fix the data dir and ${undo}, or remove the rules by hand`,
+                    backupPath,
+                };
+            }
+        }
         return { status: "applied", diff, backupPath };
     }
     catch (err) {
@@ -160,5 +175,58 @@ export function applyRestore(opts) {
     const nw = notWritable(t.path);
     if (nw)
         return { status: "error", diff: plan.diff, error: nw };
-    return commit(opts, t.path, plan.content, plan.diff, "restore");
+    const restored = new Set(denyRulesIn(plan.content.toString("utf8")));
+    return commit(opts, t.path, plan.content, plan.diff, "restore", () => {
+        const owned = readDenyOwned(opts.dataDir);
+        const kept = owned.filter((r) => restored.has(r));
+        if (kept.length !== owned.length)
+            recordDenyOwned(opts.dataDir, kept);
+    });
+}
+const DENY_OWNED_KEY = "denyProfileOwned";
+/** Rules a previous `deny-profile install` recorded as added by it (empty when none). */
+export function readDenyOwned(dataDir) {
+    const v = readPluginState("setup", { dataDir })[DENY_OWNED_KEY];
+    return Array.isArray(v) ? v.filter((r) => typeof r === "string") : [];
+}
+function readSettingsText(path) {
+    const t = resolveTarget(path);
+    if (!t.ok)
+        return t;
+    if (lstatDangling(path, t.path))
+        return { ok: false, error: `${path} is a dangling symlink` };
+    try {
+        const cur = readCurrent(t.path);
+        return { ok: true, target: t.path, text: cur === null ? null : cur.toString("utf8") };
+    }
+    catch (err) {
+        return { ok: false, error: `cannot read ${t.path}: ${err.message}` };
+    }
+}
+/** Dry-run plan of the opt-in deny profile; same file reading rules as apply. */
+export function planDeny(opts) {
+    const r = readSettingsText(opts.settingsPath);
+    if (!r.ok)
+        return r;
+    const plan = planDenyProfile(r.text, opts.action, readDenyOwned(opts.dataDir), opts.settingsPath);
+    return plan.ok ? { ...plan, target: r.target } : plan;
+}
+/** Same safety as applyMode: plan, backup, atomic write; ownership is recorded only after the write. */
+export function applyDenyProfile(opts) {
+    const plan = planDeny(opts);
+    if (!plan.ok)
+        return { status: "error", diff: NO_CHANGES, error: plan.error };
+    if (!plan.changed) {
+        if (JSON.stringify(plan.owned) !== JSON.stringify(readDenyOwned(opts.dataDir)))
+            recordDenyOwned(opts.dataDir, plan.owned);
+        return { status: "unchanged", diff: plan.diff };
+    }
+    const nw = notWritable(plan.target);
+    if (nw)
+        return { status: "error", diff: plan.diff, error: nw };
+    return commit(opts, plan.target, plan.after, plan.diff, "write", () => recordDenyOwned(opts.dataDir, plan.owned));
+}
+function recordDenyOwned(dataDir, owned) {
+    const prev = readPluginState("setup", { dataDir });
+    writePluginState("setup", { ...prev, [DENY_OWNED_KEY]: owned }, { dataDir });
 }

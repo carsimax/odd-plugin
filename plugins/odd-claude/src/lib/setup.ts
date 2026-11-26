@@ -21,13 +21,13 @@ export type Plan =
 
 export const NO_CHANGES = "no changes";
 
-function isObject(v: unknown): v is Record<string, unknown> {
+export function isObject(v: unknown): v is Record<string, unknown> {
   return typeof v === "object" && v !== null && !Array.isArray(v);
 }
 
-type Parsed = { ok: true; root: Record<string, unknown> } | { ok: false; error: string };
+export type Parsed = { ok: true; root: Record<string, unknown> } | { ok: false; error: string };
 
-function parseSettings(text: string, checkPermissions = true): Parsed {
+export function parseSettings(text: string, checkPermissions = true): Parsed {
   let root: unknown;
   try {
     root = JSON.parse(text);
@@ -51,7 +51,7 @@ export function currentMode(text: string | null): string | undefined {
   return typeof m === "string" ? m : undefined;
 }
 
-function detectIndent(text: string): string | number {
+export function detectIndent(text: string): string | number {
   const m = /^\{[ \t]*\r?\n([ \t]+)\S/.exec(text);
   return m ? m[1]! : 2;
 }

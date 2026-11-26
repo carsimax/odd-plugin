@@ -12,10 +12,10 @@ export function isMode(v) {
     return typeof v === "string" && MODES.includes(v);
 }
 export const NO_CHANGES = "no changes";
-function isObject(v) {
+export function isObject(v) {
     return typeof v === "object" && v !== null && !Array.isArray(v);
 }
-function parseSettings(text, checkPermissions = true) {
+export function parseSettings(text, checkPermissions = true) {
     let root;
     try {
         root = JSON.parse(text);
@@ -41,7 +41,7 @@ export function currentMode(text) {
     const m = isObject(perms) ? perms.defaultMode : undefined;
     return typeof m === "string" ? m : undefined;
 }
-function detectIndent(text) {
+export function detectIndent(text) {
     const m = /^\{[ \t]*\r?\n([ \t]+)\S/.exec(text);
     return m ? m[1] : 2;
 }

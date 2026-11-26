@@ -1,4 +1,4 @@
-// `node dist/cli/setup.js [--mode <m>] [--apply] [--restore [backup]] [--settings <path>] [--data-dir <dir>] [--json]`
+// `node dist/cli/setup.js [--mode <m> | --deny-profile install|remove] [--apply] [--restore [backup]] [--settings <path>] [--data-dir <dir>] [--json]`
 // Without --apply it is a dry run: prints the diff and writes nothing.
 // Exit codes: 0 ok (dry run, applied, unchanged, info); 1 refused/failed (invalid mode,
 // invalid JSON settings, unknown backup, write error); 2 usage error.
@@ -9,14 +9,16 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { MODES, currentMode, modeWarning, planModeChange } from "../lib/setup.js";
-import { applyMode, applyRestore, listBackups, planRestore } from "../lib/setup-fs.js";
+import { applyDenyProfile, applyMode, applyRestore, listBackups, planDeny, planRestore } from "../lib/setup-fs.js";
+import { DENY_ACTIONS, DENY_PROFILE_RULES, isDenyAction } from "../lib/deny-profile.js";
 
 type Env = Record<string, string | undefined>;
-const VALUE_FLAGS = ["--mode", "--settings", "--data-dir"];
+const VALUE_FLAGS = ["--mode", "--deny-profile", "--settings", "--data-dir"];
 const BOOL_FLAGS = ["--apply", "--json"];
 
 interface Args {
   mode?: string;
+  denyProfile?: string;
   apply: boolean;
   json: boolean;
   restore: boolean;
@@ -36,6 +38,10 @@ function parseArgs(argv: string[]): Args | string {
       const v = argv[++i];
       if (v === undefined || v === "" || v.startsWith("--")) return `${f} needs a value`;
       if (f === "--mode") a.mode = v;
+      else if (f === "--deny-profile") {
+        if (a.denyProfile !== undefined) return "--deny-profile given more than once";
+        a.denyProfile = v;
+      }
       else if (f === "--settings") a.settings = v;
       else a.dataDir = v;
     } else if (f === "--restore") {
@@ -45,7 +51,11 @@ function parseArgs(argv: string[]): Args | string {
     } else return `unknown argument ${f}`;
   }
   if (a.restore && a.mode !== undefined) return "--restore and --mode are mutually exclusive";
-  if (a.apply && !a.restore && a.mode === undefined) return "--apply needs --mode <mode> or --restore";
+  if (a.denyProfile !== undefined) {
+    if (!isDenyAction(a.denyProfile)) return `--deny-profile must be one of ${DENY_ACTIONS.join(", ")}`;
+    if (a.restore || a.mode !== undefined) return "--deny-profile cannot be combined with --mode or --restore";
+  }
+  if (a.apply && !a.restore && a.mode === undefined && a.denyProfile === undefined) return "--apply needs --mode <mode>, --deny-profile <install|remove> or --restore";
   return a;
 }
 
@@ -85,7 +95,7 @@ function run(argv: string[], env: Env): CliResult {
   const settingsPath = args.settings ?? join(homedir(), ".claude", "settings.json");
   const dataDir = args.dataDir ?? dataDirFromEnv(env);
 
-  if (!args.restore && args.mode === undefined) {
+  if (!args.restore && args.mode === undefined && args.denyProfile === undefined) {
     const text = existsSync(settingsPath) ? readFileSync(settingsPath, "utf8") : null;
     const cur = currentMode(text);
     const backups = listBackups(dataDir);
@@ -99,6 +109,20 @@ function run(argv: string[], env: Env): CliResult {
     return out({ status: "info", settingsPath, currentMode: cur ?? null, modes: [...MODES], backups }, lines.join("\n"), 0);
   }
   const base = { settingsPath, dataDir };
+
+  if (args.denyProfile !== undefined) {
+    const action = args.denyProfile;
+    if (!args.apply) {
+      const p = planDeny({ ...base, action });
+      if (!p.ok) return fail(argv, p.error, 1);
+      return out(
+        { status: "dry-run", changed: p.changed, diff: p.diff, rules: [...DENY_PROFILE_RULES] },
+        p.changed ? `${p.diff}\n\ndry run: nothing written. Re-run with --apply to write it` : `${p.diff}\n\ndry run: nothing to do`,
+        0,
+      );
+    }
+    return render(argv, applyDenyProfile({ ...base, action }), "applied", out);
+  }
 
   if (args.restore) {
     if (!args.apply) {
@@ -142,11 +166,16 @@ function render(argv: string[], r: ReturnType<typeof applyMode>, verb: string, o
 }
 
 const USAGE =
-  "usage: setup.js [--mode default|acceptEdits|auto|plan|bypassPermissions] [--apply] [--restore [backup]] [--settings <path>] [--data-dir <dir>] [--json] [--help]";
+  "usage: setup.js [--mode default|acceptEdits|auto|plan|bypassPermissions | --deny-profile install|remove] [--apply] [--restore [backup]] [--settings <path>] [--data-dir <dir>] [--json] [--help]";
 
 const HELP = `${USAGE}
 
-Writes ONLY permissions.defaultMode of the settings file (default ~/.claude/settings.json).
+Writes ONLY permissions.defaultMode of the settings file (default ~/.claude/settings.json), or, with the
+explicit opt-in --deny-profile install|remove, the permission rules of the odd-claude deny profile
+(Read/Edit of .env files, ~/.ssh, ~/.aws/credentials, *.pem and *.key, plus Bash(git push *) and
+Bash(gh pr merge *)). The installer never writes it. install merges only the missing rules and records
+which ones it added; remove deletes only those, so rules you already had survive. Bash(git push *)
+does not catch variants such as "git -C . push".
 Without --apply it is a dry run: prints the diff and writes nothing.
 --apply backs up the original to <data-dir>/backups (mode 0600) first, then writes atomically,
 keeping the file mode and following a symlinked settings file. A read-only file is refused.
