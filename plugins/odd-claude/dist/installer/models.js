@@ -70,8 +70,10 @@ export function applyAgentModel(markdown, model) {
     const next = line.test(body) ? body.replace(line, () => `model: ${model}`) : `${body}${eol}model: ${model}`;
     return `---${eol}${next}${m[3]}---${markdown.slice(m[0].length)}`;
 }
-/** The effort the profile gives a role (a `custom` selection starts from balanced, as writeProfileState does); undefined when it has none. */
+/** The effort the profile gives a role (a `custom` selection starts from balanced, as writeProfileState does); undefined when it has none or the role's model is haiku (which never carries an effort, as in review/reviewer-model.ts). */
 export function roleEffort(selection, role) {
+    if (selection.roles[role] === "haiku")
+        return undefined;
     const base = selection.profile === CUSTOM_PROFILE ? "balanced" : selection.profile;
     return PRESETS[base][role]?.effort;
 }

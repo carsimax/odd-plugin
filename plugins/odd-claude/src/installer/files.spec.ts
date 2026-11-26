@@ -46,20 +46,65 @@ test("agent model: written for each role from balanced defaults and from a custo
   }
 });
 
-test("agent effort: written next to model for each role from the balanced preset, idempotent across reinstall", () => {
+const installedAgent = (plan: { actions: { rel: string; content?: Buffer }[] }, role: string): string => plan.actions.find((x) => x.rel === `agents/${role}.md`)!.content!.toString();
+
+test("agent effort: written next to model for each non-haiku role, idempotent across reinstall", () => {
   const { paths } = setup();
   const plan = planInstallFiles(paths, defaultSelection());
   for (const role of PROFILE_ROLES) {
-    const text = plan.actions.find((x) => x.rel === `agents/${role}.md`)!.content!.toString();
-    assert.match(text, new RegExp(`\\nmodel: ${PRESETS.balanced[role]!.model}\\neffort: ${PRESETS.balanced[role]!.effort}\\n`), role);
-    assert.equal(applyAgentEffort(text, PRESETS.balanced[role]!.effort!), text, `${role} idempotent`);
+    const { model, effort } = PRESETS.balanced[role]!;
+    const text = installedAgent(plan, role);
+    if (model === "haiku") continue;
+    assert.match(text, new RegExp(`\\nmodel: ${model}\\neffort: ${effort}\\n`), role);
+    assert.equal(applyAgentEffort(text, effort!), text, `${role} idempotent`);
   }
-  assert.match(plan.actions.find((x) => x.rel === "agents/odd-worker.md")!.content!.toString(), /\neffort: medium\n/);
-  assert.match(plan.actions.find((x) => x.rel === "agents/odd-verify.md")!.content!.toString(), /\neffort: medium\n/);
+  assert.match(installedAgent(plan, "odd-worker"), /\neffort: medium\n/);
+  assert.match(installedAgent(plan, "odd-verify"), /\neffort: medium\n/);
   const max = planInstallFiles(paths, buildSelection("max"));
-  assert.match(max.actions.find((x) => x.rel === "agents/odd-worker.md")!.content!.toString(), /\nmodel: opus\neffort: high\n/);
+  assert.match(installedAgent(max, "odd-worker"), /\nmodel: opus\neffort: high\n/);
   assert.equal(roleEffort(buildSelection("economy"), "odd-worker"), "low");
   assert.equal(roleEffort(defaultSelection(), "unknown-role"), undefined);
+});
+
+test("agent effort: haiku never carries an effort line (balanced odd-explore; economy odd-verify and the review lenses)", () => {
+  const { paths } = setup();
+  const balanced = installedAgent(planInstallFiles(paths, defaultSelection()), "odd-explore");
+  assert.match(balanced, /\nmodel: haiku\n/);
+  assert.doesNotMatch(balanced, /^effort:/m);
+  const economy = planInstallFiles(paths, buildSelection("economy"));
+  for (const role of ["odd-explore", "odd-verify", "odd-review-readability", "odd-review-reliability", "odd-review-resilience", "odd-review-risk"]) {
+    const text = installedAgent(economy, role);
+    assert.match(text, /\nmodel: haiku\n/, role);
+    assert.doesNotMatch(text, /^effort:/m, role);
+  }
+  assert.equal(roleEffort(buildSelection("economy"), "odd-verify"), undefined);
+  assert.equal(roleEffort(buildSelection("balanced", { "odd-worker": "haiku" }), "odd-worker"), undefined);
+});
+
+test("agent effort: an install without effort lines upgrades as installer-owned updates (non-haiku only), then is unchanged", () => {
+  const { paths } = setup();
+  const sel = defaultSelection();
+  const old = planInstallFiles(paths, sel);
+  for (const a of old.actions) if (a.rel.startsWith("agents/")) a.content = Buffer.from(a.content!.toString().replace(/\neffort: [a-z]+\n/, "\n"));
+  applyInstallFiles(paths, old);
+  const up = planInstallFiles(paths, sel).actions.filter((a) => a.rel.startsWith("agents/"));
+  for (const a of up) assert.equal(a.action, PRESETS.balanced[a.rel.slice(7, -3)]!.model === "haiku" ? "unchanged" : "update", a.rel);
+  assert.ok(up.some((a) => a.action === "update"));
+  applyInstallFiles(paths, planInstallFiles(paths, sel));
+  assert.deepEqual([...new Set(planInstallFiles(paths, sel).actions.filter((a) => a.rel.startsWith("agents/")).map((a) => a.action))], ["unchanged"]);
+});
+
+test("agent effort: after runInstall every non-haiku role's file carries the stored profile effort", () => {
+  for (const sel of [buildSelection("economy"), buildSelection("max"), buildSelection("economy", { "odd-worker": "opus" })]) {
+    const { paths, src } = setup();
+    runInstall({ paths, sourceRoot: src, version: "1.0.0", selection: sel });
+    const profile = readProfile({ dataDir: paths.dataDir });
+    for (const role of PROFILE_ROLES) {
+      const text = readFileSync(join(paths.claudeDir, "agents", `${role}.md`), "utf8");
+      if (sel.roles[role] === "haiku") assert.doesNotMatch(text, /^effort:/m, `${sel.profile} ${role}`);
+      else assert.match(text, new RegExp(`\\nmodel: ${sel.roles[role]}\\neffort: ${profile.routing[role]!.effort}\\n`), `${sel.profile} ${role}`);
+    }
+  }
 });
 
 test("install writes files, manifest and profile state; a second run is all unchanged", () => {
