@@ -2,6 +2,13 @@
 
 A global Claude Code harness (installed with a TUI, no longer a plugin) that ports the ODD harness of gentle-shell (MIT) <!-- odd-check: allow --> to Claude Code. **v2.0** adds native receipt-driven review (RDD) on top of **v1.0** (the parity release): the ODD persona, orchestrator rules, agents, skills, native integrations, advisory review and lifecycle hooks. Apart from the RDD Stop settle reminder, which can block only when you turn RDD on (it is off by default), the plugin ships **no deny/ask/block hook and no `permissions.deny` by default** (user decision, v0.5, amended for v2): its hooks only add context. Coordinator mode and the admission rules are prompt text, not enforcement; otherwise the only enforcement is Claude Code's native permission system (see [Permission modes](#permission-modes)). The plugin collects no data and sends nothing anywhere.
 
+## What's new in 8.2.1
+
+Not breaking. The shipped payload is unchanged, so there is no behavior change for users:
+
+- New conformance spec (`src/conformance/payload-manifest.spec.ts`) that validates the release payload manifests, the installer's equivalent of `claude plugin validate`: agent, skill and output-style frontmatter, and the `hooks.json` schema.
+- It runs under `npm test`.
+
 ## What's new in 8.2.0
 
 Not breaking. Enforcement stays opt-in (`odd/tasks/enforcement-opt-in.md`):
