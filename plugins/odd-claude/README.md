@@ -121,14 +121,14 @@ Upgrade notes for 4.0.0:
 
 Simplification: removes the hooks module and the visual extras.
 
-- **Removed:** the startup banner, the themes (`odd`, `odd cute`, `odd bold`), the visual mods (the hooks module and per-spawn agent routing), the statusline (the setup subcommand and its shim) and the `agents`, `changes` and `quiet` commands (`odd/tasks/simplify.md`).
+- **Removed:** the startup banner, the themes (`odd`, `odd cute`, `odd bold`), the visual mods (the hooks module and per-spawn agent routing), the old statusline (the setup subcommand and its `node '<data dir>/statusline.mjs'` shim; the installer later reintroduced a status line, see below) and the `agents`, `changes` and `quiet` commands (`odd/tasks/simplify.md`).
 - **Stays:** the `odd` output style, model profiles (they apply through the SessionStart context line, no mod needed) and `/odd-stats` (subagent recording is kept).
 
 Upgrade notes for 3.0.0:
 
 - If you picked one of the `odd`, `odd cute` or `odd bold` themes with `/theme`, pick another one: they no longer ship.
-- If you enabled the statusline, your `~/.claude/settings.json` may still have a `statusLine` entry pointing at the old shim (`node '<data dir>/statusline.mjs'`). Remove that `statusLine` key by hand (or run `/odd-setup restore` to go back to a backup taken before it); the plugin no longer writes or reads it, and nothing else in your settings is touched. The shim file in the plugin data dir is inert and can be deleted.
-- The banner command and the statusline subcommand of setup are gone; setup still handles `permissions.defaultMode` and `restore`.
+- If you enabled the statusline, your `~/.claude/settings.json` may still have a `statusLine` entry pointing at the old shim (`node '<data dir>/statusline.mjs'`). Remove that `statusLine` key by hand (or run `/odd-setup restore` to go back to a backup taken before it); the plugin no longer used that shim, and nothing else in your settings is touched. The shim file in the plugin data dir is inert and can be deleted. Today's installer writes a different `statusLine` (`bash "<odd root>/statusline/statusline.sh"`, installed by default; pass `--no-statusline` to skip it), so a stale `node '<data dir>/statusline.mjs'` entry is replaced on the next install and restored or removed on uninstall.
+- The banner command and the statusline subcommand of `/odd-setup` are gone (the installer's status line is a separate path); setup still handles `permissions.defaultMode` and `restore`.
 
 ## What's new in 2.3.0
 
@@ -261,7 +261,7 @@ Reviewers run as isolated `claude -p` children: `--print --output-format text --
 
 ## What's in v1.1
 
-Statistics and profiles (Phase 5), unchanged in 2.0. The visual mods, the banner, the statusline and the `agents`, `changes` and `quiet` commands were removed in the simplification pass (`odd/tasks/simplify.md`).
+Statistics and profiles (Phase 5), unchanged in 2.0. The visual mods, the banner, the old statusline shim and the `agents`, `changes` and `quiet` commands were removed in the simplification pass (`odd/tasks/simplify.md`).
 
 - `/odd-stats` (R36): local session stats from the transcript.
 - `/odd-profiles` (R39/R40): model profiles and per-spawn routing.
@@ -435,7 +435,7 @@ Every TUI choice has a flag. `odd-claude --help` is the reference.
 | `--dry-run` | plan only: nothing is written and nothing external is changed |
 | `--yes` | non-interactive; confirms the Engram and codegraph installs |
 | `--no-deps` | skip Engram and codegraph |
-| `--no-statusline` | skip the status line |
+| `--no-statusline` | skip the status line (installed by default: `statusLine` runs `bash "<odd root>/statusline/statusline.sh"`, which needs `jq`) |
 | `--keep-claude-ai-connectors`, `--keep-claude-ai-skills`, `--keep-claude-ai-plugins` | leave that claude.ai sync setting alone (by default each is disabled) |
 | `--keep-builtin-plugins`, `--disable-builtin <id>` | leave the `@builtin` plugins alone, or disable only the given ones (repeatable); by default every discovered builtin is disabled except managed ones and `cc-plugin-sec-default@builtin` |
 | `--purge` | uninstall: also delete the data dir and the backups |
