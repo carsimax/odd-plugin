@@ -73,3 +73,10 @@ test("global names pass, an attributed reference is allowed, and runtime dirs ar
   assert.equal(run({ "skills/a.md": "legacy odd-claude:delta <!-- odd-check: allow -->\n" }).status, 0);
   assert.equal(run({ "src/a.ts": "const w = 'odd-claude:odd-worker';\n" }).status, 0);
 });
+
+test("a forbidden pattern in a workflows/ file is reported", () => {
+  const r = run({ "workflows/a.js": `const x = '${G}-foo';\n` });
+  assert.equal(r.status, 1);
+  assert.match(r.stderr, /workflows\/a\.js:1: .* identifier/);
+  assert.equal(run({ "workflows/a.js": "const x = 1;\n" }).status, 0);
+});
