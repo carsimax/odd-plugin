@@ -75,3 +75,4 @@ Before each run: if accumulated cost + the per-run cap (`--max-budget-usd`) woul
 
 Results: [pilot 2026-11-25](pilot-2026-11-25.md) (6 tasks x 3 arms x 3 trials).
 Results: [hard tasks 2026-11-25](hard-2026-11-25.md) (6 harder tasks x 3 arms x 3 trials, with per-check rates and a comparison with the pilot).
+Results: [odd-skills 2026-11-25](odd-skills-2026-11-25.md) (odd-skills POC vs plain Claude Code, 6 hard tasks x 2 arms x 3 trials, Opus and Sonnet, with the plugin comparison).
