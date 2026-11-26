@@ -2,6 +2,14 @@
 
 A global Claude Code harness (installed with a TUI, no longer a plugin) that ports the ODD harness of gentle-shell (MIT) <!-- odd-check: allow --> to Claude Code. **v2.0** adds native receipt-driven review (RDD) on top of **v1.0** (the parity release): the ODD persona, orchestrator rules, agents, skills, native integrations, advisory review and lifecycle hooks. Apart from the RDD Stop settle reminder, which can block only when you turn RDD on (it is off by default), the plugin ships **no deny/ask/block hook and no `permissions.deny` by default** (user decision, v0.5, amended for v2): its hooks only add context. Coordinator mode and the admission rules are prompt text, not enforcement; otherwise the only enforcement is Claude Code's native permission system (see [Permission modes](#permission-modes)). The plugin collects no data and sends nothing anywhere.
 
+## What's new in 9.0.0
+
+**Breaking.** odd-peers is retired:
+
+- The `odd-peers` MCP server, the `/odd-peers` skill, its hooks, CLI and libs are removed. Use Claude Code's native cross-session messaging (`ListAgents`/`SendMessage`); inbound messages follow your `crossSessionInbound` setting (accept|hold|refuse), and a peer message is never consent. See [Cross-session messaging (native)](#cross-session-messaging-native).
+- `update` removes the `odd-peers` server the installer had added (a foreign one is never touched; one you already removed by hand is just dropped from the state), the copied `odd-peers` skill and the `peers/` data dir.
+- GitHub workflows are removed: releases are manual, see [Releasing (manual)](#releasing-manual). The rules now point cross-session messaging to the native tools.
+
 ## What's new in 8.3.0
 
 Not breaking. The installer does not change any setting; you get the new rules after `update`:
