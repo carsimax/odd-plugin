@@ -11,7 +11,7 @@ test("pluginVersion matches package.json and is semver", () => {
   assert.match(pluginVersion(), /^\d+\.\d+\.\d+$/);
 });
 
-test("pluginVersion reads the package.json of the given root, with no plugin.json present", () => {
+test("pluginVersion reads the package.json of the given root, ", () => {
   const root = mkdtempSync(join(tmpdir(), "odd-ver-"));
   try {
     writeFileSync(join(root, "package.json"), JSON.stringify({ name: "x", version: "9.8.7" }));
@@ -23,14 +23,11 @@ test("pluginVersion reads the package.json of the given root, with no plugin.jso
   }
 });
 
-test("package.json, package-lock and marketplace versions equal plugin.json", () => {
+test("package.json and package-lock versions agree", () => {
   const read = (rel: string): any => JSON.parse(readFileSync(new URL(rel, import.meta.url), "utf8"));
   const expected = pluginVersion();
   assert.equal(read("../../package.json").version, expected);
   const lock = read("../../package-lock.json");
   assert.equal(lock.version, expected);
   assert.equal(lock.packages[""].version, expected);
-  const entry = read("../../../../.claude-plugin/marketplace.json").plugins.find((p: { name: string }) => p.name === "odd-claude");
-  assert.ok(entry, "marketplace entry odd-claude exists");
-  assert.equal(entry.version, expected);
 });

@@ -297,7 +297,7 @@ export function realGitTracked(cwd, targets) {
 export function realPluginRoots(env, home) {
     const out = [];
     const own = oddClaudeRoot(env);
-    out.push({ name: pluginName(own) ?? "odd-claude", root: own });
+    out.push({ name: "odd-claude", root: own });
     try {
         const raw = JSON.parse(readFileSync(join(home, ".claude", "plugins", "installed_plugins.json"), "utf8"));
         for (const [key, installs] of Object.entries(raw.plugins ?? {})) {
@@ -311,13 +311,4 @@ export function realPluginRoots(env, home) {
         // no installed plugins file
     }
     return out;
-}
-function pluginName(root) {
-    try {
-        const n = JSON.parse(readFileSync(join(root, ".claude-plugin", "plugin.json"), "utf8")).name;
-        return typeof n === "string" && n !== "" ? n : undefined;
-    }
-    catch {
-        return undefined;
-    }
 }

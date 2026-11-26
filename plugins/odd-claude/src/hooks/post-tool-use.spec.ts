@@ -223,8 +223,9 @@ test("CLI: PostToolUse fixture exits 0 with advisory-only JSON; hooks.json regis
     };
     const g = cfg.hooks.PostToolUse[0];
     const m = new RegExp(`^(?:${g.matcher})$`);
-    for (const t of ["Read", "Grep", "Glob", "WebFetch", "WebSearch", "mcp__codegraph__x", "mcp__plugin_odd-claude_codegraph__x"]) assert.ok(m.test(t), t);
+    for (const t of ["Read", "Grep", "Glob", "WebFetch", "WebSearch", "mcp__codegraph__x"]) assert.ok(m.test(t), t);
     assert.ok(!m.test("Bash"));
+    assert.ok(!m.test("mcp__plugin_odd-claude_codegraph__x"), "the plugin-namespaced MCP name left the matcher with the plugin distribution");
     assert.ok((g.hooks[0].timeout ?? 999) <= 10);
     assert.match(g.hooks[0].command, /run\.js" PostToolUse$/);
   } finally {

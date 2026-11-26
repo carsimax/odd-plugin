@@ -65,9 +65,9 @@ test("the themes directory, the banner and the statusline skills, CLIs, libs and
 
 test("the `odd` output style stays", () => {
   assert.ok(existsSync(join(root, "output-styles", "odd.md")));
-  // Pinned byte-identical to its content after the refine-v5 prompt dedupe (T3). A deliberate edit of odd.md must update this hash.
+  // Pinned byte-identical to its content after removing `force-for-plugin` (global-installer T8). A deliberate edit of odd.md must update this hash.
   const sha = createHash("sha256").update(readFileSync(join(root, "output-styles", "odd.md"))).digest("hex");
-  assert.equal(sha, "f66431b9955129515e6bd0cc4b16072667e44adcf391d28ec39a7732723e208f");
+  assert.equal(sha, "ca8183f6098139ae674579ea72fafb65d74a484e856b6e598a2636077b93ca40");
 });
 
 test("setup has no statusline subcommand, flag or shim", () => {
@@ -94,10 +94,9 @@ test("SessionStart emits no banner systemMessage, on startup or any other source
   }
 });
 
-test("the README and the plugin manifest do not offer the removed features", () => {
+test("the README does not offer the removed features", () => {
   const readme = read("README.md");
   for (const re of [/\/odd-claude:banner/, /setup statusline/, /statusline on/, /^## Themes/m, /themes\/odd/, /ODD_CLAUDE_NO_BANNER/]) assert.doesNotMatch(readme, re);
-  assert.doesNotMatch(read(".claude-plugin", "plugin.json"), /theme/i);
 });
 
 test("setup rejects the removed statusline flags without touching settings (S3)", () => {

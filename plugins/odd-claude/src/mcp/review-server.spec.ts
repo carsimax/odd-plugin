@@ -744,17 +744,6 @@ test("every invocation the plugin hands out names a registered tool or an existi
   for (const t of REVIEW_TOOL_NAMES) assert.ok(tools.has(t));
 });
 
-test("the plugin manifest registers the review server at an existing build output, next to codegraph", () => {
-  const cfg = JSON.parse(readFileSync(join(PLUGIN_ROOT, ".mcp.json"), "utf8")) as { mcpServers: Record<string, { command: string; args: string[] }> };
-  assert.deepEqual(Object.keys(cfg.mcpServers).sort(), ["codegraph", "peers", "review"]);
-  const review = cfg.mcpServers.review!;
-  assert.equal(review.command, "node");
-  assert.deepEqual(review.args, ["${CLAUDE_PLUGIN_ROOT}/dist/mcp/review-server.js"]);
-  assert.ok(existsSync(join(PLUGIN_ROOT, "dist", "mcp", "review-server.js")));
-  const plugin = JSON.parse(readFileSync(join(PLUGIN_ROOT, ".claude-plugin", "plugin.json"), "utf8")) as Record<string, unknown>;
-  assert.equal(plugin.mcpServers, undefined, "declared once, in .mcp.json");
-});
-
 // ---- S1: the contract texts an agent follows are accepted literally ----
 
 /** Calls the tool a transition names with its arguments exactly as given; the tool must exist and the arguments must validate. */

@@ -25,7 +25,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest]
-        # 22 = the plugin's `engines.node` floor (>=22; Node 20 is EOL and its test runner does not expand globs); 26 = the version used for development.
+        # 22 = the odd-claude `engines.node` floor (>=22; Node 20 is EOL and its test runner does not expand globs); 26 = the version used for development.
         node: ["22", "26"]
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -38,7 +38,7 @@ jobs:
           cache: npm
           cache-dependency-path: plugins/odd-claude/package-lock.json
 
-      - name: Install plugin dependencies
+      - name: Install dependencies
         working-directory: plugins/odd-claude
         run: npm ci
 
@@ -73,5 +73,12 @@ jobs:
       - name: Install Claude Code CLI
         run: npm i -g "@anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}"
 
-      - name: Validate the plugin manifests
-        run: claude plugin validate plugins/odd-claude
+      - name: Build the TUI bundle
+        run: |
+          npm --prefix plugins/odd-claude/tui ci
+          npm --prefix plugins/odd-claude/tui test
+          npm --prefix plugins/odd-claude/tui run bundle
+
+      # Installs into a temp HOME with a foreign hook in settings.json, then uninstalls and checks settings.json is restored (jq -S).
+      - name: Installer e2e (install + uninstall)
+        run: sh scripts/tests/installer-e2e.sh

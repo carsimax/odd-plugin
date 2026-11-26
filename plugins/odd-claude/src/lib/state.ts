@@ -26,6 +26,7 @@ interface StateFile {
 
 /** Data dir from the environment alone: ODD_CLAUDE_DATA > CLAUDE_PLUGIN_DATA > `${ODD_CLAUDE_HOME:-~/.odd-claude}/data`. */
 export function dataDirFromEnv(env: Record<string, string | undefined> = process.env): string {
+  // CLAUDE_PLUGIN_DATA is legacy (removed plugin distribution; bench still sets it).
   const explicit = env.ODD_CLAUDE_DATA || env.CLAUDE_PLUGIN_DATA;
   if (explicit) return explicit;
   const oddHome = env.ODD_CLAUDE_HOME || join(env.HOME || homedir(), ".odd-claude");

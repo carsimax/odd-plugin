@@ -1,7 +1,6 @@
 ---
 name: odd
 description: odd-claude orchestrator - Organic Driven Development (ODD) workflow, task sizing, delegation rules.
-force-for-plugin: true
 keep-coding-instructions: true
 ---
 

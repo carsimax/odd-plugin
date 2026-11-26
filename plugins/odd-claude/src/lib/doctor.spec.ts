@@ -9,8 +9,10 @@ function deps(over: Partial<DoctorDeps> & { present?: Record<string, string> } =
     exec: (cmd) => present[cmd],
     env: { CLAUDE_PLUGIN_DATA: "/data/odd" },
     nodeVersion: "v22.1.0",
-    pluginVersion: "0.1.0",
+    version: "0.1.0",
     installedPlugins: () => ["engram@engram"],
+    installedVersion: () => "0.1.0",
+    hooksInstalled: () => true,
     isWritable: () => true,
     ...over,
   };
@@ -27,7 +29,7 @@ test("parseVersion extracts the first semver and nodeSatisfies enforces >=22", (
 test("all present: every item ok, nothing missing", () => {
   const r = collectDoctor(deps());
   assert.deepEqual(r.items.map((i) => [i.id, i.status]), [
-    ["node", "ok"], ["git", "ok"], ["engram", "ok"], ["codegraph", "ok"], ["plugin", "ok"], ["data-dir", "ok"],
+    ["node", "ok"], ["git", "ok"], ["engram", "ok"], ["codegraph", "ok"], ["install", "ok"], ["hooks", "ok"], ["data-dir", "ok"],
   ]);
   assert.deepEqual(r.missing, []);
   assert.deepEqual(r.requiredMissing, []);
@@ -35,6 +37,19 @@ test("all present: every item ok, nothing missing", () => {
   const text = renderDoctor(r);
   assert.match(text, /^missing: none$/m);
   assert.match(text, /git .*2\.40\.1/);
+  assert.match(text, /^odd-claude doctor \(v0\.1\.0\)$/m);
+});
+
+test("install: reports the installed odd version; missing install or hooks are optional, listed and keep the report ok", () => {
+  const ok = collectDoctor(deps({ installedVersion: () => "6.0.0" }));
+  assert.match(ok.items.find((i) => i.id === "install")?.detail ?? "", /6\.0\.0/);
+  const none = collectDoctor(deps({ installedVersion: () => undefined, hooksInstalled: () => false }));
+  const byId = (id: string) => none.items.find((i) => i.id === id);
+  assert.deepEqual([byId("install")?.status, byId("install")?.required, byId("hooks")?.status, byId("hooks")?.required], ["missing", false, "missing", false]);
+  assert.match(byId("install")?.detail ?? "", /odd-claude install/);
+  assert.deepEqual(none.missing, ["install", "hooks"]);
+  assert.equal(none.ok, true);
+  assert.equal(collectDoctor(deps({ hooksInstalled: () => undefined })).items.find((i) => i.id === "hooks")?.status, "missing");
 });
 
 test("missing optional (engram, codegraph): listed but report stays ok", () => {
@@ -75,7 +90,7 @@ test("cli --json prints the report shape; exit 0 when only optionals are missing
   const res = doctorCli(["--json"], deps({ present: { git: "git version 2" }, installedPlugins: () => [] }));
   assert.equal(res.exitCode, 0);
   const j = JSON.parse(res.stdout);
-  assert.deepEqual(Object.keys(j).sort(), ["items", "missing", "ok", "pluginVersion", "requiredMissing", "schema"]);
+  assert.deepEqual(Object.keys(j).sort(), ["items", "missing", "ok", "requiredMissing", "schema", "version"]);
   assert.equal(j.schema, 1);
   assert.deepEqual(Object.keys(j.items[0]).sort(), ["detail", "id", "label", "required", "status"]);
   assert.deepEqual(j.missing, ["engram", "codegraph"]);

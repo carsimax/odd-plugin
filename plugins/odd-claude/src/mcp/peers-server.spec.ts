@@ -317,12 +317,6 @@ test("outputs never echo message contents and the server writes nothing to stder
 
 // ---- registration + real process with a fake parent ----
 
-test(".mcp.json registers the `peers` server separately from `review`", () => {
-  const raw = JSON.parse(readFileSync(new URL("../../.mcp.json", import.meta.url), "utf8")) as { mcpServers: Record<string, { command: string; args: string[] }> };
-  assert.deepEqual(raw.mcpServers.peers, { command: "node", args: ["${CLAUDE_PLUGIN_ROOT}/dist/mcp/peers-server.js"] });
-  assert.ok(raw.mcpServers.review);
-});
-
 test("real server process under a fake Claude Code parent: finds the id the SessionStart-style entry recorded and sends with a grant", () => {
   const dir = mkdtempSync(join(tmpdir(), "odd-peers-mcp-"));
   try {

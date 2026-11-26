@@ -1,7 +1,7 @@
 // Real implementations of the injected probes (exec, filesystem). Kept apart from the
 // pure logic so tests never touch the machine.
 import { spawnSync } from "node:child_process";
-import { accessSync, constants, existsSync, readFileSync } from "node:fs";
+import { accessSync, constants, existsSync, readFileSync, realpathSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 export function realExec(cmd, args) {
@@ -32,6 +32,28 @@ export function realInstalledPlugins() {
     try {
         const raw = JSON.parse(readFileSync(join(homedir(), ".claude", "plugins", "installed_plugins.json"), "utf8"));
         return raw.plugins ? Object.keys(raw.plugins) : undefined;
+    }
+    catch {
+        return undefined;
+    }
+}
+/** Version of the global install behind `<ODD_CLAUDE_HOME or ~/.odd-claude>/current`; undefined when absent or unreadable. */
+export function realInstalledVersion(env = process.env) {
+    try {
+        const current = join(env.ODD_CLAUDE_HOME || join(homedir(), ".odd-claude"), "current");
+        const v = JSON.parse(readFileSync(join(realpathSync(current), "package.json"), "utf8")).version;
+        return typeof v === "string" ? v : undefined;
+    }
+    catch {
+        return undefined;
+    }
+}
+/** True when `<CLAUDE_CONFIG_DIR or ~/.claude>/settings.json` has a hook command running odd-claude's `dist/hooks/run.js`; undefined when unreadable. */
+export function realHooksInstalled(env = process.env) {
+    try {
+        const raw = readFileSync(join(env.CLAUDE_CONFIG_DIR || join(homedir(), ".claude"), "settings.json"), "utf8");
+        const hooks = JSON.parse(raw).hooks ?? {};
+        return /\/dist\/hooks\/run\.js/.test(JSON.stringify(hooks));
     }
     catch {
         return undefined;

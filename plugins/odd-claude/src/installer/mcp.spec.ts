@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { applyMcp, planMcp, removeMcp, type McpRunner } from "./mcp.js";
 
 type Call = { cmd: string; args: string[]; env: NodeJS.ProcessEnv | undefined };
@@ -144,4 +145,17 @@ test("real CLI output: list fallback matches the exact name followed by ': ' at 
   const plan = await planMcp({ runner, env, oddRoot: "/o/current" });
   // "plugin:odd-claude:review" must not count as "odd-review"; codegraph is listed.
   assert.deepEqual(plan.servers.map((x) => x.action), ["add", "add", "skip-existing"]);
+});
+
+test("planMcp registers odd-review, odd-peers and codegraph with argv pointing at existing build outputs", async () => {
+  const root = fileURLToPath(new URL("../../", import.meta.url));
+  const { runner } = fake([]);
+  const plan = await planMcp({ runner, env, oddRoot: root });
+  assert.deepEqual(plan.servers.map((x) => x.name), ["odd-review", "odd-peers", "codegraph"]);
+  const argv = (name: string) => plan.servers.find((x) => x.name === name)!.argv;
+  const r = root.replace(/\/+$/, "");
+  assert.deepEqual(argv("odd-review"), ["mcp", "add", "-s", "user", "odd-review", "--", "node", `${r}/dist/mcp/review-server.js`]);
+  assert.deepEqual(argv("odd-peers"), ["mcp", "add", "-s", "user", "odd-peers", "--", "node", `${r}/dist/mcp/peers-server.js`]);
+  assert.deepEqual(argv("codegraph"), ["mcp", "add", "-s", "user", "codegraph", "--", "codegraph", "serve", "--mcp"]);
+  for (const f of ["review-server.js", "peers-server.js"]) assert.ok(existsSync(join(root, "dist", "mcp", f)), f);
 });

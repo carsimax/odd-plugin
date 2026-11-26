@@ -9,6 +9,7 @@ import { acquireLock, releaseOwnedLock } from "./lock.js";
 export const STATE_SCHEMA_VERSION = 1;
 /** Data dir from the environment alone: ODD_CLAUDE_DATA > CLAUDE_PLUGIN_DATA > `${ODD_CLAUDE_HOME:-~/.odd-claude}/data`. */
 export function dataDirFromEnv(env = process.env) {
+    // CLAUDE_PLUGIN_DATA is legacy (removed plugin distribution; bench still sets it).
     const explicit = env.ODD_CLAUDE_DATA || env.CLAUDE_PLUGIN_DATA;
     if (explicit)
         return explicit;

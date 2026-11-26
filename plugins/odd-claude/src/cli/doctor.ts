@@ -3,7 +3,7 @@ import { realpathSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { collectDoctor, renderDoctor, type DoctorDeps } from "../lib/doctor.js";
 import { pluginVersion } from "../lib/version.js";
-import { envWithDataDir, realExec, realInstalledPlugins, realIsWritable } from "../lib/system.js";
+import { envWithDataDir, realExec, realHooksInstalled, realInstalledPlugins, realInstalledVersion, realIsWritable } from "../lib/system.js";
 
 export function doctorCli(argv: string[], deps: DoctorDeps): { exitCode: number; stdout: string } {
   const report = collectDoctor({ ...deps, env: envWithDataDir(argv, deps.env) });
@@ -16,8 +16,10 @@ function main(): void {
     exec: realExec,
     env: process.env,
     nodeVersion: process.version,
-    pluginVersion: pluginVersion(),
+    version: pluginVersion(),
     installedPlugins: realInstalledPlugins,
+    installedVersion: realInstalledVersion,
+    hooksInstalled: realHooksInstalled,
     isWritable: realIsWritable,
   });
   process.stdout.write(res.stdout + "\n");

@@ -1,7 +1,7 @@
 // Read-only diagnostics (R38 doctor semantics): probe tools and report ok/missing.
 // Pure: every side effect (exec, env, filesystem) is injected so tests use fakes.
 // Upstream treats Engram as a warning, not a failure; here node and git are required,
-// engram, codegraph, plugin and data-dir are optional.
+// engram, codegraph, the odd-claude install, its hooks and the data dir are optional.
 import { dataDirFromEnv } from "./state.js";
 
 
@@ -11,9 +11,14 @@ export interface DoctorDeps {
   env: Record<string, string | undefined>;
   /** e.g. "v22.1.0" (process.version). */
   nodeVersion: string;
-  pluginVersion: string;
-  /** Installed plugin keys (`name@marketplace`); undefined when unknown. */
+  /** odd-claude version of the running code (package.json). */
+  version: string;
+  /** Installed Claude Code plugin keys (`name@marketplace`), used for the Engram plugin; undefined when unknown. */
   installedPlugins: () => string[] | undefined;
+  /** Version behind `~/.odd-claude/current`; undefined when the global install is absent. */
+  installedVersion: () => string | undefined;
+  /** Whether settings.json registers the odd-claude hooks; undefined when unknown. */
+  hooksInstalled: () => boolean | undefined;
   isWritable: (dir: string) => boolean;
 }
 
@@ -27,7 +32,7 @@ export interface DoctorItem {
 
 export interface DoctorReport {
   schema: 1;
-  pluginVersion: string;
+  version: string;
   items: DoctorItem[];
   missing: string[];
   requiredMissing: string[];
@@ -74,9 +79,14 @@ export function collectDoctor(deps: DoctorDeps): DoctorReport {
   );
 
   const cg = probeBinary(deps, "codegraph", ["--version"]);
-  items.push(item("codegraph", "codegraph", false, cg !== undefined, cg !== undefined ? `${cg} (plugin MCP server codegraph: serve --mcp)` : "not found on PATH (optional: the plugin codegraph MCP server stays disconnected; install @colbymchenry/codegraph to enable it)"));
+  items.push(item("codegraph", "codegraph", false, cg !== undefined, cg !== undefined ? `${cg} (MCP server codegraph: serve --mcp)` : "not found on PATH (optional: the codegraph MCP server stays disconnected; install @colbymchenry/codegraph to enable it)"));
 
-  items.push(item("plugin", "odd-claude plugin", false, true, `version ${deps.pluginVersion}`));
+  const installed = deps.installedVersion();
+  items.push(
+    item("install", "odd-claude install", false, installed !== undefined, installed !== undefined ? `version ${installed} (~/.odd-claude/current)` : `no ~/.odd-claude/current (running v${deps.version}); run \`odd-claude install\``),
+  );
+  const hooks = deps.hooksInstalled();
+  items.push(item("hooks", "odd-claude hooks", false, hooks === true, hooks === true ? "registered in settings.json" : "not registered in settings.json"));
 
   const dataDir = dataDirFromEnv(deps.env);
   items.push(item("data-dir", "data dir", false, deps.isWritable(dataDir), `${dataDir}${deps.isWritable(dataDir) ? "" : " (not writable)"}`));
@@ -85,7 +95,7 @@ export function collectDoctor(deps: DoctorDeps): DoctorReport {
   const requiredMissing = missing.filter((i) => i.required).map((i) => i.id);
   return {
     schema: 1,
-    pluginVersion: deps.pluginVersion,
+    version: deps.version,
     items,
     missing: missing.map((i) => i.id),
     requiredMissing,
@@ -95,7 +105,7 @@ export function collectDoctor(deps: DoctorDeps): DoctorReport {
 
 export function renderDoctor(report: DoctorReport): string {
   const w = Math.max(...report.items.map((i) => i.label.length));
-  const lines = [`odd-claude doctor (v${report.pluginVersion})`, ""];
+  const lines = [`odd-claude doctor (v${report.version})`, ""];
   for (const i of report.items) {
     lines.push(`${i.label.padEnd(w)}  ${i.required ? "required" : "optional"}  ${i.status.padEnd(7)}  ${i.detail}`);
   }

@@ -1,6 +1,10 @@
 # odd-claude
 
-A Claude Code plugin that ports the ODD harness of gentle-shell (MIT) <!-- odd-check: allow --> to Claude Code. **v2.0** adds native receipt-driven review (RDD) on top of **v1.0** (the parity release): the ODD persona, orchestrator cards, agents, skills, native integrations, advisory review and lifecycle hooks. Apart from the RDD Stop settle reminder, which can block only when you turn RDD on (it is off by default), the plugin ships **no deny/ask/block hook** (user decision, v0.5, amended for v2): its hooks only add context. Coordinator mode and the admission rules are prompt text, not enforcement; otherwise the only enforcement is Claude Code's native permission system (see [Permission modes](#permission-modes)). The plugin collects no data and sends nothing anywhere.
+A global Claude Code harness (installed with a TUI, no longer a plugin) that ports the ODD harness of gentle-shell (MIT) <!-- odd-check: allow --> to Claude Code. **v2.0** adds native receipt-driven review (RDD) on top of **v1.0** (the parity release): the ODD persona, orchestrator cards, agents, skills, native integrations, advisory review and lifecycle hooks. Apart from the RDD Stop settle reminder, which can block only when you turn RDD on (it is off by default), the plugin ships **no deny/ask/block hook** (user decision, v0.5, amended for v2): its hooks only add context. Coordinator mode and the admission rules are prompt text, not enforcement; otherwise the only enforcement is Claude Code's native permission system (see [Permission modes](#permission-modes)). The plugin collects no data and sends nothing anywhere.
+
+## What's new in 6.0.0
+
+**Breaking: odd-claude is no longer a Claude Code plugin.** It installs globally with a TUI or scripts (see [Install](#install)). The plugin manifest, the marketplace and `.mcp.json` are gone; the installer registers hooks, the output style, skills, agents and MCP servers in `~/.claude`. Names lost the plugin namespace: see [Migrating from the plugin](#migrating-from-the-plugin).
 
 ## What's new in 5.3.0
 
@@ -182,7 +186,7 @@ The only block the plugin can emit is the Stop settle reminder (user decision S3
 
 ### Review MCP tools
 
-A stdio server, `dist/mcp/review-server.js`, declared as server `review` in `.mcp.json`. It has no dependencies, speaks the minimal MCP stdio protocol (`initialize`, `tools/list`, `tools/call`, `ping`, cancellation) and writes only protocol messages to stdout. Claude Code lists the tools as `mcp__odd-review__<name>`. The names are bare (`review_*`) because the plugin guard forbids an `odd`-prefixed review tool name in shipped files.
+A stdio server, `dist/mcp/review-server.js`, registered by the installer as the user-scope MCP server `odd-review`. It has no dependencies, speaks the minimal MCP stdio protocol (`initialize`, `tools/list`, `tools/call`, `ping`, cancellation) and writes only protocol messages to stdout. Claude Code lists the tools as `mcp__odd-review__<name>`. The names are bare (`review_*`) because the plugin guard forbids an `odd`-prefixed review tool name in shipped files.
 
 | Tool | What it does |
 |---|---|
@@ -257,7 +261,7 @@ All of these are advisory: none returns a block decision, `continue:false` or a 
 
 ## What v0.2 shipped
 
-- **Persona / output style `odd`** (`output-styles/odd.md`, `force-for-plugin: true`, so no `/odd-setup` is needed). SessionStart and UserPromptSubmit hooks add `additionalContext` with the rest of the prompt and the path of the cards. Replies follow the user's language.
+- **Persona / output style `odd`** (`output-styles/odd.md`, set as `outputStyle` in `settings.json` by the installer, so no `/odd-setup` is needed). SessionStart and UserPromptSubmit hooks add `additionalContext` with the rest of the prompt and the path of the cards. Replies follow the user's language.
 - **Persona**: there is one persona, `neutral` (direct, technical, neutral Spanish), and it is always the default. `/odd-persona` shows it; any other mode (including `mentor`) is refused. Spanish replies are always neutral: no voseo or regional forms (tú or usted).
 - **Cards** (`cards/*.md`): orchestrator rules loaded on demand (delegation, tracking, verification, memory, skills, prompts, writer, quota recovery), with tool names mapped to Claude Code (`Agent`, `TodoWrite`, `AskUserQuestion`, `Bash` with `run_in_background`, `Monitor`, worktree tools). See `cards/SOURCES.md`.
 - **Agents** (`<agent>`): `odd-explore` (read-only), `odd-verify` (runs checks), `odd-worker` (scoped writer), `odd-jd-fix`, `odd-jd-judge-a`, `odd-jd-judge-b` (Judgment Day), and the four advisory review lenses `odd-review-risk`, `odd-review-resilience`, `odd-review-readability`, `odd-review-reliability`.
@@ -288,7 +292,7 @@ On SessionStart the hook reads the existing `.atl/skill-registry.md` (one contex
 
 ### codegraph MCP
 
-The plugin declares a `codegraph` MCP server (`.mcp.json`, needs the `codegraph` binary). The tool is `mcp__codegraph__codegraph_explore`; agent allowlists list it and a tool that is not connected is ignored. The SessionStart warm-up (detached `codegraph sync`) is **off by default**: a `.codegraph/` directory comes from the repository and is not a trust signal. Opt in per project: `node "${CLAUDE_PLUGIN_ROOT}/dist/cli/codegraph-trust.js" --action trust --cwd <project>` (records the path in plugin state; `--action untrust` / `--action list`). There is no environment-variable opt-in: a repository can set env through its own `.claude/settings.json`, so only the trust list the user writes counts.
+The installer registers a `codegraph` MCP server (user scope, needs the `codegraph` binary). The tool is `mcp__codegraph__codegraph_explore`; agent allowlists list it and a tool that is not connected is ignored. The SessionStart warm-up (detached `codegraph sync`) is **off by default**: a `.codegraph/` directory comes from the repository and is not a trust signal. Opt in per project: `node "${CLAUDE_PLUGIN_ROOT}/dist/cli/codegraph-trust.js" --action trust --cwd <project>` (records the path in plugin state; `--action untrust` / `--action list`). There is no environment-variable opt-in: a repository can set env through its own `.claude/settings.json`, so only the trust list the user writes counts.
 
 When trusted and an index exists, SessionStart syncs it. Repeated starts do not overlap: an in-flight lock per project (`<data dir>/locks`, replaced when its process is gone or after 6 minutes) skips the spawn. Other flags: `ODD_CLAUDE_CODEGRAPH_INIT=1` also runs `codegraph init` in a trusted project with no index (opt-in); `ODD_CLAUDE_NO_CODEGRAPH_WARMUP=1` disables the warm-up. It never runs in a home or broad directory.
 
@@ -310,41 +314,55 @@ Claude Code removes `AskUserQuestion` from every subagent (verified on 2.1.327).
 
 ## Requirements
 
-- Claude Code >= 2.1.323 (the `engines.claude-code` value in `.claude-plugin/plugin.json`)
-- Node >= 22
-- git
-- Required: the `engram` plugin (declared in `plugin.json` as `dependencies: ["engram@engram"]`; odd-claude does not load without it) and the `engram` binary its MCP server runs
-- Optional: `codegraph`
+| Need | For |
+|---|---|
+| Node >= 22 | the installer and the hooks |
+| `gh`, authenticated (`gh auth login`) | downloading releases of the private repository `carsimax/odd-plugin` |
+| `jq` | the status line |
+| git | the harness (`/odd-doctor` checks it) |
+| Claude Code >= 2.1.323 | the host |
+| Engram, codegraph | optional; the installer offers to install them (`--no-deps` skips). The Engram plugin is also a valid way to get Engram |
 
 `/odd-doctor` reports which of these are present.
 
 ## Install
 
-Add the engram marketplace first (engram is required), then this one:
+One line (needs `gh`):
 
 ```
-/plugin marketplace add Gentleman-Programming/engram
-/plugin marketplace add carsimax/odd-plugin
-/plugin install odd-claude@odd-claude
+gh api repos/carsimax/odd-plugin/contents/scripts/install.sh -H "Accept: application/vnd.github.raw" | sh
 ```
 
-The same from a terminal:
+Pin a release with `| sh -s -- --version <v>`.
+
+From a checkout:
 
 ```
-claude plugin marketplace add Gentleman-Programming/engram
-claude plugin marketplace add carsimax/odd-plugin
-claude plugin install odd-claude@odd-claude
+npm --prefix plugins/odd-claude/tui ci && npm --prefix plugins/odd-claude/tui run bundle && node plugins/odd-claude/tui/dist/odd-claude.mjs install --source plugins/odd-claude
 ```
 
-Without the engram marketplace the install still succeeds but warns `dependency "engram@engram" was not installed … "odd-claude" will not load without it`. With it, the install reports "+ 1 dependency: engram" and both plugins are enabled.
+Afterwards (details in [Installer](#installer)):
 
-The repository is private: the machine needs GitHub credentials that git can use (for example `gh auth login` or a credential helper) for Claude Code to clone it. Auto-update is off for third-party marketplaces unless you enable it.
+| Goal | Command |
+|---|---|
+| Update | `odd-claude.mjs update` |
+| Roll back | `odd-claude.mjs rollback [--to <version>]` |
+| Uninstall | `odd-claude.mjs uninstall [--purge]` |
 
-For development, load the plugin from a checkout without installing:
+`odd-claude.mjs` is the bundled TUI the installer downloads; run it with `node` (a local checkout builds it at `plugins/odd-claude/tui/dist/odd-claude.mjs`).
 
-```
-claude --plugin-dir plugins/odd-claude
-```
+### Migrating from the plugin
+
+The installer detects an installed `odd-claude@*` plugin, uninstalls it (so hooks are not duplicated) and copies its state from `~/.claude/plugins/data/odd-claude-*` into `~/.odd-claude/data`. Renames to know:
+
+| Before (plugin) | Now |
+|---|---|
+| `/odd-claude:profiles`, `/odd-claude:status`, ... | `/odd-profiles`, `/odd-status`, ... | <!-- odd-check: allow -->
+| agents `odd-claude:odd-worker`, ... | `odd-worker`, ... | <!-- odd-check: allow -->
+| MCP `mcp__plugin_odd-claude_review__*` | `mcp__odd-review__*` | <!-- odd-check: allow -->
+| MCP `mcp__plugin_odd-claude_peers__*` | `mcp__odd-peers__*` | <!-- odd-check: allow -->
+
+State lives in `~/.odd-claude/data` (override with `ODD_CLAUDE_HOME`). `CLAUDE_PLUGIN_DATA` and `CLAUDE_PLUGIN_ROOT` are still read as legacy fallbacks.
 
 ## Installer
 
@@ -481,7 +499,7 @@ odd-claude has no permission system of its own: the upstream modes map onto Clau
 
 ## Data directory
 
-State lives under `${CLAUDE_PLUGIN_DATA}` (for an installed plugin `~/.claude/plugins/data/odd-claude-<marketplace>`; with `--plugin-dir` it is `odd-claude-inline`): `sessions/`, `backups/`, `logs/hooks.log` and `setup.json`.
+State lives under `~/.odd-claude/data` (`ODD_CLAUDE_HOME` moves it; the legacy `CLAUDE_PLUGIN_DATA` is still honored): `sessions/`, `backups/`, `logs/hooks.log` and `setup.json`.
 
 ## Development
 
@@ -496,9 +514,9 @@ npm run check   # naming / data-collection guard
 
 `dist/` is committed so the plugin runs without a local `tsc`: **rebuild it (`npm run build`) and commit it with every source change.**
 
-`npm test` is the main node:test suite. Validate the manifests with `claude plugin validate plugins/odd-claude` and `claude plugin validate .`.
+`npm test` is the main node:test suite. The installer end to end (install, then uninstall restoring `settings.json` exactly) runs with `npm run test:e2e` at the repo root after `npm --prefix plugins/odd-claude/tui run bundle`; it needs `jq` and the `claude` CLI.
 
-**CI** (`.github/workflows/ci.yml`): on every pull request and push to `main`, on Ubuntu and macOS with Node 22 and 26, it runs `npm ci`, `npm run build` (on Ubuntu / Node 26 it also fails if the committed `dist/` differs from `src/`), `npm test`, `npm run check`, the bench unit tests (`npm run test:bench` at the repo root) and `claude plugin validate plugins/odd-claude` (Claude Code CLI pinned to 2.1.330).
+**CI** (`.github/workflows/ci.yml`): on every pull request and push to `main`, on Ubuntu and macOS with Node 22 and 26, it runs `npm ci`, `npm run build` (on Ubuntu / Node 26 it also fails if the committed `dist/` differs from `src/`), `npm test`, `npm run check`, the bench unit tests (`npm run test:bench` at the repo root) the TUI tests and bundle, and the installer e2e (`scripts/tests/installer-e2e.sh`, Claude Code CLI pinned to 2.1.330).
 
 ## License and attribution
 

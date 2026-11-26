@@ -34,7 +34,7 @@
     ],
     "PostToolUse": [
       {
-        "matcher": "Read|Grep|Glob|WebFetch|WebSearch|mcp__codegraph__.*|mcp__plugin_odd-claude_codegraph__.*",
+        "matcher": "Read|Grep|Glob|WebFetch|WebSearch|mcp__codegraph__.*",
         "hooks": [
           {
             "type": "command",

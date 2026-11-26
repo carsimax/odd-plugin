@@ -1,17 +1,33 @@
 # odd-claude
 
-odd-claude is a Claude Code plugin marketplace whose first plugin, `odd-claude`, ports the ODD harness to Claude Code. v0.1 is the installable skeleton: Engram dependency, `/odd-doctor`, `/odd-status` and an opt-in `/odd-setup`.
+odd-claude ports the ODD harness to Claude Code. It installs globally (`~/.claude` + `~/.odd-claude`) with a TUI and scripts; it is no longer a Claude Code plugin.
 
-Install (engram is required: `plugin.json` declares `dependencies: ["engram@engram"]`, so add its marketplace first):
+## Quick path
+
+Requirements: Node >= 22, `gh` authenticated (the repository is private), `jq` (status line).
 
 ```
-/plugin marketplace add Gentleman-Programming/engram
-/plugin marketplace add carsimax/odd-plugin
-/plugin install odd-claude@odd-claude
+gh api repos/carsimax/odd-plugin/contents/scripts/install.sh -H "Accept: application/vnd.github.raw" | sh
 ```
 
-From a terminal: `claude plugin marketplace add Gentleman-Programming/engram`, `claude plugin marketplace add carsimax/odd-plugin`, `claude plugin install odd-claude@odd-claude`. Without the engram marketplace the install warns that `odd-claude` will not load without it. The repository is private: the installer needs GitHub access (for example `gh auth login`).
+Pin a release: `... | sh -s -- --version <v>`. From a checkout:
 
-- [Plugin README](plugins/odd-claude/README.md): install, commands, development
+```
+npm --prefix plugins/odd-claude/tui ci && npm --prefix plugins/odd-claude/tui run bundle && node plugins/odd-claude/tui/dist/odd-claude.mjs install --source plugins/odd-claude
+```
+
+| Goal | Command (`odd-claude.mjs` = the bundled TUI, run with `node`) |
+|---|---|
+| Update | `odd-claude.mjs update` |
+| Roll back | `odd-claude.mjs rollback [--to <version>]` |
+| Uninstall | `odd-claude.mjs uninstall [--purge]` |
+
+## Migrating from the plugin
+
+The installer detects `odd-claude@*`, uninstalls it and copies its state from `~/.claude/plugins/data/odd-claude-*`. Names changed: `/odd-claude:profiles` -> `/odd-profiles` (same for every command), agent `odd-claude:odd-worker` -> `odd-worker`, MCP `mcp__plugin_odd-claude_review__*` -> `mcp__odd-review__*`. Details in the [README](plugins/odd-claude/README.md#migrating-from-the-plugin).
+
+## More
+
+- [odd-claude README](plugins/odd-claude/README.md): install, commands, development
 - [Docs](docs/README.md): decisions and research
 - [Roadmap](docs/roadmap.md): phases and status

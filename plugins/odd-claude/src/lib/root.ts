@@ -10,7 +10,7 @@ export function moduleRoot(): string {
   return join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 }
 
-/** `CLAUDE_PLUGIN_ROOT` when set and non-empty, else the module-relative root. */
+/** Legacy: `CLAUDE_PLUGIN_ROOT` is only set by the removed plugin distribution (bench still sets it). `CLAUDE_PLUGIN_ROOT` when set and non-empty, else the module-relative root. */
 export function oddClaudeRoot(env: Record<string, string | undefined> = process.env): string {
   const fromEnv = env.CLAUDE_PLUGIN_ROOT;
   return typeof fromEnv === "string" && fromEnv !== "" ? fromEnv : moduleRoot();
