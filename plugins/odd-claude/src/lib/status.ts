@@ -1,5 +1,5 @@
 // Read-only status (R38 status semantics): plugin, data dir, session state, hooks, roadmap.
-import { listSessionIds, readSessionState, type StateData } from "./state.js";
+import { dataDirFromEnv, listSessionIds, readSessionState, type StateData } from "./state.js";
 
 export const ROADMAP_PHASE = "v5.3: harness research, done-when lint and verifier calibration shipped";
 
@@ -15,23 +15,23 @@ export interface StatusDeps {
 export interface StatusReport {
   schema: 1;
   pluginVersion: string;
-  dataDir: string | null;
+  dataDir: string;
   session: { id: string | null; origin: "flag" | "env" | "latest" | "none"; state: StateData };
   hooks: string[];
   roadmapPhase: string;
 }
 
 export function collectStatus(deps: StatusDeps): StatusReport {
-  const dataDir = deps.env.CLAUDE_PLUGIN_DATA || null;
+  const dataDir = dataDirFromEnv(deps.env);
   let id: string | null = null;
   let origin: StatusReport["session"]["origin"] = "none";
   if (deps.sessionId) [id, origin] = [deps.sessionId, "flag"];
   else if (deps.env.CLAUDE_SESSION_ID) [id, origin] = [deps.env.CLAUDE_SESSION_ID, "env"];
-  else if (dataDir) {
+  else {
     const latest = listSessionIds({ dataDir })[0];
     if (latest !== undefined) [id, origin] = [latest, "latest"];
   }
-  const state = id !== null && dataDir ? readSessionState(id, { dataDir }) : {};
+  const state = id !== null ? readSessionState(id, { dataDir }) : {};
   return {
     schema: 1,
     pluginVersion: deps.pluginVersion,
@@ -51,7 +51,7 @@ export function renderStatus(s: StatusReport): string {
         (keys.length === 0 ? " no state recorded" : ` ${keys.map((k) => `${k}=${JSON.stringify(s.session.state[k])}`).join(" ")}`);
   return [
     `odd-claude ${s.pluginVersion}`,
-    `data dir: ${s.dataDir ?? "not set"}`,
+    `data dir: ${s.dataDir}`,
     summary,
     `hooks: ${s.hooks.length === 0 ? "none" : s.hooks.join(", ")}`,
     `roadmap: ${s.roadmapPhase}`,

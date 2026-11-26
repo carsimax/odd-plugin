@@ -90,16 +90,19 @@ test("CLI: SessionStart fixture records session start in state and emits context
   }
 });
 
-test("CLI: unknown event and missing data dir exit 0", () => {
-  const env = { ...process.env };
+test("CLI: unknown event and missing data dir env exit 0 (the home default is used)", () => {
+  const home = mkdtempSync(join(tmpdir(), "odd-run-home-"));
+  const env: NodeJS.ProcessEnv = { ...process.env, ODD_CLAUDE_HOME: home };
   delete env.CLAUDE_PLUGIN_DATA;
+  delete env.ODD_CLAUDE_DATA;
   const a = spawnSync(process.execPath, [runJs, "Nope"], { input: "{}", env, encoding: "utf8" });
   assert.equal(a.status, 0);
   assert.equal(a.stdout, "");
   const b = spawnSync(process.execPath, [runJs, "SessionStart"], { input: '{"session_id":"x"}', env, encoding: "utf8" });
   assert.equal(b.status, 0);
-  // no data dir: state is skipped, the context still goes out with the default persona
   assert.match(JSON.parse(b.stdout).hookSpecificOutput.additionalContext, /Persona mode: neutral/);
+  assert.ok(existsSync(join(home, "data")), "state went to ODD_CLAUDE_HOME/data");
+  rmSync(home, { recursive: true, force: true });
 });
 
 test("SessionStart context follows the stored persona and covers every source", () => {
@@ -125,7 +128,7 @@ test("UserPromptSubmit emits a bounded language anchor for human prompts only", 
     const out = JSON.parse(r.stdout).hookSpecificOutput;
     assert.equal(out.hookEventName, "UserPromptSubmit");
     assert.match(out.additionalContext, /"hola, qué tal"/);
-    assert.deepEqual(runHook("UserPromptSubmit", JSON.stringify({ prompt: "/odd-claude:status" }), { dataDir: dir }), { exitCode: 0, stdout: "" });
+    assert.deepEqual(runHook("UserPromptSubmit", JSON.stringify({ prompt: "/odd-status" }), { dataDir: dir }), { exitCode: 0, stdout: "" });
     assert.deepEqual(runHook("UserPromptSubmit", "{}", { dataDir: dir }), { exitCode: 0, stdout: "" });
   } finally {
     rmSync(dir, { recursive: true, force: true });

@@ -1,6 +1,6 @@
 # Orchestrator — Full Delegation Card (lazy-loaded)
 
-Main-thread session only, in coordinator mode. You are a COORDINATOR in full delegation mode. The rule itself (you never implement; every authorized mutation of repository content goes to a bounded `odd-claude:odd-worker`, with the general-purpose `Agent` as the reported fallback) is stated in the session context (`Coordinator mode: ON`); no hook blocks edits or any other tool, so the discipline is yours. The human switches it with `/odd-claude:coordinator on|off|status`; the change applies from the next session start (or `/clear`).
+Main-thread session only, in coordinator mode. You are a COORDINATOR in full delegation mode. The rule itself (you never implement; every authorized mutation of repository content goes to a bounded `odd-worker`, with the general-purpose `Agent` as the reported fallback) is stated in the session context (`Coordinator mode: ON`); no hook blocks edits or any other tool, so the discipline is yours. The human switches it with `/odd-coordinator on|off|status`; the change applies from the next session start (or `/clear`).
 
 Never write repository files through `Bash` (`sed -i`, redirects, scripts). If no writer can run, report that blocker; never edit a file yourself.
 
@@ -32,5 +32,5 @@ Handoff language and by-reference specs follow the odd output style (Delegation 
 The triggers are those of the odd output style (Delegation, items 1-7); in this mode these specifics apply:
 
 - **Explore**: after the parallel explorers return, merge them, then one spot check.
-- **Verify**: the writer runs the authorized checks and reports `<command>: <observed result>`, observing RED before it writes; you re-run one reported command as a spot check, and add one independent `odd-claude:odd-verify` only when the Risk line names a high-risk item (`${CLAUDE_PLUGIN_ROOT}/cards/verification.md`).
+- **Verify**: the writer runs the authorized checks and reports `<command>: <observed result>`, observing RED before it writes; you re-run one reported command as a spot check, and add one independent `odd-verify` only when the Risk line names a high-risk item (`${CLAUDE_PLUGIN_ROOT}/cards/verification.md`).
 - **Context backstop**: delegate the next unit instead of absorbing it when context runs long.

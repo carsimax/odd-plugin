@@ -19,7 +19,7 @@ function formatSize(bytes: number): string {
 export function scratchCli(argv: string[], env: Record<string, string | undefined> = process.env): { exitCode: number; stdout: string } {
   const session = flagValue(argv, "--session");
   const merged = envWithDataDir(argv, env);
-  if (!session || !merged.CLAUDE_PLUGIN_DATA) return { exitCode: 0, stdout: "odd-claude scratch: no session or data dir available (run it inside a Claude Code session)." };
+  if (!session) return { exitCode: 0, stdout: "odd-claude scratch: no session available (run it inside a Claude Code session)." };
   const dir = scratchDir(session, { env: merged });
   const l = listScratch(dir);
   if (!l.exists) return { exitCode: 0, stdout: `odd-claude scratch: ${dir}\n(not created yet or already removed)` };

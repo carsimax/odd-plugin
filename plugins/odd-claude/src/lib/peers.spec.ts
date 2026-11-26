@@ -224,12 +224,14 @@ test("session ids: UUID-like only; bad recipient/sender refused; nothing created
   }
 });
 
-test("data dir resolution: env CLAUDE_PLUGIN_DATA is used; relative or missing dir throws", () => {
+test("data dir resolution: env CLAUDE_PLUGIN_DATA is used, else the home default; a relative dir throws", () => {
   const t = tmp();
   try {
     send(B, { from: A, reason: REASON, message: "m" }, { env: { CLAUDE_PLUGIN_DATA: t.dir }, now: () => 1 });
     assert.ok(existsSync(join(t.dir, "peers", B)));
-    assert.throws(() => send(B, { from: A, reason: REASON, message: "m" }, { env: {} }), /no data dir/);
+    const home = join(t.dir, "home");
+    send(B, { from: A, reason: REASON, message: "m" }, { env: { ODD_CLAUDE_HOME: home }, now: () => 1 });
+    assert.ok(existsSync(join(home, "data", "peers", B)));
     assert.throws(() => send(B, { from: A, reason: REASON, message: "m" }, { dataDir: "rel" }), /absolute/);
   } finally {
     t.done();

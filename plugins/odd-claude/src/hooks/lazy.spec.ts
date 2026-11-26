@@ -34,7 +34,7 @@ const inputsFor = (cwd: string): [string, object][] => {
   return [
   ["SessionStart", { ...base, source: "startup" }],
   ["UserPromptSubmit", { ...base, prompt: "hola, qué tal" }],
-  ["UserPromptSubmit", { ...base, prompt: "/odd-claude:status" }],
+  ["UserPromptSubmit", { ...base, prompt: "/odd-status" }],
   ["PreToolUse", { ...base, tool_name: "Bash", tool_input: { command: "ls -la" } }],
   ["PreToolUse", { ...base, tool_name: "Bash", tool_input: { command: "git push origin main" } }],
   ["PreToolUse", { ...base, tool_name: "Read", tool_input: {} }],

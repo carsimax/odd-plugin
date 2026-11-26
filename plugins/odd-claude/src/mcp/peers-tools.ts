@@ -48,7 +48,7 @@ export function fail(code: string, message: string, extra: Record<string, unknow
 }
 
 const UNKNOWN_GUIDANCE =
-  "This session's id is not known to the peers server. Run `/odd-claude:peers` (it shows the id) or restart the session so the SessionStart hook records it; the human then grants with `/odd-claude:peers allow <id>` in the recipient session.";
+  "This session's id is not known to the peers server. Run `/odd-peers` (it shows the id) or restart the session so the SessionStart hook records it; the human then grants with `/odd-peers allow <id>` in the recipient session.";
 
 // ---- list helpers ----
 
@@ -100,7 +100,7 @@ const NO_ARGS: JsonSchema & { type: "object" } = { type: "object", properties: {
 export const PEERS_TOOLS: readonly PeersToolDefinition[] = [
   {
     name: "odd_orchestrator_session_id",
-    description: "Returns this session's id (the one other sessions use to address it and the human uses in `/odd-claude:peers allow <id>`), or session_id null with guidance when it is not known.",
+    description: "Returns this session's id (the one other sessions use to address it and the human uses in `/odd-peers allow <id>`), or session_id null with guidance when it is not known.",
     inputSchema: NO_ARGS,
     annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
     run: (_args, ctx) => {
@@ -147,7 +147,7 @@ export const PEERS_TOOLS: readonly PeersToolDefinition[] = [
       if (me === null) return fail("session_unknown", "this session's id is not known, so consent cannot be checked", { guidance: UNKNOWN_GUIDANCE });
       if (recipient === me) return fail("self_recipient", "the recipient is this session");
       if (!isAllowed(recipient, me, ctx.opts)) {
-        return fail("not_granted", "the recipient has not granted this session; ask the human to run `/odd-claude:peers allow <id>` in the recipient session with this session's id", { sender: me });
+        return fail("not_granted", "the recipient has not granted this session; ask the human to run `/odd-peers allow <id>` in the recipient session with this session's id", { sender: me });
       }
       try {
         const r = send(recipient, { from: me, reason, message }, ctx.opts);

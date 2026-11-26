@@ -2,7 +2,7 @@
 // Every argument is validated against a whitelist (lib/profiles.ts). Exit codes: 0 ok; 1 invalid value; 2 usage / no data dir.
 import { realpathSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { clearProfile, defaultProfile, readProfile, renderPresetList, renderProfiles, setRole, useProfile } from "../lib/profiles.js";
+import { clearProfile, readProfile, renderPresetList, renderProfiles, setRole, useProfile } from "../lib/profiles.js";
 import { envWithDataDir } from "../lib/system.js";
 const USAGE = "usage: profiles.js [list|show|use <name>|set <role> <model> [effort]|clear] [--data-dir <dir>]";
 const usage = (m) => ({ exitCode: 2, stdout: "", stderr: `error: ${m}\n${USAGE}` });
@@ -22,13 +22,12 @@ export function profilesCli(argv, env = process.env) {
             pos.push(a);
     }
     const opts = { env: envWithDataDir(argv, env) };
-    const hasDir = Boolean(opts.env.CLAUDE_PLUGIN_DATA);
     const [cmd = "list", ...rest] = pos;
     const ok = (stdout) => ({ exitCode: 0, stdout, stderr: "" });
     if (cmd === "list" || cmd === "show") {
         if (rest.length > 0)
             return usage(`${cmd} takes no arguments`);
-        const p = hasDir ? readProfile(opts) : defaultProfile();
+        const p = readProfile(opts);
         return ok(cmd === "list" ? renderPresetList(p.active) : renderProfiles(p));
     }
     if (cmd !== "use" && cmd !== "set" && cmd !== "clear")
@@ -39,8 +38,6 @@ export function profilesCli(argv, env = process.env) {
         return usage("set needs <role> <model> [effort]");
     if (cmd === "clear" && rest.length > 0)
         return usage("clear takes no arguments");
-    if (!hasDir)
-        return usage("no data dir (pass --data-dir or set CLAUDE_PLUGIN_DATA)");
     try {
         if (cmd === "use") {
             const p = useProfile(rest[0], opts);

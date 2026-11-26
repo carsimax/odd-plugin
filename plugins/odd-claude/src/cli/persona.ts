@@ -38,7 +38,6 @@ export function personaCli(argv: string[], env: Record<string, string | undefine
   if (!isPersonaMode(mode)) {
     return { exitCode: 1, stdout: "", stderr: `error: invalid persona ${JSON.stringify(mode)}; available modes: ${PERSONA_MODES.join(", ")}` };
   }
-  if (!opts.env.CLAUDE_PLUGIN_DATA) return usageError("no data dir (pass --data-dir or set CLAUDE_PLUGIN_DATA)");
   writePersona(mode, opts);
   return { exitCode: 0, stdout: `persona set to: ${mode}\nApplies from the next session start (or /clear).`, stderr: "" };
 }

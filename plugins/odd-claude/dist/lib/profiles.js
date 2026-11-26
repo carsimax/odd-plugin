@@ -128,8 +128,8 @@ export function clearProfile(opts = {}) {
 /** SessionStart context line (the only routing); always present (balanced by default), agent-file roles only. Never throws. */
 export function profileContextLine(opts = {}) {
     const p = readProfile(opts);
-    const entries = PROFILE_ROLES.filter((role) => p.routing[role] !== undefined).map((role) => `odd-claude:${role}=${p.routing[role].model}`);
-    return `Model profile: ${p.active}${p.active === DEFAULT_PROFILE ? " (default)" : ""}. When you call the Agent tool for one of these odd-claude agents, pass the \`model\` parameter shown (the agent's own frontmatter model is only the default): ${entries.join(", ")}. \`/odd-claude:profiles\` shows or changes it.`;
+    const entries = PROFILE_ROLES.filter((role) => p.routing[role] !== undefined).map((role) => `${role}=${p.routing[role].model}`);
+    return `Model profile: ${p.active}${p.active === DEFAULT_PROFILE ? " (default)" : ""}. When you call the Agent tool for one of these odd-claude agents, pass the \`model\` parameter shown (the agent's own frontmatter model is only the default): ${entries.join(", ")}. \`/odd-profiles\` shows or changes it.`;
 }
 export function renderProfiles(p) {
     const roles = [...PROFILE_ROLES, ...NATIVE_REVIEW_ROLES].filter((role) => p.routing[role] !== undefined);

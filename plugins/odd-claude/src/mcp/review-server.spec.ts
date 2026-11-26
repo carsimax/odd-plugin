@@ -190,7 +190,7 @@ test("initialize negotiates the protocol version and advertises only tools; init
     const result = r.result as any;
     assert.equal(result.protocolVersion, v);
     assert.deepEqual(result.capabilities, { tools: { listChanged: false } });
-    assert.equal(result.serverInfo.name, "odd-claude-review");
+    assert.equal(result.serverInfo.name, "odd-review");
     assert.match(result.serverInfo.version, /^\d+\.\d+\.\d+/);
   }
   const unknown = (await rpc(s, { jsonrpc: "2.0", id: "x", method: "initialize", params: { protocolVersion: "1999-01-01" } }))!;
@@ -742,17 +742,6 @@ test("every invocation the plugin hands out names a registered tool or an existi
     assert.ok(tools.has(ackCmd.execute.command), ackCmd.execute.command);
   });
   for (const t of REVIEW_TOOL_NAMES) assert.ok(tools.has(t));
-});
-
-test("the plugin manifest registers the review server at an existing build output, next to codegraph", () => {
-  const cfg = JSON.parse(readFileSync(join(PLUGIN_ROOT, ".mcp.json"), "utf8")) as { mcpServers: Record<string, { command: string; args: string[] }> };
-  assert.deepEqual(Object.keys(cfg.mcpServers).sort(), ["codegraph", "peers", "review"]);
-  const review = cfg.mcpServers.review!;
-  assert.equal(review.command, "node");
-  assert.deepEqual(review.args, ["${CLAUDE_PLUGIN_ROOT}/dist/mcp/review-server.js"]);
-  assert.ok(existsSync(join(PLUGIN_ROOT, "dist", "mcp", "review-server.js")));
-  const plugin = JSON.parse(readFileSync(join(PLUGIN_ROOT, ".claude-plugin", "plugin.json"), "utf8")) as Record<string, unknown>;
-  assert.equal(plugin.mcpServers, undefined, "declared once, in .mcp.json");
 });
 
 // ---- S1: the contract texts an agent follows are accepted literally ----

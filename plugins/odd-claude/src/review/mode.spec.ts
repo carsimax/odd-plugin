@@ -53,8 +53,8 @@ test("default is OFF: nothing stored, nothing set, source default", () => {
     const s = readReviewMode(f.repo, { dataDir: f.data });
     assert.deepEqual(s, { effective: "off", source: "default", global: "unset", cloneLocal: "unset", problems: [] });
     assert.equal(readReviewMode(undefined, { dataDir: f.data }).effective, "off");
-    // no data dir at all (hook without CLAUDE_PLUGIN_DATA): still off, never throws
-    assert.equal(readReviewMode(f.repo, { env: {} }).effective, "off");
+    // no data dir env at all: the home default holds nothing, still off, never throws
+    assert.equal(readReviewMode(f.repo, { env: { ODD_CLAUDE_HOME: join(f.data, "nohome") } }).effective, "off");
   } finally {
     f.cleanup();
   }
@@ -103,12 +103,12 @@ test("clone scope: disable stores an off-only override under <git-common-dir>/od
   }
 });
 
-test("clone scope without a repository, global scope without a data dir: typed errors, nothing written", () => {
+test("clone scope without a repository, global scope with a relative data dir: typed errors, nothing written", () => {
   const f = fx();
   try {
     assert.throws(() => setReviewMode("disable", "clone", f.plain, { dataDir: f.data }), ReviewModeError);
     assert.throws(() => setReviewMode("disable", "clone", undefined, { dataDir: f.data }), ReviewModeError);
-    assert.throws(() => setReviewMode("enable", "global", f.repo, { env: {} }), ReviewModeError);
+    assert.throws(() => setReviewMode("enable", "global", f.repo, { dataDir: "relative" }), ReviewModeError);
     assert.deepEqual(tree(f.data), []);
     assert.deepEqual(tree(join(f.commonDir, "odd-plugin")), []);
   } finally {

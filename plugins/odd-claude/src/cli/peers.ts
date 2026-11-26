@@ -8,14 +8,14 @@ import { envWithDataDir, flagValue } from "../lib/system.js";
 
 const REFUSAL =
   "odd-claude peers: this command is read-only (list, status). The CLI cannot grant or revoke; only the human can, by typing\n" +
-  "`/odd-claude:peers allow <session-id>` or `/odd-claude:peers revoke <session-id|--all>` as their own prompt.";
+  "`/odd-peers allow <session-id>` or `/odd-peers revoke <session-id|--all>` as their own prompt.";
 
 export function peersCli(argv: string[], env: Record<string, string | undefined> = process.env): { exitCode: number; stdout: string } {
   const sub = argv[0];
   if (sub !== "list" && sub !== "status") return { exitCode: 2, stdout: REFUSAL };
   const session = flagValue(argv, "--session");
   const merged = envWithDataDir(argv, env);
-  if (!session || !merged.CLAUDE_PLUGIN_DATA) return { exitCode: 0, stdout: "odd-claude peers: no session or data dir available (run it inside a Claude Code session)." };
+  if (!session) return { exitCode: 0, stdout: "odd-claude peers: no session available (run it inside a Claude Code session)." };
   try {
     const grants = listGrants(session, { env: merged });
     if (grants.length === 0) return { exitCode: 0, stdout: `odd-claude peers: session ${session} accepts messages from nobody (closed by default).` };

@@ -64,10 +64,18 @@ test("invalid mode: exit 1, stderr error, stored persona unchanged", () => {
   }
 });
 
-test("usage errors exit 2; missing data dir on write exits 2", () => {
+test("usage errors exit 2", () => {
   assert.equal(personaCli(["--bogus"], {}).exitCode, 2);
   assert.equal(personaCli(["--mode"], {}).exitCode, 2);
-  const r = personaCli(["--mode", "neutral"], {});
-  assert.equal(r.exitCode, 2);
-  assert.match(r.stderr, /no data dir/);
+});
+
+test("a write without a data dir flag or env goes to ODD_CLAUDE_HOME/data", () => {
+  const home = tmp();
+  try {
+    const r = personaCli(["--mode", "neutral"], { ODD_CLAUDE_HOME: home });
+    assert.equal(r.exitCode, 0);
+    assert.equal(readPersona({ dataDir: join(home, "data") }), "neutral");
+  } finally {
+    rmSync(home, { recursive: true, force: true });
+  }
 });

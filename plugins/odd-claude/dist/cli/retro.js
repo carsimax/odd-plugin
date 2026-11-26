@@ -22,8 +22,6 @@ export function retroCli(argv, env = process.env) {
             if (session === undefined)
                 return note("No session id or transcript (pass --session <id> --data-dir <dir>, or --transcript <path>); no retro to show.");
             const e = envWithDataDir(argv, env);
-            if (!e.CLAUDE_PLUGIN_DATA)
-                return note("No data dir (pass --data-dir <dir> or set CLAUDE_PLUGIN_DATA); no retro to show.");
             path = readTranscriptPath(session, { env: e });
             if (path === undefined)
                 return note("No transcript path recorded for this session yet (it is saved at the next prompt).");

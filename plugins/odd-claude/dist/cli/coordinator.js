@@ -32,8 +32,6 @@ export function coordinatorCli(argv, env) {
         return { exitCode: 1, stdout: "", stderr: `error: invalid action ${JSON.stringify(action)}; available actions: ${ACTIONS.join(", ")}` };
     }
     if (action !== "status") {
-        if (!opts.env.CLAUDE_PLUGIN_DATA)
-            return usageError("no data dir (pass --data-dir or set CLAUDE_PLUGIN_DATA)");
         writeDelegationMode(action === "on" ? "full" : "organic", opts);
         return {
             exitCode: 0,

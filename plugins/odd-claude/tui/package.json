@@ -1,0 +1,23 @@
+{
+  "name": "odd-claude-tui",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Interactive installer for odd-claude (Ink), bundled with the CLI into one file: dist/odd-claude.mjs",
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "bundle": "node build.mjs",
+    "bundle:test": "node build.mjs --tests",
+    "test": "node build.mjs --tests && node --test \"dist-test/*.spec.mjs\""
+  },
+  "devDependencies": {
+    "@types/node": "^20.19.0",
+    "@types/react": "^19.3.0",
+    "esbuild": "^0.28.0",
+    "ink": "^8.0.0",
+    "ink-testing-library": "^4.0.0",
+    "react": "^19.3.0",
+    "typescript": "5.9.3"
+  }
+}

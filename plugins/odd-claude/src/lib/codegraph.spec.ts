@@ -67,16 +67,6 @@ test("run: missing binary, timeout, failure and a throwing exec are reported and
   }
 });
 
-test(".mcp.json ships a `codegraph` stdio server that runs `codegraph serve --mcp`", async () => {
-  const { readFileSync } = await import("node:fs");
-  const raw = JSON.parse(readFileSync(new URL("../../.mcp.json", import.meta.url), "utf8")) as {
-    mcpServers: Record<string, { command: string; args: string[] }>;
-  };
-  assert.deepEqual(Object.keys(raw.mcpServers), ["codegraph", "review", "peers"]);
-  assert.deepEqual(raw.mcpServers.peers, { command: "node", args: ["${CLAUDE_PLUGIN_ROOT}/dist/mcp/peers-server.js"] });
-  assert.deepEqual(raw.mcpServers.codegraph, { command: "codegraph", args: ["serve", "--mcp"] });
-});
-
 test("plan: a .codegraph index alone never warms up; trust is required (R1-001)", () => {
   assert.deepEqual(planWarmup("/p", deps({ isTrusted: () => false })), { action: "skip", reason: "untrusted" });
   // init opt-in does not bypass trust either

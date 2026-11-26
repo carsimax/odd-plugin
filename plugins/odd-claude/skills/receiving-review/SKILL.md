@@ -9,7 +9,7 @@ metadata:
 
 ## Activation Contract
 
-Use when you must act on review feedback: a human's comments, PR threads, bot or AI reviews, `/odd-claude:4r-review` lenses, `/odd-claude:judgment-day` verdicts, or odd-verify findings. It governs how items are evaluated before fixing; it does not replace the fix flows of Judgment Day or 4r-review.
+Use when you must act on review feedback: a human's comments, PR threads, bot or AI reviews, `/4r-review` lenses, `/judgment-day` verdicts, or odd-verify findings. It governs how items are evaluated before fixing; it does not replace the fix flows of Judgment Day or 4r-review.
 
 ## Hard Rules
 
@@ -20,7 +20,7 @@ Use when you must act on review feedback: a human's comments, PR threads, bot or
 - Push back with technical evidence (code, tests, observed output), not defensiveness. If you cannot verify an item, say what is missing and ask.
 - Order: clarifications first, then blocking issues, then simple fixes, then complex ones. One item at a time within the correction batch, each with its check; then run the authorized suite and checks.
 - No performative agreement ("You're absolutely right", "Great point"). State what changed and where, or the evidence for declining. If you pushed back and were wrong, say so in one line and fix it.
-- Answer a GitHub inline comment in its thread (`gh api repos/{owner}/{repo}/pulls/{pr}/comments/{id}/replies`), not as a top-level comment. Wording follows `/odd-claude:comment-writer` and the thread's language.
+- Answer a GitHub inline comment in its thread (`gh api repos/{owner}/{repo}/pulls/{pr}/comments/{id}/replies`), not as a top-level comment. Wording follows `/comment-writer` and the thread's language.
 
 ## Decision Gates
 

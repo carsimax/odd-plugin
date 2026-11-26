@@ -40,9 +40,11 @@ test("missing session id, missing data dir or garbage input never throw and writ
   try {
     recordSubagentStart({}, { dataDir: dir });
     recordSubagentStart({ session_id: "s1", agent_id: 5 }, { dataDir: dir });
-    recordSubagentStart({ session_id: "s1", agent_id: "a" }, { env: {} });
+    const home = { env: { ODD_CLAUDE_HOME: join(dir, "home") } };
+    recordSubagentStart({ session_id: "s1", agent_id: "a" }, home); // no data dir env: the home default
     assert.deepEqual(readSubagents("s1", { dataDir: dir }), []);
-    assert.deepEqual(readSubagents("nope", { env: {} }), []);
+    assert.equal(readSubagents("s1", home).length, 1);
+    assert.deepEqual(readSubagents("nope", home), []);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

@@ -64,6 +64,6 @@ test("cards/tracking.md: a task is closed only with git or Log evidence, else th
 });
 
 test("status skill: the description mentions the feature-document lint", () => {
-  const fm = /^---\n([\s\S]*?)\n---/.exec(read("skills/status/SKILL.md"))?.[1] ?? "";
+  const fm = /^---\n([\s\S]*?)\n---/.exec(read("skills/odd-status/SKILL.md"))?.[1] ?? "";
   assert.match(fm, /^description:.*lint/m);
 });

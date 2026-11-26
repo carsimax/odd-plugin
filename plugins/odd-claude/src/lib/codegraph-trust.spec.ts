@@ -31,7 +31,7 @@ test("trust: default untrusted; explicit trust is per project path; untrust reve
 
 test("trust: the env var ODD_CLAUDE_CODEGRAPH_WARMUP is ignored (repo settings can set env); no data dir means untrusted, never throws", () => {
   assert.equal(isTrustedProject("/x", { ODD_CLAUDE_CODEGRAPH_WARMUP: "1" }, { dataDir: "/nonexistent-odd-dir" }), false);
-  assert.equal(isTrustedProject("/x", {}, { env: {} }), false);
+  assert.equal(isTrustedProject("/x", {}, { env: { ODD_CLAUDE_HOME: "/nonexistent-odd-home" } }), false);
 });
 
 test("trust cli: trust/untrust/list with exit codes", () => {
@@ -46,7 +46,8 @@ test("trust cli: trust/untrust/list with exit codes", () => {
     assert.match(codegraphTrustCli(["--action", "untrust", "--cwd", "/a/proj"], env).stdout, /untrusted: \/a\/proj/);
     assert.equal(codegraphTrustCli(["--action", "nope"], env).exitCode, 1);
     assert.equal(codegraphTrustCli(["--bogus"], env).exitCode, 2);
-    assert.equal(codegraphTrustCli(["--action", "trust"], {}).exitCode, 2); // no data dir
+    assert.equal(codegraphTrustCli(["--action", "trust", "--cwd", "/b/proj"], { ODD_CLAUDE_HOME: join(t.dir, "home") }).exitCode, 0); // home default data dir
+    assert.match(codegraphTrustCli(["--action", "list"], { ODD_CLAUDE_HOME: join(t.dir, "home") }).stdout, /\/b\/proj/);
   } finally {
     t.done();
   }

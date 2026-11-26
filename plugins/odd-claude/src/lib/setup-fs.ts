@@ -1,4 +1,4 @@
-// Write path of /odd-claude:setup. Real filesystem; callers (tests/CLI) pick the paths.
+// Write path of /odd-setup. Real filesystem; callers (tests/CLI) pick the paths.
 // Order on apply: validate/plan -> backup original (atomic) -> record state -> atomic write.
 import { accessSync, constants, existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, realpathSync, statSync } from "node:fs";
 import { join } from "node:path";
@@ -51,7 +51,7 @@ export function listBackups(dataDir: string): string[] {
 type Target = { ok: true; path: string } | { ok: false; error: string };
 
 /** Follows a symlinked settings file so the link is kept and its target updated. */
-function resolveTarget(path: string): Target {
+export function resolveTarget(path: string): Target {
   try {
     if (lstatSync(path).isSymbolicLink()) return { ok: true, path: realpathSync(path) };
   } catch (err) {
@@ -65,7 +65,7 @@ function resolveTarget(path: string): Target {
 }
 
 /** Error text when an existing target cannot be written by this user; undefined when fine. */
-function notWritable(path: string): string | undefined {
+export function notWritable(path: string): string | undefined {
   if (!existsSync(path)) return undefined;
   try {
     accessSync(path, constants.W_OK);
@@ -90,7 +90,7 @@ function record(dataDir: string, backupPath: string): void {
   writePluginState("setup", { ...prev, lastBackup: backupPath, backups: [...backups, backupPath] }, { dataDir });
 }
 
-function fileMode(path: string): number | undefined {
+export function fileMode(path: string): number | undefined {
   return existsSync(path) ? statSync(path).mode & 0o7777 : undefined;
 }
 
@@ -130,7 +130,7 @@ export function applyMode(opts: SetupOptions & { mode: string }): ApplyResult {
 }
 
 /** A symlink whose target does not exist: realpath would have thrown, so the path is unchanged. */
-function lstatDangling(path: string, resolved: string): boolean {
+export function lstatDangling(path: string, resolved: string): boolean {
   try {
     return lstatSync(path).isSymbolicLink() && !existsSync(resolved);
   } catch {

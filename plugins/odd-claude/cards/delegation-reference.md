@@ -25,14 +25,14 @@ Progress is shown through the visible task list (`TaskCreate`/`TaskUpdate`): kee
 | Action | Direct inline | Delegated direct worker |
 |--------|---------------|-------------------------|
 | Read to decide/verify within the cumulative evidence budget (one parallel batch: at most 3 calls, ~10k tokens) | ✅ | — |
-| Read to explore/understand beyond the evidence budget | — | ✅ several parallel explorers (`odd-claude:odd-explore`), one per distinct front (handoff of at most ~2k tokens each, `path:line` evidence) |
+| Read to explore/understand beyond the evidence budget | — | ✅ several parallel explorers (`odd-explore`), one per distinct front (handoff of at most ~2k tokens each, `path:line` evidence) |
 | Read as preparation for writing | ✅ for understood inline work | ✅ together with the delegated write |
 | Write a small task (one understood change, any number of files) | ✅ | — |
 | Write a large task with no Writer rule reason | ✅ following the logbook | — |
-| Write a unit with a Writer rule reason | — | ✅ one bounded writer per unit (`odd-claude:odd-worker`) |
+| Write a unit with a Writer rule reason | — | ✅ one bounded writer per unit (`odd-worker`) |
 | Bash for state (`git`, `gh`) | ✅ | — |
 | Focused test and suite of the change being made | ✅ in one command | — |
-| Named high-risk item | — | ✅ independent `odd-claude:odd-verify` |
+| Named high-risk item | — | ✅ independent `odd-verify` |
 
 Check duration alone never triggers a verifier.
 
@@ -46,7 +46,7 @@ Once a trigger fires, the parent MUST delegate through the `Agent` tool. Never f
 
 The canonical Writer rule under Delegation Triggers overrides this general runtime preference.
 
-1. **Evidence-budget rule**: as in the odd output style (Delegation, item 2). Route generic exploration first to `odd-claude:odd-explore`; if missing or unusable, use a general-purpose `Agent` with the same read-only mapping task and report the fallback.
+1. **Evidence-budget rule**: as in the odd output style (Delegation, item 2). Route generic exploration first to `odd-explore`; if missing or unusable, use a general-purpose `Agent` with the same read-only mapping task and report the fallback.
 2. **Writer rule**: follow the canonical Writer rule under Delegation Triggers.
 3. **Incident rule**: after wrong `cwd`, accidental repository/worktree mutation, failed merge recovery, confusing test command, or environment workaround, stop and diagnose the incident separately before resuming.
 4. **Context backstop**: when the context advisory fires, pause and delegate the next unit that needs several steps instead of silently continuing monolithically; single small edits stay inline.
@@ -64,7 +64,7 @@ Use inline execution when the task is small by the always-on Task Size section: 
 
 Delegate when a mechanism's own trigger fires, within the ODD workflow: understanding an unfamiliar module beyond the evidence budget (explore), implementing a unit with a Writer rule reason (writer), or checking a high-risk change (independent verifier).
 
-Use the `Agent` tool with the plugin's agents (`odd-claude:odd-explore`, `odd-claude:odd-worker`, `odd-claude:odd-verify`). Continue a finished or paused subagent with `SendMessage` instead of relaunching equivalent work. For bounded writes, follow the canonical Writer rule under Delegation Triggers.
+Use the `Agent` tool with the plugin's agents (`odd-explore`, `odd-worker`, `odd-verify`). Continue a finished or paused subagent with `SendMessage` instead of relaunching equivalent work. For bounded writes, follow the canonical Writer rule under Delegation Triggers.
 
 #### Background Subagents
 
@@ -81,7 +81,7 @@ Waiting on CI, a build, or a server is not delegation: start it with `Bash` and 
 
 For generic mapping, follow the Evidence-budget rule in the delegation card.
 
-Delegate generic verification that executes or delegates commands per the Verification rule (trigger 3 under Delegation Triggers) -- the normative routing lives in `${CLAUDE_PLUGIN_ROOT}/cards/verification.md`, not here: the bounded writer always self-verifies via `## Verification`; a named high-risk item also requires `odd-claude:odd-verify` (or a general-purpose `Agent` fallback, with the same read-only verification constraints, exact parent-authorized commands, and fallback reporting). `## Known environmental failures`: `odd-claude:odd-worker`'s Verification contract. The change's own focused test and suite run inline. Separate exploration stays reserved for when the parent needs the map to decide or route; reading that prepares a write belongs with the writer making the change, consistent with the Delegation Rules table above.
+Delegate generic verification that executes or delegates commands per the Verification rule (trigger 3 under Delegation Triggers) -- the normative routing lives in `${CLAUDE_PLUGIN_ROOT}/cards/verification.md`, not here: the bounded writer always self-verifies via `## Verification`; a named high-risk item also requires `odd-verify` (or a general-purpose `Agent` fallback, with the same read-only verification constraints, exact parent-authorized commands, and fallback reporting). `## Known environmental failures`: `odd-worker`'s Verification contract. The change's own focused test and suite run inline. Separate exploration stays reserved for when the parent needs the map to decide or route; reading that prepares a write belongs with the writer making the change, consistent with the Delegation Rules table above.
 
 For delegation other than a large task's bounded writes, use the generic fallback: a general-purpose `Agent` in the current runtime; never fall back to an external pane, terminal, session, window, or remote worker. The delegation trigger remains mandatory. If no delegation mechanism is available, stop the complex work and tell the user instead of silently continuing inline.
 

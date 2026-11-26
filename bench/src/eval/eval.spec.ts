@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { existsSync, mkdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
-import { isAbsolute, join, relative } from "node:path";
+import { dirname, isAbsolute, join, relative } from "node:path";
+import { fileURLToPath } from "node:url";
 import { afterEach, describe, test } from "node:test";
 import { chmodSync } from "node:fs";
 import { buildClaudeArgv } from "./argv.js";
@@ -11,7 +12,8 @@ import { planRuns, runEval, runOne, type EvalOptions, type RunRecord } from "./r
 import { parseStream } from "./stream.js";
 import { summarize } from "./stats.js";
 import { loadTasks } from "./tasks.js";
-import { FAKE_PLUGIN_JSON, goodStream, installFakeClaude, makeFakePlugin, makeTask, scratch } from "./fixtures.js";
+import { FAKE_INSTALL_LOG, goodStream, installFakeClaude, makeFakeInstallerSource, makeTask, scratch } from "./fixtures.js";
+import { installerSourceError, installOdd } from "./install.js";
 
 const dirs: string[] = [];
 const tmp = (): string => { const d = scratch(); dirs.push(d); return d; };
@@ -22,10 +24,10 @@ const logOf = (f: string): Record<string, any>[] => (existsSync(f) ? readFileSyn
 function setup(over: Partial<Parameters<typeof installFakeClaude>[1]> = {}, taskOver = {}): { root: string; tasksDir: string; log: string; opts: EvalOptions } {
   const root = tmp(), tasksDir = join(root, "tasks"), log = join(root, "calls.log");
   makeTask(tasksDir, "t1", taskOver);
-  makeFakePlugin(join(root, "plugin"));
+  makeFakeInstallerSource(join(root, "source"));
   const claudeBin = installFakeClaude(root, { logFile: log, stdout: goodStream(), proof: {}, ...over });
   const opts: EvalOptions = {
-    tasks: loadTasks(tasksDir), arms: ["none", "coord-on", "coord-off"], trials: 1, pluginDir: join(root, "plugin"), claudeBin, model: "opus",
+    tasks: loadTasks(tasksDir), arms: ["none", "coord-on", "coord-off"], trials: 1, sourceDir: join(root, "source"), claudeBin, model: "opus",
     maxBudgetUsd: 1, maxTurns: 5, totalBudgetUsd: 70, outDir: join(root, "out"),
     baseEnv: { PATH: process.env.PATH, TMPDIR: process.env.TMPDIR, ANTHROPIC_API_KEY: "k", SECRET_PARENT_VAR: "leak", CLAUDE_CONFIG_DIR: "/real/.claude", CLAUDE_PLUGIN_DATA: "/real/data" },
   };
@@ -34,7 +36,7 @@ function setup(over: Partial<Parameters<typeof installFakeClaude>[1]> = {}, task
 
 const SANDBOX = { sandbox: { enabled: true, autoAllowBashIfSandboxed: true, allowUnsandboxedCommands: false, failIfUnavailable: true } };
 describe("argv", () => {
-  const base = { prompt: "P", pluginDir: "/p", model: "opus", maxTurns: 9, maxBudgetUsd: 1.5 };
+  const base = { prompt: "P", model: "opus", maxTurns: 9, maxBudgetUsd: 1.5 };
   test("none arm: no plugin-dir; never --bare nor a bypass flag", () => {
     const a = buildClaudeArgv({ ...base, arm: "none" });
     assert.ok(!a.includes("--plugin-dir"));
@@ -47,10 +49,11 @@ describe("argv", () => {
     assert.equal(a.at(-1), "P");
     assert.ok(a.includes("--no-session-persistence") && a.includes("--verbose"));
   });
-  test("coord arms: plugin-dir and the odd output style via --settings", () => {
+  test("coord arms: no --plugin-dir, sandbox-only --settings, --setting-sources user so the installed settings.json (hooks, output style odd) loads", () => {
     for (const arm of ["coord-on", "coord-off"] as const) {
-      const a = buildClaudeArgv({ ...base, arm }); assert.equal(a[a.indexOf("--plugin-dir") + 1], "/p"); assert.ok(!a.includes("--bare"));
-      assert.deepEqual(JSON.parse(a[a.indexOf("--settings") + 1]), { outputStyle: "odd-claude:odd", ...SANDBOX });
+      const a = buildClaudeArgv({ ...base, arm }); assert.ok(!a.includes("--plugin-dir") && !a.includes("--bare"));
+      assert.equal(a[a.indexOf("--setting-sources") + 1], "user");
+      assert.deepEqual(JSON.parse(a[a.indexOf("--settings") + 1]), SANDBOX);
     }
     assert.deepEqual(JSON.parse(buildClaudeArgv({ ...base, arm: "none" }).join("\u0000").split("--settings\u0000")[1].split("\u0000")[0]), SANDBOX);
   });
@@ -62,7 +65,7 @@ describe("argv", () => {
       assert.equal(a.filter((x) => x === "--settings").length, 1);
       const s = JSON.parse(a[a.indexOf("--settings") + 1]);
       assert.deepEqual(s.sandbox, SANDBOX.sandbox);
-      assert.deepEqual(Object.keys(s).sort(), arm.startsWith("coord") ? ["outputStyle", "sandbox"] : ["sandbox"]);
+      assert.deepEqual(Object.keys(s).sort(), ["sandbox"]); assert.ok(!a.includes("--plugin-dir"));
     }
   });
 });
@@ -73,14 +76,14 @@ describe("isolation", () => {
     const base = { PATH: "/bin", ANTHROPIC_API_KEY: "k", SECRET_PARENT_VAR: "x", CLAUDE_CONFIG_DIR: "/real", CLAUDE_PLUGIN_DATA: "/real/d", CLAUDE_CODE_PLUGIN_DIRS: "/x", HOME: "/Users/real" };
     prepareIsolation(d, "coord-on");
     const env = buildRunEnv(base, d, "coord-on");
-    assert.equal(env.HOME, d.home); assert.equal(env.CLAUDE_CONFIG_DIR, d.config); assert.equal(env.CLAUDE_PLUGIN_DATA, d.pluginData);
+    assert.equal(env.HOME, d.home); assert.equal(env.CLAUDE_CONFIG_DIR, d.config); assert.equal(env.ODD_CLAUDE_HOME, d.oddHome); assert.equal(env.CLAUDE_PLUGIN_DATA, undefined);
     assert.equal(env.ANTHROPIC_API_KEY, "k"); assert.equal(env.SECRET_PARENT_VAR, undefined); assert.equal(env.CLAUDE_CODE_PLUGIN_DIRS, undefined);
-    assert.ok(d.pluginData.startsWith(root) && d.pluginData.endsWith("plugins/data/odd-claude-inline"));
-    assert.deepEqual(JSON.parse(readFileSync(join(d.pluginData, "delegation.json"), "utf8")), { version: 1, sessionId: "delegation", data: { mode: "full" } });
+    assert.ok(d.oddHome.startsWith(root) && d.config.startsWith(root) && d.dataDir === join(d.oddHome, "data"));
+    assert.deepEqual(JSON.parse(readFileSync(join(d.dataDir, "delegation.json"), "utf8")), { version: 1, sessionId: "delegation", data: { mode: "full" } });
     const r2 = tmp(), d2 = runDirs(r2); prepareIsolation(d2, "coord-off");
-    assert.equal(JSON.parse(readFileSync(join(d2.pluginData, "delegation.json"), "utf8")).data.mode, "organic");
+    assert.equal(JSON.parse(readFileSync(join(d2.dataDir, "delegation.json"), "utf8")).data.mode, "organic");
     const r3 = tmp(), d3 = runDirs(r3); prepareIsolation(d3, "none");
-    assert.ok(!existsSync(d3.pluginData)); assert.equal(buildRunEnv(base, d3, "none").CLAUDE_PLUGIN_DATA, undefined);
+    assert.ok(!existsSync(d3.dataDir)); assert.equal(buildRunEnv(base, d3, "none").ODD_CLAUDE_HOME, undefined); assert.equal(buildRunEnv(base, d3, "none").CLAUDE_PLUGIN_DATA, undefined);
   });
   test("hasAuthEnv", () => { assert.equal(hasAuthEnv({}), false); assert.equal(hasAuthEnv({ CLAUDE_CODE_OAUTH_TOKEN: "t" }), true); });
   test("a run never sees the parent's config/plugin dirs and seeds the arm state only in its own dir", async () => {
@@ -92,9 +95,9 @@ describe("isolation", () => {
       assert.notEqual(c.env.CLAUDE_CONFIG_DIR, "/real/.claude"); assert.notEqual(c.env.HOME, process.env.HOME);
       assert.equal(c.env.SECRET_PARENT_VAR, null); assert.equal(c.env.ANTHROPIC_API_KEY, "k");
     }
-    const byArm = Object.fromEntries(calls.map((c) => [c.argv.includes("--plugin-dir") ? (JSON.parse(c.delegation).data.mode === "full" ? "on" : "off") : "none", c]));
+    const byArm = Object.fromEntries(calls.map((c) => [c.delegation === null ? "none" : JSON.parse(c.delegation).data.mode === "full" ? "on" : "off", c]));
     assert.deepEqual(Object.keys(byArm).sort(), ["none", "off", "on"]);
-    assert.equal(byArm.none.delegation, null); assert.equal(byArm.none.env.CLAUDE_PLUGIN_DATA, null);
+    assert.equal(byArm.none.delegation, null); assert.equal(byArm.none.env.CLAUDE_PLUGIN_DATA, null); assert.equal(byArm.none.env.ODD_CLAUDE_HOME, null);
     assert.ok(!existsSync(byArm.on.env.CLAUDE_CONFIG_DIR), "workspace and private dirs are removed afterwards");
   });
 });
@@ -141,7 +144,7 @@ describe("runOne grading", () => {
     const bin = join(root, "fake");
     // A fake that edits relative to its cwd.
     writeFileSync(bin, `#!${process.execPath}\nconst fs=require("fs");fs.mkdirSync("src",{recursive:true});fs.writeFileSync("src/value.txt","fixed");process.stdout.write(${JSON.stringify(goodStream())});\n`, { mode: 0o755 });
-    const mk = (extra: NodeJS.ProcessEnv): EvalOptions => ({ tasks: loadTasks(tasksDir), arms: ["none"], trials: 1, pluginDir: "/p", claudeBin: bin, model: "opus", maxBudgetUsd: 1, maxTurns: 5, totalBudgetUsd: 70, outDir: join(root, "o"), baseEnv: { PATH: process.env.PATH, ANTHROPIC_API_KEY: "k", ...extra } });
+    const mk = (extra: NodeJS.ProcessEnv): EvalOptions => ({ tasks: loadTasks(tasksDir), arms: ["none"], trials: 1, sourceDir: "/p", claudeBin: bin, model: "opus", maxBudgetUsd: 1, maxTurns: 5, totalBudgetUsd: 70, outDir: join(root, "o"), baseEnv: { PATH: process.env.PATH, ANTHROPIC_API_KEY: "k", ...extra } });
     const clean = await runOne({ task: loadTasks(tasksDir)[0], arm: "none", trial: 1 }, mk({}));
     assert.equal(clean.passed, true); assert.equal(clean.visible_tests_modified, false);
     const { testsModified } = await import("./runner.js");
@@ -154,7 +157,7 @@ describe("runOne grading", () => {
     makeTask(tasksDir, "t1");
     const bin = join(root, "fake");
     writeFileSync(bin, `#!${process.execPath}\nrequire("fs").writeFileSync("test/visible.test.js","changed");process.stdout.write(${JSON.stringify(goodStream())});\n`, { mode: 0o755 });
-    const rec = await runOne({ task: loadTasks(tasksDir)[0], arm: "none", trial: 1 }, { tasks: [], arms: ["none"], trials: 1, pluginDir: "/p", claudeBin: bin, model: "opus", maxBudgetUsd: 1, maxTurns: 5, totalBudgetUsd: 70, outDir: join(root, "o"), baseEnv: { PATH: process.env.PATH } });
+    const rec = await runOne({ task: loadTasks(tasksDir)[0], arm: "none", trial: 1 }, { tasks: [], arms: ["none"], trials: 1, sourceDir: "/p", claudeBin: bin, model: "opus", maxBudgetUsd: 1, maxTurns: 5, totalBudgetUsd: 70, outDir: join(root, "o"), baseEnv: { PATH: process.env.PATH } });
     assert.equal(rec.visible_tests_modified, true); assert.equal(rec.passed, false);
   });
   test("a nonzero exit without a result is an error record, not a crash", async () => {
@@ -182,40 +185,70 @@ describe("grading path", () => {
   });
 });
 
-describe("plugin staging, output style and proof fields", () => {
-  const armOf = (c: Record<string, any>): string => (!c.argv.includes("--plugin-dir") ? "none" : JSON.parse(c.delegation).data.mode === "full" ? "coord-on" : "coord-off");
+describe("installed arm, output style and proof fields", () => {
+  const armOf = (c: Record<string, any>): string => (c.delegation === null ? "none" : JSON.parse(c.delegation).data.mode === "full" ? "coord-on" : "coord-off");
+  const installs = (root: string): Record<string, any>[] => logOf(join(root, "source", FAKE_INSTALL_LOG));
 
-  test("plugin arms get a staged copy without dependencies; the source is untouched; the copy is removed afterwards", async () => {
-    const a = setup(); const srcManifest = join(a.opts.pluginDir, ".claude-plugin", "plugin.json");
-    const before = readFileSync(srcManifest, "utf8");
-    await runEval(a.opts);
-    const calls = logOf(a.log).filter((c) => c.argv.includes("--plugin-dir"));
-    assert.equal(calls.length, 2);
-    const dirsUsed = new Set(calls.map((c) => c.argv[c.argv.indexOf("--plugin-dir") + 1]));
-    assert.equal(dirsUsed.size, 1, "staged once per eval");
-    const staged = [...dirsUsed][0];
-    assert.notEqual(staged, a.opts.pluginDir);
-    for (const c of calls) { const m = JSON.parse(c.pluginJson); assert.equal(m.name, "odd-claude"); assert.ok(!("dependencies" in m)); }
-    assert.equal(readFileSync(srcManifest, "utf8"), before); assert.deepEqual(JSON.parse(before), FAKE_PLUGIN_JSON);
-    assert.ok(!existsSync(staged), "staged copy removed");
-  });
-  test("the staged copy is removed when the eval throws; no staging for the none arm only", async () => {
-    const a = setup(); a.opts.arms = ["coord-on"]; a.opts.onRecord = () => { throw new Error("boom"); };
-    await assert.rejects(runEval(a.opts), /boom/);
-    const staged = logOf(a.log)[0].argv; const dir = staged[staged.indexOf("--plugin-dir") + 1];
-    assert.ok(!existsSync(dir));
-    const b = setup(); b.opts.arms = ["none"]; await runEval(b.opts);
-    assert.ok(!logOf(b.log)[0].argv.includes("--plugin-dir"));
-  });
-  test("--settings carries the sandbox for every arm and the odd output style for plugin arms only; records say whether the plugin was staged", async () => {
-    const a = setup(); const out = await runEval(a.opts);
-    for (const c of logOf(a.log)) {
-      assert.deepEqual(JSON.parse(c.argv[c.argv.indexOf("--settings") + 1]), armOf(c) === "none" ? SANDBOX : { outputStyle: "odd-claude:odd", ...SANDBOX });
+  test("each installed-arm run installs odd-claude from the checkout into its own isolated dirs, never the real home; no --plugin-dir anywhere", async () => {
+    const a = setup(); a.opts.baseEnv = { ...a.opts.baseEnv, HOME: "/Users/real", ODD_CLAUDE_HOME: "/real/.odd-claude" };
+    const out = await runEval(a.opts);
+    const calls = installs(a.root), sessions = logOf(a.log);
+    assert.equal(calls.length, 2, "one install per coord-on / coord-off run, none for arm none");
+    for (const c of calls) {
+      assert.equal(c.source, join(a.root, "source"));
+      assert.equal(c.deps, false); assert.equal(c.migrate, false);
+      assert.equal(c.extras.statusLine, false); assert.deepEqual(c.extras.builtin, { mode: "keep" }); assert.deepEqual(c.extras.claudeAi, { connectors: true, skills: true, plugins: true });
+      for (const dir of [c.CLAUDE_CONFIG_DIR, c.ODD_CLAUDE_HOME, c.HOME, c.homedir]) { assert.ok(isAbsolute(dir)); assert.ok(!dir.startsWith("/real") && !dir.startsWith("/Users/real")); }
+      assert.equal(c.homedir, c.HOME);
+      assert.equal(dirname(c.ODD_CLAUDE_HOME), dirname(c.CLAUDE_CONFIG_DIR), "same run root");
     }
-    for (const r of out.records as Record<string, any>[]) {
-      assert.equal(r.plugin_staged, r.arm !== "none"); assert.equal(r.sandboxed, true); assert.equal(r.status, "ok", `${r.run_id}: ${r.error}`);
-      assert.deepEqual(r.observed_plugins, r.arm === "none" ? [] : ["odd-claude@inline"]);
-      assert.equal(r.observed_output_style, r.arm === "none" ? "default" : "odd-claude:odd");
+    assert.notEqual(calls[0].CLAUDE_CONFIG_DIR, calls[1].CLAUDE_CONFIG_DIR);
+    for (const c of sessions) { assert.ok(!c.argv.includes("--plugin-dir")); if (armOf(c) !== "none") assert.deepEqual(c.installed.agents, ["odd-worker.md"]); else assert.equal(c.installed.agents, null); }
+    // the installer's claude mcp calls ran through the same claude binary with the same isolated env as the install
+    const mcp = logOf(a.log + ".mcp"); assert.equal(mcp.length, 2);
+    for (const m of mcp) { assert.ok(calls.some((c) => c.CLAUDE_CONFIG_DIR === m.env.CLAUDE_CONFIG_DIR && c.ODD_CLAUDE_HOME === m.env.ODD_CLAUDE_HOME)); assert.notEqual(m.env.HOME, "/Users/real"); }
+    for (const r of out.records as unknown as Record<string, any>[]) { assert.equal(r.odd_installed, r.arm !== "none"); assert.ok(!("plugin_staged" in r)); }
+  });
+  test("installed arms export ODD_CLAUDE_HOME (never CLAUDE_PLUGIN_DATA) to claude", async () => {
+    const a = setup(); await runEval(a.opts);
+    for (const c of logOf(a.log).filter((x) => armOf(x) !== "none")) { assert.ok(c.env.ODD_CLAUDE_HOME.endsWith("odd-claude")); assert.equal(c.env.CLAUDE_PLUGIN_DATA, null); }
+  });
+  test("a failing install is an error record and claude is never spawned", async () => {
+    const a = setup(); makeFakeInstallerSource(join(a.root, "source"), { fail: true });
+    const rec = await runOne({ task: a.opts.tasks[0], arm: "coord-on", trial: 1 }, a.opts) as unknown as Record<string, any>;
+    assert.equal(rec.status, "error"); assert.match(rec.error, /odd-claude install failed: Install files: boom/); assert.equal(rec.odd_installed, false); assert.equal(logOf(a.log).length, 0);
+  });
+  test("a missing installer source is a clear error naming what is missing", async () => {
+    const a = setup(); a.opts.sourceDir = join(a.root, "nope");
+    const rec = await runOne({ task: a.opts.tasks[0], arm: "coord-off", trial: 1 }, a.opts);
+    assert.equal(rec.status, "error"); assert.match(String(rec.error), /installer source not found at .*nope \(missing package\.json, dist[\\/]installer[\\/]orchestrate\.js\)/); assert.equal(logOf(a.log).length, 0);
+    assert.equal(installerSourceError(join(a.root, "source")), null);
+    await assert.rejects(installOdd({ sourceDir: join(a.root, "nope"), dirs: runDirs(a.root), env: {}, claudeBin: "x" }), /installer source not found/);
+    const noArm = setup(); noArm.opts.sourceDir = join(noArm.root, "nope"); noArm.opts.arms = ["none"];
+    assert.equal((await runEval(noArm.opts)).records[0].status, "ok", "arm none never needs the installer");
+  });
+  test("the real installer from this checkout installs into the isolated dirs only", async () => {
+    const a = setup(); a.opts.sourceDir = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..", "plugins", "odd-claude"); a.opts.arms = ["coord-on"];
+    const rec = await runOne({ task: a.opts.tasks[0], arm: "coord-on", trial: 1 }, { ...a.opts, keepWorkspaces: true }) as unknown as Record<string, any>;
+    const c = logOf(a.log)[0];
+    try {
+      assert.equal(rec.status, "ok", String(rec.error)); assert.equal(rec.odd_installed, true);
+      assert.equal(c.installed.outputStyle, "odd"); assert.ok(c.installed.agents.includes("odd-worker.md"));
+      assert.equal(JSON.parse(c.delegation).data.mode, "full");
+      const settings = JSON.parse(readFileSync(join(c.env.CLAUDE_CONFIG_DIR, "settings.json"), "utf8"));
+      assert.equal(settings.outputStyle, "odd"); assert.ok(settings.hooks && Object.keys(settings.hooks).length > 0);
+      assert.ok(existsSync(join(c.env.ODD_CLAUDE_HOME, "current")), "versioned install under the isolated ODD_CLAUDE_HOME");
+      assert.ok(!settings.statusLine, "status line off");
+      assert.equal(logOf(a.log + ".mcp").filter((m) => m.argv[1] === "add").length, 3, "odd-review, odd-peers, codegraph");
+    } finally { rmSync(dirname(c.env.CLAUDE_CONFIG_DIR), { recursive: true, force: true }); }
+  });
+  test("--settings carries only the sandbox for every arm; records say whether odd-claude was installed", async () => {
+    const a = setup(); const out = await runEval(a.opts);
+    for (const c of logOf(a.log)) assert.deepEqual(JSON.parse(c.argv[c.argv.indexOf("--settings") + 1]), SANDBOX);
+    for (const r of out.records as unknown as Record<string, any>[]) {
+      assert.equal(r.odd_installed, r.arm !== "none"); assert.equal(r.sandboxed, true); assert.equal(r.status, "ok", `${r.run_id}: ${r.error}`);
+      assert.deepEqual(r.observed_plugins, []);
+      assert.equal(r.observed_output_style, r.arm === "none" ? "default" : "odd");
       assert.equal(r.observed_delegation, r.arm === "coord-on" ? "full" : r.arm === "coord-off" ? "organic" : null);
     }
   });
@@ -232,14 +265,15 @@ describe("plugin staging, output style and proof fields", () => {
     assert.equal(rec.status, "invalid"); assert.match(rec.error, expectError);
     assert.equal(rec.cost_usd, 0.5, "cost still recorded"); assert.equal(typeof rec.passed, "boolean", "still graded");
   };
-  test("invalid: plugin arm without odd-claude@inline in the init plugins", () => invalidCase("coord-on", { plugins: [] }, /odd-claude@inline/));
-  test("invalid: plugin arm with another output style", () => invalidCase("coord-off", { output_style: "default" }, /output style.*default/i));
+  test("invalid: installed arm without the odd-worker agent in the init agents", () => invalidCase("coord-on", { agents: [] }, /lack odd-worker/));
+  test("invalid: installed arm that shows the legacy plugin", () => invalidCase("coord-off", { plugins: [{ name: "odd-claude", source: "odd-claude@inline" }] }, /legacy plugin odd-claude@inline/));
+  test("invalid: installed arm with another output style", () => invalidCase("coord-off", { output_style: "default" }, /output style.*default/i));
   test("invalid: observed delegation differs from the arm's mode", async () => {
     await invalidCase("coord-on", { delegation: "organic" }, /delegation.*organic.*full/i);
     await invalidCase("coord-off", { delegation: "full" }, /delegation.*full.*organic/i);
     await invalidCase("coord-on", { delegation: null }, /delegation/i);
   });
-  test("invalid: arm none that loaded odd-claude", () => invalidCase("none", { plugins: [{ name: "odd-claude", source: "odd-claude@inline" }] }, /odd-claude@inline/));
+  test("invalid: arm none that loaded the legacy plugin", () => invalidCase("none", { plugins: [{ name: "odd-claude", source: "odd-claude@inline" }] }, /odd-claude@inline/));
 
   test("report excludes invalid runs from stats and lists them with a count per arm", async () => {
     const a = setup({ proof: { output_style: "default" } }); a.opts.arms = ["none", "coord-on"];
@@ -301,7 +335,7 @@ describe("named grade checks", () => {
     writeFileSync(bin, `#!${process.execPath}\nconst fs=require("fs");fs.mkdirSync("src",{recursive:true});fs.writeFileSync("src/value.txt","fixed");process.stdout.write(${JSON.stringify(goodStream())});\n`, { mode: 0o755 });
     return bin;
   };
-  const optsFor = (root: string, tasksDir: string, bin: string): EvalOptions => ({ tasks: loadTasks(tasksDir), arms: ["none"], trials: 1, pluginDir: "/p", claudeBin: bin, model: "opus", maxBudgetUsd: 1, maxTurns: 5, totalBudgetUsd: 70, outDir: join(root, "o"), baseEnv: { PATH: process.env.PATH, ANTHROPIC_API_KEY: "k" } });
+  const optsFor = (root: string, tasksDir: string, bin: string): EvalOptions => ({ tasks: loadTasks(tasksDir), arms: ["none"], trials: 1, sourceDir: "/p", claudeBin: bin, model: "opus", maxBudgetUsd: 1, maxTurns: 5, totalBudgetUsd: 70, outDir: join(root, "o"), baseEnv: { PATH: process.env.PATH, ANTHROPIC_API_KEY: "k" } });
 
   test("one failing check: checks records both, passed is false, grade is still recorded", async () => {
     const root = tmp(), tasksDir = join(root, "tasks");
@@ -370,26 +404,28 @@ const markerInstaller = (root: string): string => {
 describe("skills arm", () => {
   const sk = (proof: Record<string, unknown> = {}) => { const a = setup({ proof }); a.opts.arms = ["skills"]; a.opts.skillsInstaller = markerInstaller(a.root); return a; };
   test("argv: no plugin-dir, sandbox-only --settings, --setting-sources user", () => {
-    const a = buildClaudeArgv({ prompt: "P", pluginDir: "/p", model: "sonnet", maxTurns: 9, maxBudgetUsd: 1, arm: "skills" });
+    const a = buildClaudeArgv({ prompt: "P", model: "sonnet", maxTurns: 9, maxBudgetUsd: 1, arm: "skills" });
     assert.ok(!a.includes("--plugin-dir") && !a.includes("--bare"));
     assert.deepEqual(JSON.parse(a[a.indexOf("--settings") + 1]), SANDBOX);
     assert.equal(a[a.indexOf("--setting-sources") + 1], "user"); assert.equal(a.at(-1), "P");
     assert.equal(a[a.indexOf("--permission-mode") + 1], "dontAsk");
   });
-  test("the installer runs into the private config before claude; no plugin staging, no plugin data", async () => {
+  test("the installer runs into the private config before claude; no odd-claude install, no plugin data", async () => {
     const a = sk(); const out = await runEval(a.opts);
     const calls = logOf(a.log); assert.equal(calls.length, 1);
     const c = calls[0];
     assert.ok(c.installed.agents.includes("odd-worker.md") && c.installed.skills.length > 0 && c.installed.claudeMd && c.installed.settings);
-    assert.equal(c.env.CLAUDE_PLUGIN_DATA, null); assert.equal(c.pluginJson, null);
+    assert.equal(c.env.CLAUDE_PLUGIN_DATA, null); assert.equal(c.env.ODD_CLAUDE_HOME, null); assert.ok(!existsSync(join(a.root, "source", FAKE_INSTALL_LOG)));
     const r = out.records[0] as unknown as Record<string, any>;
-    assert.equal(r.status, "ok", String(r.error)); assert.equal(r.skills_installed, true); assert.equal(r.plugin_staged, false);
+    assert.equal(r.status, "ok", String(r.error)); assert.equal(r.skills_installed, true); assert.equal(r.odd_installed, false);
     assert.ok(r.observed_agents.includes("odd-worker")); assert.deepEqual(r.observed_plugins, []); assert.ok(r.observed_skills.length > 0);
     assert.ok(!existsSync(c.env.CLAUDE_CONFIG_DIR), "private dirs removed");
   });
   test("other arms never install and record skills_installed false", async () => {
     const a = setup(); const out = await runEval(a.opts);
-    for (const c of logOf(a.log)) assert.equal(c.installed.agents, null);
+    // the skills installer never ran: arm none sees no agents, the odd-claude arms only the installer's own odd-worker (and no skills dir)
+    for (const c of logOf(a.log)) { assert.equal(c.installed.skills, null); assert.ok(c.installed.agents === null || c.installed.agents.join() === "odd-worker.md"); }
+    assert.equal(logOf(a.log).filter((c) => c.installed.agents === null).length, 1);
     for (const r of out.records as unknown as Record<string, any>[]) assert.equal(r.skills_installed, false);
   });
   test("installer failure: error record with the installer's stderr, claude never spawned", async () => {
@@ -549,7 +585,7 @@ describe("cli", () => {
   test("a full CLI run writes runs.jsonl and report.md", async () => {
     const root = tmp(), tasksDir = join(root, "tasks"), log = join(root, "c.log"), outDir = join(root, "o");
     makeTask(tasksDir, "t1"); const bin = installFakeClaude(root, { logFile: log, stdout: goodStream() });
-    // plugin dir check uses the real repo plugin: present in this repository.
+    // the installer source check and the install use the real plugins/odd-claude of this repository (dist is committed).
     const code = await main(["--tasks-dir", tasksDir, "--claude-bin", bin, "--out", outDir, "--trials", "1", "--arms", "none,coord-on"], () => {}, { PATH: process.env.PATH, ANTHROPIC_API_KEY: "k" });
     assert.equal(code, 0);
     const rows = readFileSync(join(outDir, "runs.jsonl"), "utf8").trim().split("\n").map((l) => JSON.parse(l));

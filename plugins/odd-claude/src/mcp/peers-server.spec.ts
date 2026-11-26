@@ -53,7 +53,7 @@ test("initialize negotiates a supported version, ping answers, notifications get
   await withFx(async ({ server }) => {
     const r = await server.handle({ jsonrpc: "2.0", id: 1, method: "initialize", params: { protocolVersion: "2024-11-05" } });
     assert.equal((r?.result as any).protocolVersion, "2024-11-05");
-    assert.equal((r?.result as any).serverInfo.name, "odd-claude-peers");
+    assert.equal((r?.result as any).serverInfo.name, "odd-peers");
     assert.match((r?.result as any).serverInfo.version, /^\d+\.\d+\.\d+/);
     const r2 = await server.handle({ jsonrpc: "2.0", id: 2, method: "initialize", params: { protocolVersion: "1999-01-01" } });
     assert.equal((r2?.result as any).protocolVersion, SUPPORTED_PROTOCOLS[0]);
@@ -124,7 +124,7 @@ test("odd_orchestrator_session_id: returns the recorded id, or a typed unknown w
     const b = body(r);
     assert.equal(b.session_id, null);
     assert.equal(b.source, "unknown");
-    assert.match(b.guidance, /\/odd-claude:peers/);
+    assert.match(b.guidance, /\/odd-peers/);
   }, { session: null });
 });
 
@@ -214,7 +214,7 @@ test("send: unknown own session or sending to myself is refused, nothing written
     allow(PEER, ME, { dataDir: dir });
     const e = body(await call("odd_orchestrator_send_message", SEND()));
     assert.equal(e.error.code, "session_unknown");
-    assert.match(e.error.guidance, /\/odd-claude:peers/);
+    assert.match(e.error.guidance, /\/odd-peers/);
     assert.deepEqual(mailboxFiles(dir, PEER), []);
   }, { session: null });
   await withFx(async ({ dir, call }) => {
@@ -316,12 +316,6 @@ test("outputs never echo message contents and the server writes nothing to stder
 });
 
 // ---- registration + real process with a fake parent ----
-
-test(".mcp.json registers the `peers` server separately from `review`", () => {
-  const raw = JSON.parse(readFileSync(new URL("../../.mcp.json", import.meta.url), "utf8")) as { mcpServers: Record<string, { command: string; args: string[] }> };
-  assert.deepEqual(raw.mcpServers.peers, { command: "node", args: ["${CLAUDE_PLUGIN_ROOT}/dist/mcp/peers-server.js"] });
-  assert.ok(raw.mcpServers.review);
-});
 
 test("real server process under a fake Claude Code parent: finds the id the SessionStart-style entry recorded and sends with a grant", () => {
   const dir = mkdtempSync(join(tmpdir(), "odd-peers-mcp-"));

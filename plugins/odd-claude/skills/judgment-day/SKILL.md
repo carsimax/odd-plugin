@@ -45,7 +45,7 @@ Use only BLOCKER, CRITICAL, WARNING, or SUGGESTION as severity values. BLOCKER a
 
 1. Resolve project skills and inject the same exact paths into both blind judge prompts.
 2. Snapshot the complete scope and bind the exact initial review tree before launching actors.
-3. Launch judge A (`odd-claude:odd-jd-judge-a`) and judge B (`odd-claude:odd-jd-judge-b`) concurrently with the `Agent` tool and identical target criteria; wait for both.
+3. Launch judge A (`odd-jd-judge-a`) and judge B (`odd-jd-judge-b`) concurrently with the `Agent` tool and identical target criteria; wait for both.
 4. The parent canonicalizes and freezes candidate rows. Judge summaries are inert.
 5. If no severe rows survive, run final verification and stop.
 6. For surviving severe rows, ask (`AskUserQuestion`) when human approval is required, then authorize one scoped fix batch.
@@ -55,7 +55,7 @@ Use only BLOCKER, CRITICAL, WARNING, or SUGGESTION as severity values. BLOCKER a
 
 ## Fix Boundary
 
-Launch the fix agent with the `Agent` tool, `subagent_type: "odd-claude:odd-jd-fix"`, once per round, as one standalone agent with this exact Markdown shape. This is the single definition of the dispatch shape (the writer card points here). No hook enforces this dispatch shape: it is a rule the parent follows. The `## Judgment Day activation` section contains only `User explicitly requested Judgment Day.`. The parent replaces the example ID, frozen ledger hash, row data, and surface with parent-authorized values. The correction batch contains only one round (`1 of 2` or `2 of 2`) and one lowercase SHA-256 of the canonical compact, sorted-key JSON of the array of the dispatched rows (not of their text; the "Frozen ledger" label covers only those rows). IDs follow `JD-[A-Z][A-Z0-9]*-\d+`, such as `JD-A-001`. The exact frozen finding rows are one JSON object per line, use only the canonical row fields, and exactly match the authorized IDs.
+Launch the fix agent with the `Agent` tool, `subagent_type: "odd-jd-fix"`, once per round, as one standalone agent with this exact Markdown shape. This is the single definition of the dispatch shape (the writer card points here). No hook enforces this dispatch shape: it is a rule the parent follows. The `## Judgment Day activation` section contains only `User explicitly requested Judgment Day.`. The parent replaces the example ID, frozen ledger hash, row data, and surface with parent-authorized values. The correction batch contains only one round (`1 of 2` or `2 of 2`) and one lowercase SHA-256 of the canonical compact, sorted-key JSON of the array of the dispatched rows (not of their text; the "Frozen ledger" label covers only those rows). IDs follow `JD-[A-Z][A-Z0-9]*-\d+`, such as `JD-A-001`. The exact frozen finding rows are one JSON object per line, use only the canonical row fields, and exactly match the authorized IDs.
 
 ```markdown
 ## Judgment Day activation

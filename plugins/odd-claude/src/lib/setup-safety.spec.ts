@@ -106,7 +106,7 @@ test("a dangling symlink is an error and nothing is written", () => {
 
 // F1
 test("SKILL.md never lets user argument text reach a `!` shell command", () => {
-  const skill = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "skills", "setup", "SKILL.md");
+  const skill = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "skills", "odd-setup", "SKILL.md");
   const text = readFileSync(skill, "utf8");
   const bang = text.split("\n").filter((l) => l.includes("!`"));
   assert.ok(bang.length >= 1, "expects at least one ! injection");

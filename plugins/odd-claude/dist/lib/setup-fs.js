@@ -1,4 +1,4 @@
-// Write path of /odd-claude:setup. Real filesystem; callers (tests/CLI) pick the paths.
+// Write path of /odd-setup. Real filesystem; callers (tests/CLI) pick the paths.
 // Order on apply: validate/plan -> backup original (atomic) -> record state -> atomic write.
 import { accessSync, constants, existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, realpathSync, statSync } from "node:fs";
 import { join } from "node:path";
@@ -23,7 +23,7 @@ export function listBackups(dataDir) {
     }
 }
 /** Follows a symlinked settings file so the link is kept and its target updated. */
-function resolveTarget(path) {
+export function resolveTarget(path) {
     try {
         if (lstatSync(path).isSymbolicLink())
             return { ok: true, path: realpathSync(path) };
@@ -38,7 +38,7 @@ function resolveTarget(path) {
     return { ok: true, path };
 }
 /** Error text when an existing target cannot be written by this user; undefined when fine. */
-function notWritable(path) {
+export function notWritable(path) {
     if (!existsSync(path))
         return undefined;
     try {
@@ -63,7 +63,7 @@ function record(dataDir, backupPath) {
     const backups = Array.isArray(prev.backups) ? prev.backups : [];
     writePluginState("setup", { ...prev, lastBackup: backupPath, backups: [...backups, backupPath] }, { dataDir });
 }
-function fileMode(path) {
+export function fileMode(path) {
     return existsSync(path) ? statSync(path).mode & 0o7777 : undefined;
 }
 /** Shared tail of apply/restore: backup current, record state, atomic write keeping the mode. */
@@ -107,7 +107,7 @@ export function applyMode(opts) {
     return commit(opts, t.path, plan.after, plan.diff, "write");
 }
 /** A symlink whose target does not exist: realpath would have thrown, so the path is unchanged. */
-function lstatDangling(path, resolved) {
+export function lstatDangling(path, resolved) {
     try {
         return lstatSync(path).isSymbolicLink() && !existsSync(resolved);
     }

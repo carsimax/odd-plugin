@@ -119,16 +119,29 @@ test("Bash commands repeated 2+ times exactly; git status, git diff, ls, pwd are
 
 test("Agent/Task launches by subagent_type and model; odd-worker without allowed edit surfaces is flagged", () => {
   const d = digest([
-    use("1", "Agent", { subagent_type: "odd-claude:odd-worker", model: "sonnet", prompt: "do it" }), // 1 flagged
-    use("2", "Task", { subagent_type: "odd-claude:odd-worker", prompt: "x\n## Allowed edit surfaces\n- a" }), // 2 ok
+    use("1", "Agent", { subagent_type: "odd-worker", model: "sonnet", prompt: "do it" }), // 1 flagged
+    use("2", "Task", { subagent_type: "odd-worker", prompt: "x\n## Allowed edit surfaces\n- a" }), // 2 ok
     use("3", "Agent", { subagent_type: "Explore", model: "haiku", prompt: "look" }), // 3 not a worker
     use("4", "Agent", { prompt: "no type" }), // 4
   ]);
   assert.deepEqual(d.agents, [
-    { line: 1, subagentType: "odd-claude:odd-worker", model: "sonnet", missingEditSurfaces: true },
-    { line: 2, subagentType: "odd-claude:odd-worker", model: "", missingEditSurfaces: false },
+    { line: 1, subagentType: "odd-worker", model: "sonnet", missingEditSurfaces: true },
+    { line: 2, subagentType: "odd-worker", model: "", missingEditSurfaces: false },
     { line: 3, subagentType: "Explore", model: "haiku", missingEditSurfaces: false },
     { line: 4, subagentType: "", model: "", missingEditSurfaces: false },
+  ]);
+});
+
+test("legacy plugin-namespaced odd-claude:odd-worker transcripts are still flagged as workers", () => {
+  const d = digest([
+    use("1", "Agent", { subagent_type: "odd-claude:odd-worker", model: "sonnet", prompt: "do it" }),
+    use("2", "Task", { subagent_type: "odd-claude:odd-worker", prompt: "x\n## Allowed edit surfaces\n- a" }),
+    use("3", "Agent", { subagent_type: "odd-claude:odd-explore", prompt: "look" }),
+  ]);
+  assert.deepEqual(d.agents, [
+    { line: 1, subagentType: "odd-claude:odd-worker", model: "sonnet", missingEditSurfaces: true },
+    { line: 2, subagentType: "odd-claude:odd-worker", model: "", missingEditSurfaces: false },
+    { line: 3, subagentType: "odd-claude:odd-explore", model: "", missingEditSurfaces: false },
   ]);
 });
 
@@ -250,13 +263,13 @@ test("retroCli: --json carries the schema; --transcript is validated; always exi
   }
 });
 
-test("retroCli: no-session, no-data-dir, no-path and session-resolved messages", () => {
+test("retroCli: no-session, home-default data dir, no-path and session-resolved messages", () => {
   const dir = tmp();
   try {
     const none = retroCli([], {});
     assert.equal(none.exitCode, 0);
     assert.equal(none.stdout, "No session id or transcript (pass --session <id> --data-dir <dir>, or --transcript <path>); no retro to show.");
-    assert.equal(retroCli(["--session", "s1"], {}).stdout, "No data dir (pass --data-dir <dir> or set CLAUDE_PLUGIN_DATA); no retro to show.");
+    assert.equal(retroCli(["--session", "s1"], { ODD_CLAUDE_HOME: join(dir, "home") }).stdout, "No transcript path recorded for this session yet (it is saved at the next prompt).");
     assert.equal(retroCli(["--session", "s1", "--data-dir", dir], {}).stdout, "No transcript path recorded for this session yet (it is saved at the next prompt).");
     const p = join(dir, "t.jsonl");
     writeFileSync(p, user("hi"));

@@ -66,9 +66,6 @@ test("usage errors exit 2 and write nothing; a failing write exits 1", () => {
       assert.match(r.stderr, /usage/);
     }
     assert.equal(existsSync(f.data), false);
-    const noData = reviewModeCli(["enable"], {});
-    assert.equal(noData.exitCode, 1);
-    assert.match(noData.stderr, /cannot write the global review mode/);
     const noRepo = reviewModeCli(["disable", "--scope", "clone", "--cwd", join(f.repo, "..", "nowhere"), "--data-dir", f.data], {});
     assert.equal(noRepo.exitCode, 1);
     assert.equal(existsSync(f.data), false);

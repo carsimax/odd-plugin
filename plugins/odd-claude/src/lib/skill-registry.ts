@@ -7,12 +7,13 @@ import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { basename, dirname, join, resolve, parse } from "node:path";
+import { oddClaudeRoot } from "./root.js";
 import { atomicWriteFile } from "./state.js";
 
 export const REGISTRY_REL_PATH = ".atl/skill-registry.md";
 export const CACHE_REL_PATH = ".atl/.skill-registry.cache.json";
 export const NO_REGISTRY_ENV = "ODD_CLAUDE_NO_SKILL_REGISTRY";
-const EXCLUDE_NAMES = new Set(["_shared", "skill-registry"]);
+const EXCLUDE_NAMES = new Set(["_shared", "skill-registry", "odd-skill-registry"]);
 const EXCLUDE_PREFIXES = ["sdd-"];
 
 export interface SkillEntry {
@@ -316,31 +317,22 @@ export function realGitTracked(cwd: string, targets: string[]): string[] {
   }
 }
 
-/** Plugins whose skills are indexed: this plugin (CLAUDE_PLUGIN_ROOT) plus installed plugins. Fail-safe. */
+/** Plugins whose skills are indexed: this install (CLAUDE_PLUGIN_ROOT or the module root) plus installed plugins. Fail-safe. */
 export function realPluginRoots(env: Record<string, string | undefined>, home: string): PluginRoot[] {
   const out: PluginRoot[] = [];
-  const own = env.CLAUDE_PLUGIN_ROOT;
-  if (own) out.push({ name: pluginName(own) ?? "odd-claude", root: own });
+  const own = oddClaudeRoot(env);
+  out.push({ name: "odd-claude", root: own });
   try {
     const raw = JSON.parse(readFileSync(join(home, ".claude", "plugins", "installed_plugins.json"), "utf8")) as {
       plugins?: Record<string, { installPath?: string }[]>;
     };
     for (const [key, installs] of Object.entries(raw.plugins ?? {})) {
       const root = installs?.[0]?.installPath;
-      if (typeof root !== "string" || resolve(root) === (own ? resolve(own) : "")) continue;
+      if (typeof root !== "string" || resolve(root) === resolve(own)) continue;
       out.push({ name: key.split("@")[0]!, root });
     }
   } catch {
     // no installed plugins file
   }
   return out;
-}
-
-function pluginName(root: string): string | undefined {
-  try {
-    const n = (JSON.parse(readFileSync(join(root, ".claude-plugin", "plugin.json"), "utf8")) as { name?: unknown }).name;
-    return typeof n === "string" && n !== "" ? n : undefined;
-  } catch {
-    return undefined;
-  }
 }

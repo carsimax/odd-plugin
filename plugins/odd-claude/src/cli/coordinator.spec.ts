@@ -90,10 +90,18 @@ test("corrupt delegation.json reads as the default ON; --action ON is rejected a
   }
 });
 
-test("usage errors exit 2: unknown flag, missing value, set without a data dir", () => {
+test("usage errors exit 2: unknown flag, missing value", () => {
   assert.equal(coordinatorCli(["--bogus"], {}).exitCode, 2);
   assert.equal(coordinatorCli(["--action"], {}).exitCode, 2);
-  const r = coordinatorCli(["--action", "off"], {});
-  assert.equal(r.exitCode, 2);
-  assert.match(r.stderr, /no data dir/);
+});
+
+test("set without a data dir flag or env writes to ODD_CLAUDE_HOME/data", () => {
+  const home = tmp();
+  try {
+    const r = coordinatorCli(["--action", "off"], { ODD_CLAUDE_HOME: home });
+    assert.equal(r.exitCode, 0);
+    assert.equal(readDelegationMode({ dataDir: join(home, "data") }), "organic");
+  } finally {
+    rmSync(home, { recursive: true, force: true });
+  }
 });

@@ -65,7 +65,7 @@ test("SessionStart delivers on compact (grants kept); startup/resume/clear start
       assert.equal(count(R, { dataDir: dir }), 1, source); // kept, not dropped
       assert.ok(!ctx(ups(dir, "hola otra vez")).includes("queued while away"), source); // still closed: not delivered
       assert.equal(count(R, { dataDir: dir }), 1, source);
-      const c = ctx(ups(dir, `/odd-claude:peers allow ${S}`)); // human re-allows: delivered with the confirmation
+      const c = ctx(ups(dir, `/odd-peers allow ${S}`)); // human re-allows: delivered with the confirmation
       assert.match(c, /Peer grant recorded/);
       assert.ok(c.includes(`queued while away (${source})`), source);
       assert.equal(count(R, { dataDir: dir }), 0, source);
@@ -88,7 +88,7 @@ test("coexists with the language anchor and with the grant confirmation in ONE a
     // grant command + pending mail of the sender being granted: both in one block, grant recorded
     put(dir, S, "queued by S");
     put(dir, T, "from T again");
-    const r = ups(dir, `/odd-claude:peers allow ${S}`);
+    const r = ups(dir, `/odd-peers allow ${S}`);
     const c = ctx(r);
     assert.match(c, new RegExp(`Peer grant recorded: session ${R} accepts messages from ${S}`));
     assert.ok(c.indexOf("Peer grant recorded") < c.indexOf("<peer-messages"));
@@ -185,7 +185,7 @@ test("the whole hook additionalContext (grant confirmation + anchor + peers bloc
     for (const m of ["A", "B", "C"]) put(dir, T, `${m}-` + "w".repeat(8000));
     put(dir, S, "queued by S");
     const seen: string[] = [];
-    const first = ups(dir, `/odd-claude:peers allow ${S}`);
+    const first = ups(dir, `/odd-peers allow ${S}`);
     seen.push(ctx(first));
     assert.match(ctx(first), /Peer grant recorded/);
     for (let i = 0; i < 6 && count(R, { dataDir: dir }) > 0; i++) seen.push(ctx(ups(dir, "Por favor revisa el estado del repositorio ahora mismo")));

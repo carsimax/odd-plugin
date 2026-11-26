@@ -5,6 +5,7 @@ import { homedir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { realGitTracked, realPluginRoots, refreshRegistry } from "../lib/skill-registry.js";
 import { lockPath, releaseLock } from "../lib/lock.js";
+import { dataDirFromEnv } from "../lib/state.js";
 import { flagValue } from "../lib/system.js";
 const USAGE = "usage: skill-registry.js [--cwd <dir>] [--force]";
 export function skillRegistryCli(argv, base) {
@@ -46,9 +47,7 @@ function main() {
         process.stderr.write(res.stderr + "\n");
     process.exitCode = res.exitCode;
     // Detached SessionStart refreshes hold an in-flight lock (see session-integrations.ts); free it when done.
-    const dir = process.env.CLAUDE_PLUGIN_DATA;
-    if (dir)
-        releaseLock(lockPath(dir, "registry", flagValue(process.argv.slice(2), "--cwd") ?? process.cwd()), process.pid);
+    releaseLock(lockPath(dataDirFromEnv(process.env), "registry", flagValue(process.argv.slice(2), "--cwd") ?? process.cwd()), process.pid);
 }
 try {
     if (process.argv[1] && realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url)))

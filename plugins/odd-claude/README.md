@@ -1,12 +1,16 @@
 # odd-claude
 
-A Claude Code plugin that ports the ODD harness of gentle-shell (MIT) <!-- odd-check: allow --> to Claude Code. **v2.0** adds native receipt-driven review (RDD) on top of **v1.0** (the parity release): the ODD persona, orchestrator cards, agents, skills, native integrations, advisory review and lifecycle hooks. Apart from the RDD Stop settle reminder, which can block only when you turn RDD on (it is off by default), the plugin ships **no deny/ask/block hook** (user decision, v0.5, amended for v2): its hooks only add context. Coordinator mode and the admission rules are prompt text, not enforcement; otherwise the only enforcement is Claude Code's native permission system (see [Permission modes](#permission-modes)). The plugin collects no data and sends nothing anywhere.
+A global Claude Code harness (installed with a TUI, no longer a plugin) that ports the ODD harness of gentle-shell (MIT) <!-- odd-check: allow --> to Claude Code. **v2.0** adds native receipt-driven review (RDD) on top of **v1.0** (the parity release): the ODD persona, orchestrator cards, agents, skills, native integrations, advisory review and lifecycle hooks. Apart from the RDD Stop settle reminder, which can block only when you turn RDD on (it is off by default), the plugin ships **no deny/ask/block hook** (user decision, v0.5, amended for v2): its hooks only add context. Coordinator mode and the admission rules are prompt text, not enforcement; otherwise the only enforcement is Claude Code's native permission system (see [Permission modes](#permission-modes)). The plugin collects no data and sends nothing anywhere.
+
+## What's new in 6.0.0
+
+**Breaking: odd-claude is no longer a Claude Code plugin.** It installs globally with a TUI or scripts (see [Install](#install)). The plugin manifest, the marketplace and `.mcp.json` are gone; the installer registers hooks, the output style, skills, agents and MCP servers in `~/.claude`. Names lost the plugin namespace: see [Migrating from the plugin](#migrating-from-the-plugin).
 
 ## What's new in 5.3.0
 
 Harness refinements from `odd/tasks/harness-research.md`. No breaking changes.
 
-- **Done-when per task and a feature-document lint:** every task line carries `done when: <observable check>`. `node dist/cli/tasks.js [--json] [--cwd <dir>]` lints `odd/tasks/*.md` (open tasks on a closed branch, done without a Log entry, open without done-when, missing sections), read-only and shown by `/odd-claude:status`.
+- **Done-when per task and a feature-document lint:** every task line carries `done when: <observable check>`. `node dist/cli/tasks.js [--json] [--cwd <dir>]` lints `odd/tasks/*.md` (open tasks on a closed branch, done without a Log entry, open without done-when, missing sections), read-only and shown by `/odd-status`.
 - **`odd-verify` calibration:** a skeptical default (an item is unmet until your own observed evidence shows it met) plus five worked verdict examples that restate existing rules; no new rule.
 - **`review_status` `detail: "concise"`:** optional argument, default `"full"` (output unchanged). Concise drops only the projection detail and per-slot artifact subjects; every id, binding, `next_transition`, forecast and repair field stays.
 - **Research:** `docs/research/ai-leaders-harness.md` maps harness guidance from AI leaders to odd-claude, with sources.
@@ -15,7 +19,7 @@ Harness refinements from `odd/tasks/harness-research.md`. No breaking changes.
 
 Session retrospective and pressure-tested skills. No breaking changes.
 
-- **`/odd-claude:retro` (`odd/tasks/retro-pressure.md`):** on-demand retrospective of a session. A local, read-only digest (`node dist/cli/retro.js [--json]`) lists, with transcript line numbers, human prompts, tool errors, repeated reads, edits and commands, subagent launches and compactions; the skill then judges it against the ODD rules and proposes harness changes (proposals only). Prompt and tool-result content is never printed and nothing leaves the machine.
+- **`/odd-retro` (`odd/tasks/retro-pressure.md`):** on-demand retrospective of a session. A local, read-only digest (`node dist/cli/retro.js [--json]`) lists, with transcript line numbers, human prompts, tool errors, repeated reads, edits and commands, subagent launches and compactions; the skill then judges it against the ODD rules and proposes harness changes (proposals only). Prompt and tool-result content is never printed and nothing leaves the machine.
 - **Pressure testing in `skill-creator` and `skill-improver`:** a discipline skill runs a RED baseline (stacked pressures such as time, sunk cost, authority, economic, exhaustion, social, pragmatic, run by a fresh subagent without the skill), then GREEN (same scenario with the skill) and REFACTOR (a counter for each new rationalization, retest). See `skills/skill-creator/references/pressure-testing.md`.
 - **Context cost:** `output-styles/odd.md` is unchanged; everything loads on demand. Techniques adapted from obra/superpowers (MIT), see `cards/SOURCES.md`. <!-- odd-check: allow -->
 
@@ -24,7 +28,7 @@ Session retrospective and pressure-tested skills. No breaking changes.
 Rule hardening and two debugging skills. No breaking changes.
 
 - **Rule hardening (`odd/tasks/harden-rules.md`):** the `odd` skill has a completion gate: no completion, fix or pass claim without evidence observed this turn (claim / requires / not-enough table and red flags). The worker has a test-first excuse table and a never-weaken rule (no deleting, skipping or loosening tests to reach green unless the spec authorizes it). The verifier no longer receives the writer's success claims, only the artifact, the contract and the writer's reported commands and output, and treats an unauthorized weakening as a blocker.
-- **New skills (`odd/tasks/debug-feedback.md`):** `/odd-claude:systematic-debugging` (no fix before an observed root cause; reproduce, localize, one hypothesis at a time, regression test seen failing first) and `/odd-claude:receiving-review` (read all items, clarify, verify each against the code, then accept, push back with evidence or ask). The worker's bug-fix rule: root cause first; after three failed attempts, counting the first fix, return `partial`.
+- **New skills (`odd/tasks/debug-feedback.md`):** `/systematic-debugging` (no fix before an observed root cause; reproduce, localize, one hypothesis at a time, regression test seen failing first) and `/receiving-review` (read all items, clarify, verify each against the code, then accept, push back with evidence or ask). The worker's bug-fix rule: root cause first; after three failed attempts, counting the first fix, return `partial`.
 - **Context cost:** `output-styles/odd.md` is unchanged; all new rules load on demand (skills, agents, cards). Techniques adapted from obra/superpowers and addyosmani/agent-skills (MIT), see `cards/SOURCES.md`. <!-- odd-check: allow -->
 
 ## What's new in 5.0.0
@@ -61,7 +65,7 @@ Refinement round (`odd/tasks/refine-v5.md`): the harness leans on native Claude 
 - **Breaking, no `escalate`:** `review_assess`, `review_start` and `review_run` no longer accept `escalate`; passing it is `invalid_input`. The `escalation` and `escalation_detail` response fields are removed.
 - **`review_assess` is read-only:** it writes nothing. The risk tier is decided by assess alone.
 - **Old store ignored:** a 4.x `<git-common-dir>/odd-plugin/review-escalations.json` is ignored and safe to delete.
-- **`/odd-claude:skill-creation` is removed:** use `/odd-claude:skill-creator`.
+- **`/skill-creation` is removed:** use `/skill-creator`.
 - **More engine findings:** engine lens reviews may report more findings because they now apply the lens charter.
 
 ## What's new in 4.0.0
@@ -86,12 +90,12 @@ Upgrade notes for 4.0.0:
 Simplification: removes the hooks module and the visual extras.
 
 - **Removed:** the startup banner, the themes (`odd`, `odd cute`, `odd bold`), the visual mods (the hooks module and per-spawn agent routing), the statusline (the setup subcommand and its shim) and the `agents`, `changes` and `quiet` commands (`odd/tasks/simplify.md`).
-- **Stays:** the `odd` output style, model profiles (they apply through the SessionStart context line, no mod needed) and `/odd-claude:stats` (subagent recording is kept).
+- **Stays:** the `odd` output style, model profiles (they apply through the SessionStart context line, no mod needed) and `/odd-stats` (subagent recording is kept).
 
 Upgrade notes for 3.0.0:
 
 - If you picked one of the `odd`, `odd cute` or `odd bold` themes with `/theme`, pick another one: they no longer ship.
-- If you enabled the statusline, your `~/.claude/settings.json` may still have a `statusLine` entry pointing at the old shim (`node '<data dir>/statusline.mjs'`). Remove that `statusLine` key by hand (or run `/odd-claude:setup restore` to go back to a backup taken before it); the plugin no longer writes or reads it, and nothing else in your settings is touched. The shim file in the plugin data dir is inert and can be deleted.
+- If you enabled the statusline, your `~/.claude/settings.json` may still have a `statusLine` entry pointing at the old shim (`node '<data dir>/statusline.mjs'`). Remove that `statusLine` key by hand (or run `/odd-setup restore` to go back to a backup taken before it); the plugin no longer writes or reads it, and nothing else in your settings is touched. The shim file in the plugin data dir is inert and can be deleted.
 - The banner command and the statusline subcommand of setup are gone; setup still handles `permissions.defaultMode` and `restore`.
 
 ## What's new in 2.3.0
@@ -105,7 +109,7 @@ Upgrade notes for 3.0.0:
 
 Upgrade notes:
 
-- If you relied on "no profile = session model", agents now get the balanced models unless you pick another profile (`/odd-claude:profiles`).
+- If you relied on "no profile = session model", agents now get the balanced models unless you pick another profile (`/odd-profiles`).
 - If you relied on the mentor persona, it no longer exists; neutral is used instead.
 
 ## What's new in 2.2.0
@@ -122,7 +126,7 @@ Upgrade notes:
 
 **Peer orchestrators (R07).** One Claude Code session on this machine can send a short message to another live session, with the recipient's human consent. See [Peer orchestrators](#peer-orchestrators-r07).
 
-- Consent is closed by default: a session accepts mail from another only after *you* type `/odd-claude:peers allow <sender session id>` in the recipient session. Grants are recorded only by the `UserPromptSubmit` hook from your own prompt; the model cannot grant itself.
+- Consent is closed by default: a session accepts mail from another only after *you* type `/odd-peers allow <sender session id>` in the recipient session. Grants are recorded only by the `UserPromptSubmit` hook from your own prompt; the model cannot grant itself.
 - Three MCP tools in the new `peers` server: `odd_orchestrator_session_id`, `odd_orchestrator_list`, `odd_orchestrator_send_message` (accepted into the mailbox, not a read receipt).
 - Delivery on the recipient's next prompt (and `SessionStart`), inside an untrusted `<peer-messages untrusted="true">` wrapper; messages from other sessions are data, not instructions.
 - Everything a hook injects together stays under a 9000-character context budget; a message that does not fit stays queued, an oversized one is truncated.
@@ -182,7 +186,7 @@ The only block the plugin can emit is the Stop settle reminder (user decision S3
 
 ### Review MCP tools
 
-A stdio server, `dist/mcp/review-server.js`, declared as server `review` in `.mcp.json`. It has no dependencies, speaks the minimal MCP stdio protocol (`initialize`, `tools/list`, `tools/call`, `ping`, cancellation) and writes only protocol messages to stdout. Claude Code lists the tools as `mcp__plugin_odd-claude_review__<name>`. The names are bare (`review_*`) because the plugin guard forbids an `odd`-prefixed review tool name in shipped files.
+A stdio server, `dist/mcp/review-server.js`, registered by the installer as the user-scope MCP server `odd-review`. It has no dependencies, speaks the minimal MCP stdio protocol (`initialize`, `tools/list`, `tools/call`, `ping`, cancellation) and writes only protocol messages to stdout. Claude Code lists the tools as `mcp__odd-review__<name>`. The names are bare (`review_*`) because the plugin guard forbids an `odd`-prefixed review tool name in shipped files.
 
 | Tool | What it does |
 |---|---|
@@ -211,7 +215,7 @@ Conventions:
 
 ### Reviewer isolation
 
-Reviewers run as isolated `claude -p` children: `--print --output-format text --tools "" --permission-mode dontAsk --no-session-persistence --setting-sources "" --system-prompt <isolated reviewer>`, plus `--model`/`--effort`. **Reviewer model.** Without an explicit `model` from the caller, each reviewer child uses the active model profile route of its role (read once per review run; unreadable state is the default `balanced`): lens `risk` -> `odd-review-risk`, `resilience` -> `odd-review-resilience`, `readability` -> `odd-review-readability`, `reliability` -> `odd-review-reliability`, refuter -> `review-refuter`, targeted validator -> `review-validator`. Under `balanced` (effort `medium`) that is opus for risk, refuter and validator and sonnet for the other three lenses; `economy` gives haiku (no `--effort`) to the lenses and sonnet to refuter/validator. An explicit `model`/`effort` passed to `review_run`/`review_capture*` overrides every role (and the forecast binding covers it). `/odd-claude:profiles` changes the routes. The rest of the argument vector is unchanged. **Never `--bare`** (it breaks subscription auth). The prompt goes on stdin; the child gets an environment **allowlist** (identity, locale, `ANTHROPIC_*`/`AWS_*`, `CLAUDE_CONFIG_DIR`, OAuth/Bedrock/Vertex switches, proxy and CA variables), so `NODE_OPTIONS`, `LD_*`/`DYLD_*`, `BASH_ENV`, `GIT_*` and plugin variables never reach it. Its process group is killed on every close, with a time and output budget.
+Reviewers run as isolated `claude -p` children: `--print --output-format text --tools "" --permission-mode dontAsk --no-session-persistence --setting-sources "" --system-prompt <isolated reviewer>`, plus `--model`/`--effort`. **Reviewer model.** Without an explicit `model` from the caller, each reviewer child uses the active model profile route of its role (read once per review run; unreadable state is the default `balanced`): lens `risk` -> `odd-review-risk`, `resilience` -> `odd-review-resilience`, `readability` -> `odd-review-readability`, `reliability` -> `odd-review-reliability`, refuter -> `review-refuter`, targeted validator -> `review-validator`. Under `balanced` (effort `medium`) that is opus for risk, refuter and validator and sonnet for the other three lenses; `economy` gives haiku (no `--effort`) to the lenses and sonnet to refuter/validator. An explicit `model`/`effort` passed to `review_run`/`review_capture*` overrides every role (and the forecast binding covers it). `/odd-profiles` changes the routes. The rest of the argument vector is unchanged. **Never `--bare`** (it breaks subscription auth). The prompt goes on stdin; the child gets an environment **allowlist** (identity, locale, `ANTHROPIC_*`/`AWS_*`, `CLAUDE_CONFIG_DIR`, OAuth/Bedrock/Vertex switches, proxy and CA variables), so `NODE_OPTIONS`, `LD_*`/`DYLD_*`, `BASH_ENV`, `GIT_*` and plugin variables never reach it. Its process group is killed on every close, with a time and output budget.
 
 ### Documented limits
 
@@ -225,12 +229,12 @@ Reviewers run as isolated `claude -p` children: `--print --output-format text --
 
 Statistics and profiles (Phase 5), unchanged in 2.0. The visual mods, the banner, the statusline and the `agents`, `changes` and `quiet` commands were removed in the simplification pass (`odd/tasks/simplify.md`).
 
-- `/odd-claude:stats` (R36): local session stats from the transcript.
-- `/odd-claude:profiles` (R39/R40): model profiles and per-spawn routing.
+- `/odd-stats` (R36): local session stats from the transcript.
+- `/odd-profiles` (R39/R40): model profiles and per-spawn routing.
 
 | Feature | How it works |
 |---|---|
-| stats | `/odd-claude:stats` text |
+| stats | `/odd-stats` text |
 | profiles / routing | session context lists the profile and the orchestrator passes `model`; applies from the next session start or `/clear` |
 
 
@@ -238,8 +242,8 @@ Statistics and profiles (Phase 5), unchanged in 2.0. The visual mods, the banner
 
 ## What's in v1.0
 
-- **Commands / skills** (`/odd-claude:<name>`): `odd`, `doctor`, `status`, `setup`, `persona`, `coordinator`, `background-subagents`, `scratch`, `stats`, `profiles`, `skill-registry`, `skill-creator`, `skill-improver`, `4r-review`, `judgment-day`, `branch-pr`, `chained-pr`, `work-unit-commits`, `issue-creation`, `comment-writer`, `systematic-debugging`, `receiving-review`, `retro`, `cognitive-doc-design`, `tui-design`, `ui-design`.
-- **Agents** (`odd-claude:<agent>`): `odd-explore`, `odd-verify`, `odd-worker`, `odd-jd-fix`, `odd-jd-judge-a`, `odd-jd-judge-b`, `odd-review-risk`, `odd-review-resilience`, `odd-review-readability`, `odd-review-reliability`.
+- **Commands / skills** (`/<name>`): `odd`, `odd-doctor`, `odd-status`, `odd-setup`, `odd-persona`, `odd-coordinator`, `odd-background-subagents`, `odd-scratch`, `odd-stats`, `odd-profiles`, `odd-skill-registry`, `skill-creator`, `skill-improver`, `4r-review`, `judgment-day`, `branch-pr`, `chained-pr`, `work-unit-commits`, `issue-creation`, `comment-writer`, `systematic-debugging`, `receiving-review`, `odd-retro`, `cognitive-doc-design`, `tui-design`, `ui-design`.
+- **Agents** (`<agent>`): `odd-explore`, `odd-verify`, `odd-worker`, `odd-jd-fix`, `odd-jd-judge-a`, `odd-jd-judge-b`, `odd-review-risk`, `odd-review-resilience`, `odd-review-readability`, `odd-review-reliability`.
 - **Hooks** (advisory; only the RDD-gated Stop reminder can block): `SessionStart` (context, scratch dir, title, status file, skill registry, optional codegraph warm-up; on `compact` and `resume` also a compact summary of the active feature document: the `odd/tasks/*.md` file whose header names the current branch, with its path, header line, `S#` ids, open tasks and last log entry, capped at 2000 characters, nothing when there is no match), `UserPromptSubmit` (context, quota advisory), `PostToolUse` (exploration budget, context backstop), `StopFailure` (quota advisory), `Stop` (status file; empty output unless RDD is on, see [RDD](#receipt-driven-review-rdd)), `PreToolUse` on `Bash` (RDD delivery notice, never blocks; silent unless RDD is on), `SubagentStart`/`SubagentStop` (record the subagent in session state; silent). `SubagentStart`, `SubagentStop` and `StopFailure` run with `async: true` (their output is never used); no hook that injects context is async. There is no `TaskCompleted` hook: Claude Code only lets it block, not add context, `SessionEnd` (scratch cleanup, resume hint, status file).
 - **Output style**: `odd`. **Cards**, **support docs** and **sounds assets** (see below).
 - **Not implemented, by user decision (2026-11-18):** R57 (notification sounds; the `assets/sounds/` files are only shipped assets) and R63 (GitHub star prompt). Native RDD shipped in 2.0.0; inter-session peers (R07) shipped in 2.1.0, see [Peer orchestrators](#peer-orchestrators-r07).
@@ -250,50 +254,45 @@ Statistics and profiles (Phase 5), unchanged in 2.0. The visual mods, the banner
 All of these are advisory: none returns a block decision, `continue:false` or a deny, and the `Stop` hook output is empty so it never forces continuation, except for the RDD-gated settle reminder described in [Receipt-driven review (RDD)](#receipt-driven-review-rdd) (off by default).
 
 - **Quota advisory (R35).** `StopFailure` is fire-and-forget in Claude Code, so the hook only logs and arms one advisory shown on the next prompt (30 min cooldown for exhausted quota, 2 min for transient errors). It includes `--fallback-model` guidance (Anthropic models only; see `cards/quota-recovery.md`).
-- **Session scratch (R56).** A per-session directory `<data>/scratch/<session>` (mode 0700) is created at SessionStart and its path is added to the context; `/odd-claude:scratch` shows it. It is removed at SessionEnd only when it is a real directory whose realpath is exactly `<realroot>/<session>`; symlinks are never followed. Removal first renames the dir to a tombstone `<realroot>/.rm-<pid>-<timestamp>-<session>` and then deletes it; if the process crashes in between, the tombstone stays behind and can accumulate. SessionStart sweeps them: it deletes `.rm-*` entries directly inside the real scratch root that are real directories (never symlinks) and older than 1 hour, at most 200 entries per run.
+- **Session scratch (R56).** A per-session directory `<data>/scratch/<session>` (mode 0700) is created at SessionStart and its path is added to the context; `/odd-scratch` shows it. It is removed at SessionEnd only when it is a real directory whose realpath is exactly `<realroot>/<session>`; symlinks are never followed. Removal first renames the dir to a tombstone `<realroot>/.rm-<pid>-<timestamp>-<session>` and then deletes it; if the process crashes in between, the tombstone stays behind and can accumulate. SessionStart sweeps them: it deletes `.rm-*` entries directly inside the real scratch root that are real directories (never symlinks) and older than 1 hour, at most 200 entries per run.
 - **Terminal title (R62).** SessionStart sets the title to `odd-claude · <project>` through `terminalSequence` (plain OSC 0).
 - **Resume hint (R64).** SessionEnd prints a resume hint and logs it to `hooks.log`.
 - **Agent status file (R70).** `<data>/status/<session>.json` (`schema odd-claude.agent-status/v1`: session, cwd, state `idle`/`working`/`ended`, `updatedAt`; mode 0600, atomic writes). SessionEnd writes `ended` instead of deleting; readers treat it as stale after 30 s.
 
 ## What v0.2 shipped
 
-- **Persona / output style `odd`** (`output-styles/odd.md`, `force-for-plugin: true`, so no `/setup` is needed). SessionStart and UserPromptSubmit hooks add `additionalContext` with the rest of the prompt and the path of the cards. Replies follow the user's language.
-- **Persona**: there is one persona, `neutral` (direct, technical, neutral Spanish), and it is always the default. `/odd-claude:persona` shows it; any other mode (including `mentor`) is refused. Spanish replies are always neutral: no voseo or regional forms (tú or usted).
+- **Persona / output style `odd`** (`output-styles/odd.md`, set as `outputStyle` in `settings.json` by the installer, so no `/odd-setup` is needed). SessionStart and UserPromptSubmit hooks add `additionalContext` with the rest of the prompt and the path of the cards. Replies follow the user's language.
+- **Persona**: there is one persona, `neutral` (direct, technical, neutral Spanish), and it is always the default. `/odd-persona` shows it; any other mode (including `mentor`) is refused. Spanish replies are always neutral: no voseo or regional forms (tú or usted).
 - **Cards** (`cards/*.md`): orchestrator rules loaded on demand (delegation, tracking, verification, memory, skills, prompts, writer, quota recovery), with tool names mapped to Claude Code (`Agent`, `TodoWrite`, `AskUserQuestion`, `Bash` with `run_in_background`, `Monitor`, worktree tools). See `cards/SOURCES.md`.
-- **Agents** (listed as `odd-claude:<agent>`): `odd-explore` (read-only), `odd-verify` (runs checks), `odd-worker` (scoped writer), `odd-jd-fix`, `odd-jd-judge-a`, `odd-jd-judge-b` (Judgment Day), and the four advisory review lenses `odd-review-risk`, `odd-review-resilience`, `odd-review-readability`, `odd-review-reliability`.
-- **Skills** (`odd-claude:<skill>`): `odd`, `branch-pr`, `chained-pr`, `cognitive-doc-design`, `comment-writer`, `issue-creation`, `judgment-day`, `skill-creator`, `skill-improver`, `skill-registry`, `systematic-debugging`, `receiving-review`, `retro`, `tui-design`, `ui-design`, `work-unit-commits`, `4r-review`, plus the commands `doctor`, `status`, `setup`, `persona`, `background-subagents`, `coordinator`.
+- **Agents** (`<agent>`): `odd-explore` (read-only), `odd-verify` (runs checks), `odd-worker` (scoped writer), `odd-jd-fix`, `odd-jd-judge-a`, `odd-jd-judge-b` (Judgment Day), and the four advisory review lenses `odd-review-risk`, `odd-review-resilience`, `odd-review-readability`, `odd-review-reliability`.
+- **Skills** (`<skill>`): `odd`, `branch-pr`, `chained-pr`, `cognitive-doc-design`, `comment-writer`, `issue-creation`, `judgment-day`, `skill-creator`, `skill-improver`, `odd-skill-registry`, `systematic-debugging`, `receiving-review`, `odd-retro`, `tui-design`, `ui-design`, `work-unit-commits`, `4r-review`, plus the commands `odd-doctor`, `odd-status`, `odd-setup`, `odd-persona`, `odd-background-subagents`, `odd-coordinator`.
 - **Support docs** (`support/`): test-first policy and the `odd/tasks/<feature>.md` format. **Sounds**: `assets/sounds/` (original tones, see its LICENSE).
 
 ### Background subagents
 
-`/odd-claude:background-subagents [enable|disable|status]` sets a policy (default off; env `ODD_CLAUDE_BACKGROUND_SUBAGENTS=on|off` is the fallback). When on, the session context tells the orchestrator to launch independent `Agent` work with `run_in_background: true`. Note that Claude Code itself runs subagents in the background by default.
+`/odd-background-subagents [enable|disable|status]` sets a policy (default off; env `ODD_CLAUDE_BACKGROUND_SUBAGENTS=on|off` is the fallback). When on, the session context tells the orchestrator to launch independent `Agent` work with `run_in_background: true`. Note that Claude Code itself runs subagents in the background by default.
 
 ### Coordinator mode (full delegation)
 
-`/odd-claude:coordinator [on|off|status]` switches the delegation mode; **ON by default**. When on, the session context says `Coordinator mode: ON` and points to `cards/full-delegation.md`: the main thread does not implement and sends every authorized change to a bounded `odd-worker` (a general-purpose `Agent` is the reported fallback). When off, the orchestrator works inline and delegates only when a trigger fires. The mode is stored in the plugin data dir (`delegation.json`) and applies from the next session start (or `/clear`).
+`/odd-coordinator [on|off|status]` switches the delegation mode; **ON by default**. When on, the session context says `Coordinator mode: ON` and points to `cards/full-delegation.md`: the main thread does not implement and sends every authorized change to a bounded `odd-worker` (a general-purpose `Agent` is the reported fallback). When off, the orchestrator works inline and delegates only when a trigger fires. The mode is stored in the plugin data dir (`delegation.json`) and applies from the next session start (or `/clear`).
 
 This is a **rule the orchestrator follows, not enforcement**: no hook blocks `Edit`/`Write` in either mode. The same holds for the writer `## Allowed edit surfaces` section, the verifier `Risk:` line and the Judgment Day fix dispatch shape: `cards/writer.md`, `cards/delegation.md`, `cards/verification.md` and the `judgment-day` skill state them as rules.
 
 ### Exploration budget and context backstop (advisory)
 
-A `PostToolUse` hook (matcher `Read|Grep|Glob|WebFetch|WebSearch` plus the codegraph MCP tools, both `mcp__codegraph__*` and `mcp__plugin_odd-claude_codegraph__*`) adds `additionalContext` notices. It **never blocks, asks or denies**: errors are logged and ignored, the timeout is 5 s.
+A `PostToolUse` hook (matcher `Read|Grep|Glob|WebFetch|WebSearch` plus the codegraph MCP tools `mcp__codegraph__*`) adds `additionalContext` notices. It **never blocks, asks or denies**: errors are logged and ignored, the timeout is 5 s.
 
-- **Exploration budget (R14).** Counts exploration calls and result text bytes per turn, main thread only (calls from subagents carry `agent_id`/`agent_type` and are skipped). The counters live in session state and `UserPromptSubmit` resets them each turn. With coordinator mode ON, the first time a turn passes the upstream thresholds (more than 3 lookups or 40,000 text bytes) it suggests launching several parallel `odd-claude:odd-explore` agents, one per distinct front; one notice per turn. Coordinator OFF: no notice.
+- **Exploration budget (R14).** Counts exploration calls and result text bytes per turn, main thread only (calls from subagents carry `agent_id`/`agent_type` and are skipped). The counters live in session state and `UserPromptSubmit` resets them each turn. With coordinator mode ON, the first time a turn passes the upstream thresholds (more than 3 lookups or 40,000 text bytes) it suggests launching several parallel `odd-explore` agents, one per distinct front; one notice per turn. Coordinator OFF: no notice.
 - **Context backstop (R34).** Claude Code gives hooks no context-usage number, so the hook reads `transcript_path`: the prompt tokens (`input + cache_creation + cache_read`) of the last assistant `usage` line, or, if none is in the last 512 KB, `file bytes / 4` as a rough estimate. Past 150,000 tokens (override: `ODD_CLAUDE_CONTEXT_BACKSTOP_TOKENS`) it emits one notice per session suggesting delegating the next bounded unit. A measured reading below the threshold (after compaction) re-arms it. The window size is unknown, so upstream's fraction-of-window rule is not applied. It only runs on the events matched above.
 - **Limitation (state lock).** If a hook process dies while holding the per-session state lock and its pid is later reused by another live process, the lock is not reclaimed (reclaiming needs proof of death only). Each `PostToolUse` then waits about 1 s and fails open (the timeout is logged) until you remove the stale `<data>/sessions/<id>.json.lock` by hand.
 
 ### Skill registry
 
-On SessionStart the hook reads the existing `.atl/skill-registry.md` (one context line) and starts a detached, locked refresh in the background, so the registry is written or updated without delaying session start (the first start in a project has no line yet; the next start does). The registry is an index of project, user and plugin skills by trigger and path, plus `.atl/.gitignore`. Run it on demand with `/odd-claude:skill-registry`. Another tool may also write `.atl/skill-registry.md`; to stop odd-claude from touching it set `ODD_CLAUDE_NO_SKILL_REGISTRY=1`. Git-tracked registries are preserved on automatic refresh.
+On SessionStart the hook reads the existing `.atl/skill-registry.md` (one context line) and starts a detached, locked refresh in the background, so the registry is written or updated without delaying session start (the first start in a project has no line yet; the next start does). The registry is an index of project, user and plugin skills by trigger and path, plus `.atl/.gitignore`. Run it on demand with `/odd-skill-registry`. Another tool may also write `.atl/skill-registry.md`; to stop odd-claude from touching it set `ODD_CLAUDE_NO_SKILL_REGISTRY=1`. Git-tracked registries are preserved on automatic refresh.
 
 ### codegraph MCP
 
-The plugin declares a `codegraph` MCP server (`.mcp.json`, needs the `codegraph` binary). Tool names depend on who provides the server:
-
-- plugin server: `mcp__plugin_odd-claude_codegraph__codegraph_explore`
-- user-level `codegraph` server: Claude Code suppresses the plugin one ("duplicates manually-configured") and the tool is `mcp__codegraph__codegraph_explore`.
-
-Agent allowlists list both names; a name that is not connected is ignored. The SessionStart warm-up (detached `codegraph sync`) is **off by default**: a `.codegraph/` directory comes from the repository and is not a trust signal. Opt in per project: `node "${CLAUDE_PLUGIN_ROOT}/dist/cli/codegraph-trust.js" --action trust --cwd <project>` (records the path in plugin state; `--action untrust` / `--action list`). There is no environment-variable opt-in: a repository can set env through its own `.claude/settings.json`, so only the trust list the user writes counts.
+The installer registers a `codegraph` MCP server (user scope, needs the `codegraph` binary). The tool is `mcp__codegraph__codegraph_explore`; agent allowlists list it and a tool that is not connected is ignored. The SessionStart warm-up (detached `codegraph sync`) is **off by default**: a `.codegraph/` directory comes from the repository and is not a trust signal. Opt in per project: `node "${CLAUDE_PLUGIN_ROOT}/dist/cli/codegraph-trust.js" --action trust --cwd <project>` (records the path in plugin state; `--action untrust` / `--action list`). There is no environment-variable opt-in: a repository can set env through its own `.claude/settings.json`, so only the trust list the user writes counts.
 
 When trusted and an index exists, SessionStart syncs it. Repeated starts do not overlap: an in-flight lock per project (`<data dir>/locks`, replaced when its process is gone or after 6 minutes) skips the spawn. Other flags: `ODD_CLAUDE_CODEGRAPH_INIT=1` also runs `codegraph init` in a trusted project with no index (opt-in); `ODD_CLAUDE_NO_CODEGRAPH_WARMUP=1` disables the warm-up. It never runs in a home or broad directory.
 
@@ -303,11 +302,11 @@ Memory tools are `mem_*`: `mcp__engram__mem_*` when the engram MCP is configured
 
 ### Advisory review (v0.8)
 
-`/odd-claude:4r-review [git range]` (empty = working tree against `HEAD`) runs four independent lens reviewers in parallel via `Agent`: `odd-review-risk` (R1), `odd-review-resilience` (R4), `odd-review-readability` (R2) and `odd-review-reliability` (R3). The skill gathers the diff (it validates a git range argument itself), passes it in each prompt, and merges the findings into one deduplicated, severity-sorted report. It defaults to all four lenses and may skip irrelevant ones, saying so.
+`/4r-review [git range]` (empty = working tree against `HEAD`) runs four independent lens reviewers in parallel via `Agent`: `odd-review-risk` (R1), `odd-review-resilience` (R4), `odd-review-readability` (R2) and `odd-review-reliability` (R3). The skill gathers the diff (it validates a git range argument itself), passes it in each prompt, and merges the findings into one deduplicated, severity-sorted report. It defaults to all four lenses and may skip irrelevant ones, saying so.
 
 - **Advisory only:** the report gates nothing and approves nothing; it has no approval state and no publication gating (the separate [RDD](#receipt-driven-review-rdd) engine has both, off by default). It needs no external review binary and no review tools.
 - **Read-only reviewers:** the lens agents allow only `Read`, `Grep`, `Glob` (plus codegraph) and list `Edit`, `Write`, `NotebookEdit` and `Bash` under `disallowedTools`; `src/lib/agents-guard.spec.ts` enforces this for them and for the Judgment Day judges.
-- **Judgment Day** (`/odd-claude:judgment-day`) stays independent: two blind judges and at most two fix rounds; it neither requires nor replaces `4r-review`.
+- **Judgment Day** (`/judgment-day`) stays independent: two blind judges and at most two fix rounds; it neither requires nor replaces `4r-review`.
 
 ### Subagents cannot ask questions
 
@@ -315,47 +314,133 @@ Claude Code removes `AskUserQuestion` from every subagent (verified on 2.1.327).
 
 ## Requirements
 
-- Claude Code >= 2.1.323 (the `engines.claude-code` value in `.claude-plugin/plugin.json`)
-- Node >= 22
-- git
-- Required: the `engram` plugin (declared in `plugin.json` as `dependencies: ["engram@engram"]`; odd-claude does not load without it) and the `engram` binary its MCP server runs
-- Optional: `codegraph`
+| Need | For |
+|---|---|
+| Node >= 22 | the installer and the hooks |
+| `gh`, authenticated (`gh auth login`) | downloading releases of the private repository `carsimax/odd-plugin` |
+| `jq` | the status line |
+| git | the harness (`/odd-doctor` checks it) |
+| Claude Code >= 2.1.323 | the host |
+| Engram, codegraph | optional; the installer offers to install them (`--no-deps` skips). The Engram plugin is also a valid way to get Engram |
 
-`/odd-claude:doctor` reports which of these are present.
+`/odd-doctor` reports which of these are present.
 
 ## Install
 
-Add the engram marketplace first (engram is required), then this one:
+One line (needs `gh`):
 
 ```
-/plugin marketplace add Gentleman-Programming/engram
-/plugin marketplace add carsimax/odd-plugin
-/plugin install odd-claude@odd-claude
+gh api repos/carsimax/odd-plugin/contents/scripts/install.sh -H "Accept: application/vnd.github.raw" | sh
 ```
 
-The same from a terminal:
+Pin a release with `| sh -s -- --version <v>`.
+
+From a checkout:
 
 ```
-claude plugin marketplace add Gentleman-Programming/engram
-claude plugin marketplace add carsimax/odd-plugin
-claude plugin install odd-claude@odd-claude
+npm --prefix plugins/odd-claude/tui ci && npm --prefix plugins/odd-claude/tui run bundle && node plugins/odd-claude/tui/dist/odd-claude.mjs install --source plugins/odd-claude
 ```
 
-Without the engram marketplace the install still succeeds but warns `dependency "engram@engram" was not installed … "odd-claude" will not load without it`. With it, the install reports "+ 1 dependency: engram" and both plugins are enabled.
+Afterwards (details in [Installer](#installer)):
 
-The repository is private: the machine needs GitHub credentials that git can use (for example `gh auth login` or a credential helper) for Claude Code to clone it. Auto-update is off for third-party marketplaces unless you enable it.
+| Goal | Command |
+|---|---|
+| Update | `odd-claude.mjs update` |
+| Roll back | `odd-claude.mjs rollback [--to <version>]` |
+| Uninstall | `odd-claude.mjs uninstall [--purge]` |
 
-For development, load the plugin from a checkout without installing:
+`odd-claude.mjs` is the bundled TUI the installer downloads; run it with `node` (a local checkout builds it at `plugins/odd-claude/tui/dist/odd-claude.mjs`).
+
+### Migrating from the plugin
+
+The installer detects an installed `odd-claude@*` plugin, uninstalls it (so hooks are not duplicated) and copies its state from `~/.claude/plugins/data/odd-claude-*` into `~/.odd-claude/data`. Renames to know:
+
+| Before (plugin) | Now |
+|---|---|
+| `/odd-claude:profiles`, `/odd-claude:status`, ... | `/odd-profiles`, `/odd-status`, ... | <!-- odd-check: allow -->
+| agents `odd-claude:odd-worker`, ... | `odd-worker`, ... | <!-- odd-check: allow -->
+| MCP `mcp__plugin_odd-claude_review__*` | `mcp__odd-review__*` | <!-- odd-check: allow -->
+| MCP `mcp__plugin_odd-claude_peers__*` | `mcp__odd-peers__*` | <!-- odd-check: allow -->
+
+State lives in `~/.odd-claude/data` (override with `ODD_CLAUDE_HOME`). `CLAUDE_PLUGIN_DATA` and `CLAUDE_PLUGIN_ROOT` are still read as legacy fallbacks.
+
+## Installer
+
+odd-claude installs globally (no plugin) with one file, `odd-claude.mjs`, that needs only Node >= 22. Run it with no arguments in a terminal for the interactive installer, or with a subcommand for scripts:
 
 ```
-claude --plugin-dir plugins/odd-claude
+node odd-claude.mjs                      # TUI: Welcome > Detection > Profile > Models > Extras > Dependencies > Review > Installing > Complete
+node odd-claude.mjs install --source plugins/odd-claude --dry-run --json
+node odd-claude.mjs install --yes --profile economy --model worker=opus
+node odd-claude.mjs update | rollback [--to <version>] | models --profile max | backups [--restore <id>] | status | uninstall [--purge]
 ```
+
+The TUI keys are: up/down to move, enter to continue, esc to go back, space to toggle, left/right to change a model, `q` to quit. Without a terminal and without a subcommand it prints the usage and exits 2; a failed step exits 1.
+
+### Subcommands
+
+| Command | What it does |
+|---|---|
+| `install` | migrates from the plugin (uninstalls it, copies its state), stages the payload, installs files, hooks, output style, MCP servers, extras and dependencies, in that order |
+| `update` | downloads the latest GitHub release (checksums verified), swaps `current`, re-applies hooks, MCP and extras with the options saved at install; models are kept |
+| `uninstall` | reverse order: extras, MCP, output style, hooks, files; never uninstalls Engram or codegraph |
+| `rollback` | points `current` back at the previous (or `--to`) installed version |
+| `models` | applies `--profile` / `--model` to the installed version |
+| `backups` | lists the backups, or restores one with `--restore <id>` |
+| `status` | node, `claude`, `gh`, Engram and codegraph, installed version, plugin install |
+
+### Flags
+
+Every TUI choice has a flag. `odd-claude --help` is the reference.
+
+| Flag | Meaning |
+|---|---|
+| `--source <dir>` | install from a local checkout instead of the latest release |
+| `--profile balanced\|economy\|max\|custom` | model preset; `balanced` (the previous models) is the default on a fresh install, and a reinstall keeps the stored selection |
+| `--model <role>=<model>` | per-agent override, repeatable, e.g. `--model worker=opus --model explore=haiku`; models are `haiku`, `sonnet`, `opus`; an override turns the preset into `custom` |
+| `--dry-run` | plan only: nothing is written and nothing external is changed |
+| `--yes` | non-interactive; confirms the Engram and codegraph installs |
+| `--no-deps` | skip Engram and codegraph |
+| `--no-statusline` | skip the status line |
+| `--keep-claude-ai-connectors`, `--keep-claude-ai-skills`, `--keep-claude-ai-plugins` | leave that claude.ai sync setting alone (by default each is disabled) |
+| `--keep-builtin-plugins`, `--disable-builtin <id>` | leave the `@builtin` plugins alone, or disable only the given ones (repeatable); by default every discovered builtin is disabled except managed ones and `cc-plugin-sec-default@builtin` |
+| `--purge` | uninstall: also delete the data dir and the backups |
+| `--force` | update: skip the 6 hour release-check cache and reinstall the same version |
+| `--to <version>` | rollback target |
+| `--json` | one machine-readable JSON document |
+
+### What gets written where
+
+```
+~/.odd-claude/
+  versions/<x.y.z>/     the release payload (dist, cards, agents, skills, output-styles, statusline, ...)
+  current -> versions/x.y.z
+  data/                 state that used to live in CLAUDE_PLUGIN_DATA (profiles.json, persona, delegation, ...)
+  manifest.json         every file installed into ~/.claude with its sha256
+  settings-state.json   values replaced in settings.json, MCP servers added, update-check cache, chosen extras
+  backups/<timestamp>/  copy of each ~/.claude file before it changed (and settings.json backups)
+  bin/odd-claude.mjs    the installer bundle of the installed release
+~/.claude/
+  skills/, agents/, output-styles/odd.md    copied, with absolute paths resolved
+  settings.json         + 9 hooks, outputStyle "odd", statusLine, the claude.ai keys, enabledPlugins for builtins
+  MCP (user scope)      odd-review, odd-peers, codegraph
+```
+
+`CLAUDE_CONFIG_DIR` and `ODD_CLAUDE_HOME` relocate the two roots.
+
+### Uninstall guarantees
+
+- A file in `~/.claude` is removed only when its hash still matches the manifest; edited or foreign files are reported and kept.
+- Only our hook entries are removed; other hooks keep their place and order.
+- `outputStyle`, `statusLine`, the three claude.ai keys and the `enabledPlugins` entries return to their previous values (absent keys are removed again); a value you changed after the install is kept.
+- Only the MCP servers odd-claude added are removed; servers that already existed are never touched.
+- Engram and codegraph are never uninstalled. `--purge` additionally deletes `data/` and `backups/`; without it they stay.
 
 ## Peer orchestrators (R07)
 
 **What it is.** One Claude Code session on this machine can send a short message to another live session, with the recipient's human consent. The channel is a file mailbox under `${CLAUDE_PLUGIN_DATA}/peers/<recipient session id>/`, delivered by hooks. Released in 2.1.0.
 
-**Enabling it (closed by default).** A session accepts mail from another one only after *you* type `/odd-claude:peers allow <sender session id>` in the recipient session. Grants are recorded ONLY by the `UserPromptSubmit` hook, and only when your own prompt, trimmed, is exactly `allow <id>`, `revoke <id>` or `revoke --all` after the command name (one valid session id). The model cannot forge `input.prompt`, the skill has `disable-model-invocation: true` and its CLI (`dist/cli/peers.js list|status`) is read-only. Grants live in `${CLAUDE_PLUGIN_DATA}/peers/.grants/<your session id>.json` (atomic, 0600, symlinks refused).
+**Enabling it (closed by default).** A session accepts mail from another one only after *you* type `/odd-peers allow <sender session id>` in the recipient session. Grants are recorded ONLY by the `UserPromptSubmit` hook, and only when your own prompt, trimmed, is exactly `allow <id>`, `revoke <id>` or `revoke --all` after the command name (one valid session id). The model cannot forge `input.prompt`, the skill has `disable-model-invocation: true` and its CLI (`dist/cli/peers.js list|status`) is read-only. Grants live in `${CLAUDE_PLUGIN_DATA}/peers/.grants/<your session id>.json` (atomic, 0600, symlinks refused).
 
 **Tools (MCP server `peers`).**
 
@@ -379,13 +464,13 @@ claude --plugin-dir plugins/odd-claude
 
 ## Commands
 
-- `/odd-claude:doctor` (and `/odd-claude:status`) compute their report through skill dynamic context (`!` command), so the output is already in the prompt; `/odd-claude:doctor`: checks node, git, engram, codegraph, plugin version and data dir; lists what is missing.
-- `/odd-claude:stats`: local stats for the current session: turns, tokens in/out/cache and per-model split (from the transcript tail, at most the last 8 MiB, garbage lines skipped), subagent count and finished time (from the R09 state) and the exploration counters. The transcript path (`transcript_path` of the hook input) is saved in session state at `SessionStart`/`UserPromptSubmit`; the skill only passes `${CLAUDE_SESSION_ID}`. No cost lookup, no quota endpoint, no network, nothing leaves the machine.
-- `/odd-claude:profiles [list|show|use <balanced|economy|max>|set <role> <model> [effort]|clear]` (R39/R40): a model profile maps each odd-claude agent (`odd-explore`, `odd-verify`, `odd-worker`, `odd-jd-*`, `odd-review-*`) plus the RDD native roles `review-refuter` and `review-validator` to `{model, effort}` in plugin state (`profiles.json`). The agent files in the plugin cache are never rewritten and their frontmatter `model` stays the default. **`balanced` is the default profile**: it applies whenever no profile was chosen (no state, unreadable or unknown state), `clear` returns to it, and an explicitly chosen `economy`, `max` or `custom` still wins. `balanced` (all effort `medium`): `odd-explore` haiku; `odd-worker` sonnet; `odd-verify` opus; `odd-jd-fix` sonnet; `odd-jd-judge-a` opus; `odd-jd-judge-b` sonnet; `odd-review-readability`/`reliability`/`resilience` sonnet; `odd-review-risk` opus; `review-refuter` opus; `review-validator` opus. `odd-explore` is `haiku` in every preset (balanced and max medium effort, economy low); a `set odd-explore <model>` override is still possible. Explorers are cheap, so whenever exploration is warranted the orchestrator launches several `odd-claude:odd-explore` agents in parallel in one message, each on a distinct front (subsystem, layer, or question: callers, implementation, tests, docs/history), each returning a handoff of at most ~2k tokens with `path:line` evidence that the parent merges (one explorer only for a single narrow front). `economy` and `max` give `review-refuter`/`review-validator` the same model as their judges (sonnet/medium and opus/xhigh). Arguments are validated against whitelists (models `haiku`/`sonnet`/`opus`, efforts `low`..`max`). Routing: the session context lists the active profile so the orchestrator passes `model` in the `Agent` tool call (applies from the next session start or `/clear`). The Agent tool has no `effort` parameter, so effort is stored and shown but not routed.
-- `/odd-claude:peers [allow <session-id>|revoke <session-id>|revoke --all]` (R07): per-session consent for peer messages, typed by you, closed by default. Everything else about peers (tools, delivery, limits, the shell-access limit) is under [Peer orchestrators](#peer-orchestrators-r07).
-- `/odd-claude:status`: shows the current session state, registered hooks and the roadmap position.
-- `/odd-claude:coordinator [on|off|status]`: shows or switches coordinator mode (see above).
-- `/odd-claude:setup [default|acceptEdits|auto|plan|bypassPermissions|restore [backup]]`: opt-in writer for `permissions.defaultMode` in `~/.claude/settings.json` (the only key it handles). Always a diff, explicit confirmation, a 0600 backup, an atomic write and `restore`.
+- `/odd-doctor` (and `/odd-status`) compute their report through skill dynamic context (`!` command), so the output is already in the prompt; `/odd-doctor`: checks node, git, engram, codegraph, plugin version and data dir; lists what is missing.
+- `/odd-stats`: local stats for the current session: turns, tokens in/out/cache and per-model split (from the transcript tail, at most the last 8 MiB, garbage lines skipped), subagent count and finished time (from the R09 state) and the exploration counters. The transcript path (`transcript_path` of the hook input) is saved in session state at `SessionStart`/`UserPromptSubmit`; the skill only passes `${CLAUDE_SESSION_ID}`. No cost lookup, no quota endpoint, no network, nothing leaves the machine.
+- `/odd-profiles [list|show|use <balanced|economy|max>|set <role> <model> [effort]|clear]` (R39/R40): a model profile maps each odd-claude agent (`odd-explore`, `odd-verify`, `odd-worker`, `odd-jd-*`, `odd-review-*`) plus the RDD native roles `review-refuter` and `review-validator` to `{model, effort}` in plugin state (`profiles.json`). The agent files in the plugin cache are never rewritten and their frontmatter `model` stays the default. **`balanced` is the default profile**: it applies whenever no profile was chosen (no state, unreadable or unknown state), `clear` returns to it, and an explicitly chosen `economy`, `max` or `custom` still wins. `balanced` (all effort `medium`): `odd-explore` haiku; `odd-worker` sonnet; `odd-verify` opus; `odd-jd-fix` sonnet; `odd-jd-judge-a` opus; `odd-jd-judge-b` sonnet; `odd-review-readability`/`reliability`/`resilience` sonnet; `odd-review-risk` opus; `review-refuter` opus; `review-validator` opus. `odd-explore` is `haiku` in every preset (balanced and max medium effort, economy low); a `set odd-explore <model>` override is still possible. Explorers are cheap, so whenever exploration is warranted the orchestrator launches several `odd-explore` agents in parallel in one message, each on a distinct front (subsystem, layer, or question: callers, implementation, tests, docs/history), each returning a handoff of at most ~2k tokens with `path:line` evidence that the parent merges (one explorer only for a single narrow front). `economy` and `max` give `review-refuter`/`review-validator` the same model as their judges (sonnet/medium and opus/xhigh). Arguments are validated against whitelists (models `haiku`/`sonnet`/`opus`, efforts `low`..`max`). Routing: the session context lists the active profile so the orchestrator passes `model` in the `Agent` tool call (applies from the next session start or `/clear`). The Agent tool has no `effort` parameter, so effort is stored and shown but not routed.
+- `/odd-peers [allow <session-id>|revoke <session-id>|revoke --all]` (R07): per-session consent for peer messages, typed by you, closed by default. Everything else about peers (tools, delivery, limits, the shell-access limit) is under [Peer orchestrators](#peer-orchestrators-r07).
+- `/odd-status`: shows the current session state, registered hooks and the roadmap position.
+- `/odd-coordinator [on|off|status]`: shows or switches coordinator mode (see above).
+- `/odd-setup [default|acceptEdits|auto|plan|bypassPermissions|restore [backup]]`: opt-in writer for `permissions.defaultMode` in `~/.claude/settings.json` (the only key it handles). Always a diff, explicit confirmation, a 0600 backup, an atomic write and `restore`.
   - Always shows a diff first and writes nothing until you explicitly confirm.
   - Before writing, the original file is copied to a backup under the plugin data dir (`backups/`), and only the listed key changes.
   - `restore` shows the diff back to the latest backup (or the named one) and applies it after confirmation. The current file is backed up first, so a restore is itself reversible.
@@ -393,7 +478,7 @@ claude --plugin-dir plugins/odd-claude
 
 ### Permission modes
 
-odd-claude has no permission system of its own: the upstream modes map onto Claude Code's native `permissions.defaultMode`, which `/odd-claude:setup` writes after a diff and a confirmation.
+odd-claude has no permission system of its own: the upstream modes map onto Claude Code's native `permissions.defaultMode`, which `/odd-setup` writes after a diff and a confirmation.
 
 | Upstream mode | Native `defaultMode` | Notes |
 |---|---|---|
@@ -404,7 +489,7 @@ odd-claude has no permission system of its own: the upstream modes map onto Clau
 
 `plan` (read-only planning) has no upstream counterpart and stays available.
 
-**Risk of `bypassPermissions`:** it removes every permission prompt, including for destructive shell commands and sensitive files, and odd-claude adds no deny hook to catch them (by decision: the user wants that block permissive). Hooks do stay active in this mode (observed in the Q3 spike on Claude Code 2.1.326: a `PreToolUse` hook fired under `--permission-mode bypassPermissions`; see `docs/research/open-questions.md`), but the only hook that can deny is the RDD delivery gate (off by default, and only for `git push` / `gh pr`), so that gives no protection against destructive commands. The setup dry run prints this warning with the diff. Use it only in a sandbox or disposable checkout; `/odd-claude:setup restore` undoes it.
+**Risk of `bypassPermissions`:** it removes every permission prompt, including for destructive shell commands and sensitive files, and odd-claude adds no deny hook to catch them (by decision: the user wants that block permissive). Hooks do stay active in this mode (observed in the Q3 spike on Claude Code 2.1.326: a `PreToolUse` hook fired under `--permission-mode bypassPermissions`; see `docs/research/open-questions.md`), but the only hook that can deny is the RDD delivery gate (off by default, and only for `git push` / `gh pr`), so that gives no protection against destructive commands. The setup dry run prints this warning with the diff. Use it only in a sandbox or disposable checkout; `/odd-setup restore` undoes it.
 
 ### Setup limitations
 
@@ -414,7 +499,7 @@ odd-claude has no permission system of its own: the upstream modes map onto Clau
 
 ## Data directory
 
-State lives under `${CLAUDE_PLUGIN_DATA}` (for an installed plugin `~/.claude/plugins/data/odd-claude-<marketplace>`; with `--plugin-dir` it is `odd-claude-inline`): `sessions/`, `backups/`, `logs/hooks.log` and `setup.json`.
+State lives under `~/.odd-claude/data` (`ODD_CLAUDE_HOME` moves it; the legacy `CLAUDE_PLUGIN_DATA` is still honored): `sessions/`, `backups/`, `logs/hooks.log` and `setup.json`.
 
 ## Development
 
@@ -429,9 +514,9 @@ npm run check   # naming / data-collection guard
 
 `dist/` is committed so the plugin runs without a local `tsc`: **rebuild it (`npm run build`) and commit it with every source change.**
 
-`npm test` is the main node:test suite. Validate the manifests with `claude plugin validate plugins/odd-claude` and `claude plugin validate .`.
+`npm test` is the main node:test suite. The installer end to end (install, then uninstall restoring `settings.json` exactly) runs with `npm run test:e2e` at the repo root after `npm --prefix plugins/odd-claude/tui run bundle`; it needs `jq` and the `claude` CLI.
 
-**CI** (`.github/workflows/ci.yml`): on every pull request and push to `main`, on Ubuntu and macOS with Node 22 and 26, it runs `npm ci`, `npm run build` (on Ubuntu / Node 26 it also fails if the committed `dist/` differs from `src/`), `npm test`, `npm run check`, the bench unit tests (`npm run test:bench` at the repo root) and `claude plugin validate plugins/odd-claude` (Claude Code CLI pinned to 2.1.330).
+**CI** (`.github/workflows/ci.yml`): on every pull request and push to `main`, on Ubuntu and macOS with Node 22 and 26, it runs `npm ci`, `npm run build` (on Ubuntu / Node 26 it also fails if the committed `dist/` differs from `src/`), `npm test`, `npm run check`, the bench unit tests (`npm run test:bench` at the repo root) the TUI tests and bundle, and the installer e2e (`scripts/tests/installer-e2e.sh`, Claude Code CLI pinned to 2.1.330).
 
 ## License and attribution
 

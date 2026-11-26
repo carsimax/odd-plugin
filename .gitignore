@@ -11,6 +11,10 @@ spikes/**/latest
 # odd-claude plugin: local deps and test build output (dist/ IS committed)
 plugins/odd-claude/node_modules/
 plugins/odd-claude/dist-test/
+# odd-claude TUI package: deps, esbuild bundle and test build output
+plugins/odd-claude/tui/node_modules/
+plugins/odd-claude/tui/dist/
+plugins/odd-claude/tui/dist-test/
 
 # Dev-only bench build output (bench/ is not part of the plugin payload)
 /bench/dist/
