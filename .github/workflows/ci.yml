@@ -64,6 +64,9 @@ jobs:
         run: npm run check
 
       # Needs only plugins/odd-claude/node_modules (build:bench uses its tsc), so the plugin `npm ci` above must run first.
+      - name: Install script tests (POSIX sh)
+        run: sh scripts/tests/install.test.sh
+
       - name: Bench unit tests (no oracle binary)
         run: npm run test:bench
 

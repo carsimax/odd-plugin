@@ -10,6 +10,7 @@
     "bench": "npm run build:bench --silent && node bench/dist/cli.js",
     "eval": "npm run build:bench --silent && node bench/dist/eval/cli.js",
     "bench:hooks": "npm run build:bench --silent && node bench/dist/hookstart.js",
+    "test:install": "sh scripts/tests/install.test.sh",
     "check": "npm --prefix plugins/odd-claude run check"
   }
 }
