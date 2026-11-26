@@ -572,25 +572,26 @@ npm run check   # naming / data-collection guard
 
 ### Releasing (manual)
 
-There is no CI: releases are cut by hand. Run the local checks first, at the repo root unless noted:
+There is no CI: releases are cut by hand. Run the local checks first (each line says where it runs):
 
 ```
-npm test                              # plugins/odd-claude: build + node:test suite
-npm run check                         # naming / data-collection guard
-npm run test:bench                    # bench unit tests
-npm --prefix plugins/odd-claude/tui test   # TUI tests
-sh scripts/tests/installer-e2e.sh     # installer e2e (npm run test:e2e; needs jq and the claude CLI)
+(plugins/odd-claude)  npm test                 # build + node:test suite
+(plugins/odd-claude)  npm run check            # naming / data-collection guard
+(repo root)           npm run test:bench       # bench unit tests
+(plugins/odd-claude)  npm --prefix tui test    # TUI tests
+(repo root)           sh scripts/tests/installer-e2e.sh   # installer e2e (npm run test:e2e; needs jq and the claude CLI)
 ```
 
 Then, in order:
 
-1. Build and confirm the tracked `dist/` has no diff.
-2. Bundle the TUI: `npm --prefix tui ci && npm --prefix tui run bundle` (inside `plugins/odd-claude`).
-3. Build the payload: `node scripts/release-payload.mjs --version <v> --out <dir> --bundle tui/dist/odd-claude.mjs`.
-4. Commit `chore(release): <v> [skip ci]`.
-5. Create an annotated tag `v<v>`.
-6. Push the commit and the tag.
-7. `gh release create v<v> --verify-tag --generate-notes` with the three assets: the payload tarball, `odd-claude.mjs` and `checksums.txt`.
+1. Bump the version: `node scripts/bump-version.mjs <v>` (in `plugins/odd-claude`). It updates `package.json` (and `plugin.json` / the root `marketplace.json` when they exist) but not `package-lock.json`: edit its two root `version` fields by hand.
+2. Build (in `plugins/odd-claude`) and confirm the tracked `dist/` has no diff.
+3. Bundle the TUI: `npm --prefix tui ci && npm --prefix tui run bundle` (in `plugins/odd-claude`).
+4. Build the payload: `node scripts/release-payload.mjs --version <v> --out <dir> --bundle tui/dist/odd-claude.mjs` (in `plugins/odd-claude`).
+5. Commit `chore(release): <v> [skip ci]` (repo root).
+6. Create an annotated tag `v<v>`.
+7. Push the commit and the tag.
+8. `gh release create v<v> --verify-tag --generate-notes` with the three assets: the payload tarball, `odd-claude.mjs` and `checksums.txt`.
 
 ## License and attribution
 
