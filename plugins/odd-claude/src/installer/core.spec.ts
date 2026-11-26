@@ -10,6 +10,7 @@ import { backupFiles, listBackups, restoreBackup } from "./backup.js";
 import { applyAgentModel, buildSelection, defaultSelection, readSelection, roleCoverage, writeProfileState } from "./models.js";
 import { PROFILE_ROLES, PRESETS, profileContextLine, readProfile } from "../lib/profiles.js";
 import { dataDirFromEnv } from "../lib/state.js";
+import { runInstall, runUninstall } from "./plan.js";
 import { agentMd, makeHome, makeSource, put } from "./installer.testkit.js";
 
 test("resolveInstallPaths: defaults under home, env overrides, data dir matches the runtime resolver", () => {
@@ -185,4 +186,28 @@ test("roleCoverage reports roles without an agent file and unrouted agent files"
   const partial = roleCoverage([...all.filter((f) => f !== "odd-jd-fix.md"), "extra.md"]);
   assert.deepEqual(partial.rolesWithoutAgentFile, ["odd-jd-fix", "review-refuter", "review-validator"]);
   assert.deepEqual(partial.unroutedAgentFiles, ["extra.md"]);
+});
+
+test("upgrading from a payload with cards/ and older rules leaves no cards dir and exactly the four rules; uninstall removes them", () => {
+  const { paths } = makeHome();
+  const selection = defaultSelection();
+  const old = makeSource();
+  put(old, "rules/odd-tracking.md", "old tracking\n");
+  put(old, "rules/odd-legacy.md", "old rule\n");
+  runInstall({ paths, sourceRoot: old, version: "1.0.0", selection });
+  // The current payload no longer ships cards, so simulate the previous release by adding the dir to the staged version.
+  put(join(paths.versionsDir, "1.0.0"), "cards/delegation.md", "old card\n");
+  assert.ok(existsSync(join(paths.currentLink, "cards")), "precondition: old payload had cards");
+
+  const next = makeSource();
+  const RULES = ["odd-delegation.md", "odd-skills.md", "odd-tracking.md", "odd-verification.md"];
+  for (const r of RULES) put(next, `rules/${r}`, `new ${r}\n`);
+  runInstall({ paths, sourceRoot: next, version: "2.0.0", selection });
+  assert.equal(activeVersion(paths), "2.0.0");
+  assert.equal(existsSync(join(paths.currentLink, "cards")), false);
+  assert.deepEqual(readdirSync(join(paths.claudeDir, "rules")).sort(), RULES);
+  assert.equal(readFileSync(join(paths.claudeDir, "rules", "odd-delegation.md"), "utf8"), "new odd-delegation.md\n");
+
+  runUninstall({ paths });
+  assert.equal(existsSync(join(paths.claudeDir, "rules", "odd-delegation.md")), false);
 });

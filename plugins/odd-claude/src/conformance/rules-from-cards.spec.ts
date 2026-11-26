@@ -86,3 +86,26 @@ test("a temp-HOME install of the real tree writes the card rules under rules/ an
     rmSync(home, { recursive: true, force: true });
   }
 });
+
+test("restored rules: surface authority, per-tool updates, verifier fallback, skills subject, prompt details", () => {
+  const d = read("rules/odd-delegation.md");
+  assert.match(d, /A surface grants no repository authority or prohibited operation\./);
+  assert.match(d, /never end the turn on one: take the next step it names/);
+  assert.match(d, /no per-tool updates/);
+  assert.doesNotMatch(d, /per-token/);
+  assert.match(d, /Run the required focused verification before that claim, and retain legitimate post-correction verification\. This does not invent a universal full-suite requirement\./);
+  assert.match(d, /general-purpose `Agent` with the same read-only verification constraints, the exact parent-authorized commands/);
+  assert.match(d, /Native-tool-only wording elsewhere never disables this fallback\./);
+  assert.match(d, /keep its configured model/);
+  assert.match(d, /Pass sources already available through task\/context when useful/);
+  assert.match(d, /Subagents also run in the background by default\./);
+  const v = read("rules/odd-verification.md");
+  assert.match(v, /use the existing command path and retain its observed result/);
+  assert.match(v, /do not pass missing proof/);
+  assert.match(v, /the next application outcome/);
+  assert.match(v, /the parent commits when a commit is authorized/);
+  const k = read("rules/odd-skills.md");
+  assert.match(k, /the parent continues without project skill injection and reports `skill_resolution: none`/);
+  assert.match(k, /during normal runtime/);
+  assert.match(read("README.md").split("\n")[2]!, /orchestrator rules/);
+});

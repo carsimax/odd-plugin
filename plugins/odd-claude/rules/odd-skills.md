@@ -9,9 +9,9 @@ The effective view is the skill list Claude Code shows the session (with project
 1. Match task context and target files against the view's trigger / description column.
 2. Pass only matching exact `SKILL.md` paths to subagents under `## Skills to load before work`. Match the delegated task's own files and actions, never a fixed set: a child that will not commit gets no commit skill, one that writes no docs gets no docs skill.
 3. Tell subagents to read those exact files before reading, writing, reviewing, testing or creating artifacts.
-4. If no skill matches, continue without skill injection; the worker reports `skill_resolution: none`.
+4. If no skill matches, the parent continues without project skill injection and reports `skill_resolution: none`.
 
-`.atl/skill-registry.md` indexes disk only and is never the full view. The view is unavailable only when neither the session skill list nor the registry exists: then say so; a disk-only fallback may omit runtime-only skills. Disk changes appear at the next session start, not mid-run. Subagents receive exact indexed paths and never rediscover the registry or other `SKILL.md` files.
+`.atl/skill-registry.md` indexes disk only and is never the full view. The view is unavailable only when neither the session skill list nor the registry exists: then say so; a disk-only fallback may omit runtime-only skills. Disk changes appear at the next session start, not mid-run. Subagents receive exact indexed paths and never rediscover the registry or other project/user `SKILL.md` files during normal runtime.
 
 Among the plugin's agents only `odd-worker` reports `skill_resolution`: `paths-injected` (parent supplied exact paths), `paths-invalid` (blocked; the unreadable path is in `risks`), or `none`. Other agents may report `fallback-registry` or `fallback-path` (self-loaded because parent paths were missing; degraded but auditable). Any fallback instead of `paths-injected` is an orchestration gap: pass exact indexed paths directly from then on.
 

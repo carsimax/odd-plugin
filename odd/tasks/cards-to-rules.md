@@ -19,11 +19,13 @@ Runner: `npm test` and `npm run check` inside `plugins/odd-claude`; installer te
 - "renombrar a src/ sera despues pero anotalo" — renaming `plugins/odd-claude/` is out of scope (noted in memory as backlog).
 
 ## Tasks
-- T1 [S1-S3] route: delegated (Coordinator ON) — fuse cards into `rules/` files without `paths:`, drop content duplicated in `claude-md/`, move provenance, replace every "read the card"/`cards/...` reference (claude-md, skills, README, scripts, content tests); add the S3 budget test. commit: - . done when: `plugins/odd-claude/cards/` no longer exists, budget test passes, `grep -rn "cards/" claude-md skills rules README.md` has no live card references.
-- T2 [S1] route: delegated (Coordinator ON) — runtime/installer: drop `cards` from `PAYLOAD_ITEMS`, remove `cardsDir`/`resolveCardsDir` from session context (the Coordinator ON line points to the installed rule instead), fix `quota.ts` guidance text, update specs/testkits. commit: - . done when: `npm test` and `npm run check` pass and a temp-HOME install produces the new rule files under `rules/` and no `cards` dir in the version payload.
-- T3 [S1-S3] route: parent + odd-verify (Risk item 3/5: installed layout and installer payload) — independent verification. commit: n/a. done when: verifier verdict per S#.
+- T1 [S1-S3] route: delegated (Coordinator ON) — fuse cards into `rules/` files without `paths:`, drop content duplicated in `claude-md/`, move provenance, replace every "read the card"/`cards/...` reference (claude-md, skills, README, scripts, content tests); add the S3 budget test. commit: 74f6d76 . done when: `plugins/odd-claude/cards/` no longer exists, budget test passes, `grep -rn "cards/" claude-md skills rules README.md` has no live card references.
+- T2 [S1] route: delegated (Coordinator ON) — runtime/installer: drop `cards` from `PAYLOAD_ITEMS`, remove `cardsDir`/`resolveCardsDir` from session context (the Coordinator ON line points to the installed rule instead), fix `quota.ts` guidance text, update specs/testkits. commit: 74f6d76 . done when: `npm test` and `npm run check` pass and a temp-HOME install produces the new rule files under `rules/` and no `cards` dir in the version payload.
+- T3 [S1-S3] route: parent + odd-verify (Risk item 3/5: installed layout and installer payload) — independent verification. commit: verified 74f6d76 (odd-verify). done when: verifier verdict per S#.
 
 ## Log
 - L1 (user, verbatim): "Todas las cards deberian a pasar ser  ~/.claude/rules/ renombrar a src/ sera despues pero anotalo"
 - L2 (user answer, verbatim): "Siempre cargadas, fusionadas (Recomendado)"
 - L3 (parent): Context: in Claude Code, a `~/.claude/rules/*.md` file without `paths:` frontmatter loads at session start like CLAUDE.md; cards had no repo path to scope them to.
+- L4 (parent): verifier passed S1-S4 and found 6 groups of rules lost in the merge plus a README wording issue; fixed in a follow-up commit.
+- L5 (parent): advisory: old `versions/<x>/` dirs persist after a version-number upgrade (pre-existing retention behavior, out of scope).
