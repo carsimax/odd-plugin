@@ -93,15 +93,30 @@ const RETIRED_DETAIL = "retired: native cross-session messaging";
 
 export async function applyMcp(opts: Opts & { statePath: string; dataDir?: string }): Promise<{ results: McpResult[] }> {
   const results: McpResult[] = [];
-  if (opts.dataDir) rmSync(join(opts.dataDir, "peers"), { recursive: true, force: true });
+  if (opts.dataDir) {
+    try {
+      rmSync(join(opts.dataDir, "peers"), { recursive: true, force: true });
+    } catch (err) {
+      results.push({ name: "peers-dir", status: "failed", detail: `could not remove legacy peers directory: ${(err as Error).message}` });
+    }
+  }
   const recordedBefore = readOddState(opts.statePath).mcp?.added;
   const retire = RETIRED_SERVERS.filter((n) => Array.isArray(recordedBefore) && recordedBefore.includes(n));
   const retired: string[] = [];
+  const listCache: { value?: Promise<RunResult> } = {};
   for (const name of retire) {
+    if ((await detect(opts, name, listCache)).state === "absent") {
+      retired.push(name);
+      results.push({ name, status: "removed", detail: `${RETIRED_DETAIL} (already absent)` });
+      continue;
+    }
     const r = await run(opts.runner, removeArgv(name), opts.env);
     if (r.code === 0) {
       retired.push(name);
       results.push({ name, status: "removed", detail: RETIRED_DETAIL });
+    } else if (/no mcp server (named|found)/i.test(`${r.stdout}\n${r.stderr}`)) {
+      retired.push(name);
+      results.push({ name, status: "removed", detail: `${RETIRED_DETAIL} (already absent)` });
     } else results.push({ name, status: "failed", detail: text(r) });
   }
   if (retired.length > 0) {

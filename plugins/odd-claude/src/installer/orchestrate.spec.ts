@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, readlinkSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -296,12 +297,13 @@ describe("odd-peers retirement on install and update", () => {
     mkdirSync(dirname(ctx.managed.statePath), { recursive: true });
     writeFileSync(ctx.managed.statePath, JSON.stringify({ version: 1, mcp: { added: ["odd-review", "odd-peers"] } }));
   };
+  const hasPeers = (c: Call): RunResult | undefined => (c.cmd === "claude" && c.args[0] === "mcp" && c.args[1] === "get" && c.args[2] === "odd-peers" ? ok("odd-peers:\n  Scope: User") : undefined);
   const removed = (calls: Call[]): string[] => calls.filter((c) => c.args[0] === "mcp" && c.args[1] === "remove").map((c) => c.args[c.args.length - 1]!);
 
   it("install removes our recorded odd-peers and the peers/ directory", async () => {
     const { home, env, source, ctx } = setup();
     legacy(ctx);
-    const m = machine();
+    const m = machine({ failOn: hasPeers });
     const r = await runFullInstall({ env, homedir: home, runner: m.runner, source, deps: false });
     assert.deepEqual(removed(m.calls), ["odd-peers"]);
     assert.ok(!m.calls.some((c) => c.args[1] === "add" && c.args.includes("odd-peers")));
@@ -315,12 +317,38 @@ describe("odd-peers retirement on install and update", () => {
     await runFullInstall({ env, homedir: home, runner: machine().runner, source, deps: false });
     legacy(ctx);
     const rel = makeRelease("9.9.10");
-    const gh = ghRunner(rel, (c) => (c.cmd === "claude" && c.args[0] === "mcp" && c.args[1] === "get" ? fail("No MCP server named x found") : undefined));
+    const gh = ghRunner(rel, (c) => (c.cmd === "claude" && c.args[0] === "mcp" && c.args[1] === "get" ? (c.args[2] === "odd-peers" ? ok("odd-peers:") : fail("No MCP server named x found")) : undefined));
     const r = await runUpdateFlow({ env, homedir: home, runner: gh.runner, force: true });
     assert.equal(r.status, "updated");
     assert.deepEqual(removed(gh.calls), ["odd-peers"]);
     assert.equal(JSON.parse(readFileSync(ctx.managed.statePath, "utf8")).mcp.added.includes("odd-peers"), false);
     assert.equal(existsSync(join(ctx.paths.dataDir, "peers")), false);
+  });
+
+  it("install removes the stale odd-peers skill we installed earlier", async () => {
+    const { home, env, source, ctx } = setup();
+    await runFullInstall({ env, homedir: home, runner: machine().runner, source, deps: false });
+    const content = "---\nname: odd-peers\n---\n";
+    const skill = join(ctx.paths.claudeDir, "skills", "odd-peers", "SKILL.md");
+    mkdirSync(dirname(skill), { recursive: true });
+    writeFileSync(skill, content);
+    const manifest = JSON.parse(readFileSync(ctx.paths.manifestPath, "utf8"));
+    manifest.files["skills/odd-peers/SKILL.md"] = createHash("sha256").update(content).digest("hex");
+    writeFileSync(ctx.paths.manifestPath, JSON.stringify(manifest));
+    await runFullInstall({ env, homedir: home, runner: machine().runner, source, deps: false });
+    assert.equal(existsSync(skill), false);
+    assert.equal(existsSync(dirname(skill)), false);
+    assert.equal("skills/odd-peers/SKILL.md" in JSON.parse(readFileSync(ctx.paths.manifestPath, "utf8")).files, false);
+  });
+
+  it("a dry run keeps the peers/ directory and the recorded odd-peers and removes nothing", async () => {
+    const { home, env, source, ctx } = setup();
+    legacy(ctx);
+    const m = machine({ failOn: hasPeers });
+    await runFullInstall({ env, homedir: home, runner: m.runner, source, deps: false, dryRun: true });
+    assert.ok(existsSync(join(ctx.paths.dataDir, "peers", "grants.json")));
+    assert.ok(JSON.parse(readFileSync(ctx.managed.statePath, "utf8")).mcp.added.includes("odd-peers"));
+    assert.deepEqual(removed(m.calls), []);
   });
 
   it("install without a recorded odd-peers never removes one", async () => {

@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { existsSync, mkdirSync, mkdtempSync, writeFileSync, readFileSync, rmSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, symlinkSync, writeFileSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -193,7 +193,7 @@ test("apply never touches an odd-peers server that is not recorded as ours", asy
 });
 
 test("a failed odd-peers removal is reported as failed, stays recorded and does not abort the apply", async () => {
-  const f = fake([]);
+  const f = fake(["odd-peers"]);
   const runner: McpRunner = (cmd, args, o) => (args[1] === "remove" ? { code: 1, stdout: "", stderr: "remove failed" } : f.runner(cmd, args, o));
   const s = tmpState();
   try {
@@ -235,6 +235,77 @@ test("apply removes the legacy peers/ directory under the data dir; a missing di
     await applyMcp({ runner: f.runner, env, oddRoot: "/o/current", statePath: s.statePath, dataDir: data });
     await applyMcp({ runner: f.runner, env, oddRoot: "/o/current", statePath: s.statePath, dataDir: join(data, "absent") });
   } finally {
+    s.cleanup();
+    rmSync(data, { recursive: true, force: true });
+  }
+});
+
+test("a recorded odd-peers the user already removed by hand is dropped from the state without a remove call", async () => {
+  const f = fake(["odd-review", "codegraph"]);
+  const s = tmpState();
+  try {
+    stateWith(s.statePath, ["odd-peers", "odd-review"]);
+    const r = await applyMcp({ runner: f.runner, env, oddRoot: "/o/current", statePath: s.statePath });
+    assert.ok(!mut(f.calls).some((a) => a[1] === "remove"));
+    const peers = r.results.find((x) => x.name === "odd-peers")!;
+    assert.equal(peers.status, "removed");
+    assert.match(peers.detail, /already absent/);
+    assert.deepEqual(addedOf(s.statePath), ["odd-review"]);
+  } finally {
+    s.cleanup();
+  }
+});
+
+test("a remove failure saying the server was not found counts as already removed", async () => {
+  const f = fake([], { getFails: true });
+  const runner: McpRunner = (cmd, args, o) => {
+    if (args[1] === "list") return { code: 0, stdout: "odd-peers: x - ok\n", stderr: "" };
+    if (args[1] === "remove") return { code: 1, stdout: "", stderr: "No MCP server found with name: odd-peers" };
+    return f.runner(cmd, args, o);
+  };
+  const s = tmpState();
+  try {
+    stateWith(s.statePath, ["odd-peers"]);
+    const r = await applyMcp({ runner, env, oddRoot: "/o/current", statePath: s.statePath });
+    assert.equal(r.results.find((x) => x.name === "odd-peers")!.status, "removed");
+    assert.equal(addedOf(s.statePath).includes("odd-peers"), false);
+  } finally {
+    s.cleanup();
+  }
+});
+
+test("a peers/ symlink is unlinked and its target is left alone", async () => {
+  const f = fake(["odd-review", "codegraph"]);
+  const s = tmpState();
+  const data = mkdtempSync(join(tmpdir(), "odd-mcp-data-"));
+  const target = mkdtempSync(join(tmpdir(), "odd-mcp-target-"));
+  try {
+    writeFileSync(join(target, "keep.txt"), "k");
+    symlinkSync(target, join(data, "peers"));
+    await applyMcp({ runner: f.runner, env, oddRoot: "/o/current", statePath: s.statePath, dataDir: data });
+    assert.equal(existsSync(join(data, "peers")), false);
+    assert.ok(existsSync(join(target, "keep.txt")));
+  } finally {
+    s.cleanup();
+    rmSync(data, { recursive: true, force: true });
+    rmSync(target, { recursive: true, force: true });
+  }
+});
+
+test("an unremovable peers/ directory becomes a warning entry and the other servers are still registered", async () => {
+  const f = fake([]);
+  const s = tmpState();
+  const data = mkdtempSync(join(tmpdir(), "odd-mcp-data-"));
+  const sess = join(data, "peers", "sess");
+  try {
+    mkdirSync(sess, { recursive: true });
+    writeFileSync(join(sess, "f"), "x");
+    chmodSync(sess, 0o500);
+    const r = await applyMcp({ runner: f.runner, env, oddRoot: "/o/current", statePath: s.statePath, dataDir: data });
+    if (process.getuid?.() !== 0) assert.ok(r.results.some((x) => x.name === "peers-dir" && x.status === "failed"));
+    assert.deepEqual(mut(f.calls).map((a) => a[4]), ["odd-review", "codegraph"]);
+  } finally {
+    chmodSync(sess, 0o700);
     s.cleanup();
     rmSync(data, { recursive: true, force: true });
   }
