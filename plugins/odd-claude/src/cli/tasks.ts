@@ -1,8 +1,6 @@
 // `node dist/cli/tasks.js [--json] [--cwd <dir>]`: read-only lint of `<git root>/odd/tasks/*.md`; always exits 0.
-import { realpathSync } from "node:fs";
-import { fileURLToPath } from "node:url";
 import { lintFeatureDocs, renderTasksLint, TASKS_LINT_SCHEMA, type ExecFn } from "../lib/feature-doc.js";
-import { flagValue, realExec } from "../lib/system.js";
+import { flagValue, realExec, runMain } from "../lib/system.js";
 
 export function tasksCli(argv: string[], exec: ExecFn = realExec, defaultCwd: string = process.cwd()): { exitCode: number; stdout: string } {
   const json = argv.includes("--json");
@@ -16,12 +14,6 @@ export function tasksCli(argv: string[], exec: ExecFn = realExec, defaultCwd: st
   }
 }
 
-function main(): void {
-  process.stdout.write(tasksCli(process.argv.slice(2)).stdout + "\n");
-}
+const main = () => tasksCli(process.argv.slice(2));
 
-try {
-  if (process.argv[1] && realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url))) main();
-} catch {
-  // importing must never throw
-}
+runMain(import.meta.url, main);

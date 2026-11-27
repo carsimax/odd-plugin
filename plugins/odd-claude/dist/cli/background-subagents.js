@@ -1,10 +1,8 @@
 // `node dist/cli/background-subagents.js [--action enable|disable|status] [--data-dir <dir>]`
 // Without --action (or `status`): prints the effective policy (read-only).
 // Exit codes: 0 ok; 1 invalid action; 2 usage error / no data dir.
-import { realpathSync } from "node:fs";
-import { fileURLToPath } from "node:url";
 import { resolveBackgroundSubagents, writeBackgroundSubagents } from "../lib/background-subagents.js";
-import { envWithDataDir, flagValue } from "../lib/system.js";
+import { envWithDataDir, flagValue, runMain } from "../lib/system.js";
 const USAGE = "usage: background-subagents.js [--action enable|disable|status] [--data-dir <dir>]";
 const ACTIONS = ["enable", "disable", "status"];
 function usageError(message) {
@@ -35,18 +33,5 @@ export function backgroundSubagentsCli(argv, env) {
     const note = r.malformed ? " (stored state is malformed: failing closed to off; run enable or disable to repair)" : "";
     return { exitCode: 0, stdout: `background subagents: ${r.policy} (${r.source})${note}\navailable actions: enable, disable, status`, stderr: "" };
 }
-function main() {
-    const res = backgroundSubagentsCli(process.argv.slice(2), process.env);
-    if (res.stdout !== "")
-        process.stdout.write(res.stdout + "\n");
-    if (res.stderr !== "")
-        process.stderr.write(res.stderr + "\n");
-    process.exitCode = res.exitCode;
-}
-try {
-    if (process.argv[1] && realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url)))
-        main();
-}
-catch {
-    // importing must never throw
-}
+const main = () => backgroundSubagentsCli(process.argv.slice(2), process.env);
+runMain(import.meta.url, main);

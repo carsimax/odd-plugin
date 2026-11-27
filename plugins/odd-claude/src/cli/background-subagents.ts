@@ -1,16 +1,8 @@
 // `node dist/cli/background-subagents.js [--action enable|disable|status] [--data-dir <dir>]`
 // Without --action (or `status`): prints the effective policy (read-only).
 // Exit codes: 0 ok; 1 invalid action; 2 usage error / no data dir.
-import { realpathSync } from "node:fs";
-import { fileURLToPath } from "node:url";
 import { resolveBackgroundSubagents, writeBackgroundSubagents } from "../lib/background-subagents.js";
-import { envWithDataDir, flagValue } from "../lib/system.js";
-
-export interface CliResult {
-  exitCode: number;
-  stdout: string;
-  stderr: string;
-}
+import { type CliResult, envWithDataDir, flagValue, runMain } from "../lib/system.js";
 
 const USAGE = "usage: background-subagents.js [--action enable|disable|status] [--data-dir <dir>]";
 const ACTIONS = ["enable", "disable", "status"];
@@ -42,15 +34,6 @@ export function backgroundSubagentsCli(argv: string[], env: Record<string, strin
   return { exitCode: 0, stdout: `background subagents: ${r.policy} (${r.source})${note}\navailable actions: enable, disable, status`, stderr: "" };
 }
 
-function main(): void {
-  const res = backgroundSubagentsCli(process.argv.slice(2), process.env);
-  if (res.stdout !== "") process.stdout.write(res.stdout + "\n");
-  if (res.stderr !== "") process.stderr.write(res.stderr + "\n");
-  process.exitCode = res.exitCode;
-}
+const main = (): CliResult => backgroundSubagentsCli(process.argv.slice(2), process.env);
 
-try {
-  if (process.argv[1] && realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url))) main();
-} catch {
-  // importing must never throw
-}
+runMain(import.meta.url, main);

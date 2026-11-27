@@ -227,6 +227,7 @@ describe("Install flow navigation", () => {
     assert.match(t.frame(), /Review/);
     assert.match(t.frame(), /would install v5\.3\.0/);
     assert.match(t.frame(), /file: 40 create/);
+    assert.match(t.frame(), /6\/6/);
     assert.equal(f.planned.length, 1);
     assert.equal(f.ran.length, 0, "review writes nothing");
     t.unmount();
@@ -244,6 +245,7 @@ describe("Install flow navigation", () => {
     assert.match(frame, /engram: failed/);
     assert.match(frame, /Restart Claude Code/);
     assert.match(frame, /odd/);
+    assert.doesNotMatch(frame, /\d+\/6/, "no step counter past the last numbered step");
     await t.press(ENTER);
     assert.match(t.frame(), /Welcome/);
     t.unmount();

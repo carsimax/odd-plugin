@@ -1,21 +1,21 @@
 // `node dist/cli/codegraph-warm.js <cwd>`: detached codegraph warm-up started by the SessionStart hook.
 // Hard time bound on the codegraph call; result logged to <data dir>/logs/hooks.log; always exits 0.
-import { realpathSync } from "node:fs";
 import { homedir } from "node:os";
-import { fileURLToPath } from "node:url";
 import { INIT_TIMEOUT_MS, SYNC_TIMEOUT_MS, isBroadDirectory, realHasIndex, realWarmupExec, runWarmup } from "../lib/codegraph.js";
 import { isTrustedProject } from "../lib/codegraph-trust.js";
 import { lockPath, releaseLock } from "../lib/lock.js";
 import { dataDirFromEnv, logError } from "../lib/state.js";
+import { runMain } from "../lib/system.js";
 
-function main(): void {
+function main(): Record<string, never> {
   const cwd = process.argv[2];
-  if (!cwd) return;
+  if (!cwd) return {};
   try {
     runWarmupOnce(cwd);
   } finally {
     releaseLock(lockPath(dataDirFromEnv(process.env), "warm", cwd), process.pid);
   }
+  return {};
 }
 
 function runWarmupOnce(cwd: string): void {
@@ -31,8 +31,4 @@ function runWarmupOnce(cwd: string): void {
   });
 }
 
-try {
-  if (process.argv[1] && realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url))) main();
-} catch {
-  // fail safe
-}
+runMain(import.meta.url, main);

@@ -1,8 +1,6 @@
 // `node dist/cli/scratch.js [--session <id>] [--data-dir <dir>]`. Read-only: shows this session's scratch dir. Always exits 0.
-import { realpathSync } from "node:fs";
-import { fileURLToPath } from "node:url";
 import { listScratch, scratchDir } from "../lib/scratch.js";
-import { envWithDataDir, flagValue } from "../lib/system.js";
+import { envWithDataDir, flagValue, runMain } from "../lib/system.js";
 function formatSize(bytes) {
     if (bytes < 1024)
         return `${bytes} B`;
@@ -34,11 +32,4 @@ export function scratchCli(argv, env = process.env) {
         ].join("\n"),
     };
 }
-try {
-    if (process.argv[1] && realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url))) {
-        process.stdout.write(scratchCli(process.argv.slice(2)).stdout + "\n");
-    }
-}
-catch {
-    // importing must never throw
-}
+runMain(import.meta.url, () => scratchCli(process.argv.slice(2)));

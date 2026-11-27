@@ -1,10 +1,8 @@
 // `node dist/cli/retro.js [--json] [--session <id> --data-dir <dir> | --transcript <path>]`. Read-only, local only; always exits 0.
-import { realpathSync } from "node:fs";
-import { fileURLToPath } from "node:url";
 import { collectRetro, renderRetro } from "../lib/retro.js";
 import { readTranscriptPath } from "../lib/stats.js";
 import { validPath } from "../lib/transcript-path.js";
-import { envWithDataDir, flagValue } from "../lib/system.js";
+import { envWithDataDir, flagValue, runMain } from "../lib/system.js";
 const SCHEMA = "odd-claude.retro/v1";
 export function retroCli(argv, env = process.env) {
     const json = argv.includes("--json");
@@ -35,13 +33,5 @@ export function retroCli(argv, env = process.env) {
         return note("Retro unavailable.");
     }
 }
-function main() {
-    process.stdout.write(retroCli(process.argv.slice(2)).stdout + "\n");
-}
-try {
-    if (process.argv[1] && realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url)))
-        main();
-}
-catch {
-    // importing must never throw
-}
+const main = () => retroCli(process.argv.slice(2));
+runMain(import.meta.url, main);
