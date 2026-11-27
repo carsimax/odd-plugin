@@ -2,8 +2,9 @@
 persisted per session in the state file. Local only. Every read is bounded."""
 import json
 import math
+import re
+import time
 from dataclasses import dataclass
-from datetime import UTC, datetime
 from decimal import ROUND_HALF_UP, Decimal
 from typing import Any, Literal
 
@@ -12,7 +13,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from .state import StateOptions, read_session_state
 from .subagents import SubagentRecord, format_duration
 from .transcript_path import record_transcript_path, valid_path
-from .transcript_tail import STATS_MAX_LINE_BYTES, STATS_TAIL_BYTES, clean_text, read_tail
+from .transcript_tail import STATS_MAX_LINE_BYTES, STATS_TAIL_BYTES, clean_text, js_json_loads, read_tail, utf16_head, utf16_len
 
 __all__ = ["STATS_MAX_LINE_BYTES", "STATS_TAIL_BYTES", "record_transcript_path"]
 
@@ -56,10 +57,19 @@ class StatsOutput(BaseModel):
     note: str | None = None
 
 
-def _count(v: Any) -> int | float:
-    if isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v) and v > 0:
-        return int(v) if float(v).is_integer() else v
+def _count(v: Any) -> float:
+    """JS `count()`: a finite positive number, as a double (integers beyond 2**53 round like a JS number)."""
+    if isinstance(v, (int, float)) and not isinstance(v, bool):
+        try:
+            f = float(v)
+        except OverflowError:
+            return 0
+        return f if math.isfinite(f) and f > 0 else 0
     return 0
+
+
+def _norm(x: float) -> int | float:
+    return int(x) if float(x).is_integer() else x
 
 
 def read_transcript_path(session_id: str, opts: StateOptions | None = None) -> str | None:
@@ -67,12 +77,41 @@ def read_transcript_path(session_id: str, opts: StateOptions | None = None) -> s
     return p if valid_path(p) else None
 
 
+_ISO = re.compile(
+    r"(?P<y>[+-][0-9]{6}|[0-9]{4})(?:-(?P<m>[0-9]{2})(?:-(?P<d>[0-9]{2}))?)?"
+    r"(?:[Tt ](?P<H>[0-9]{2}):(?P<M>[0-9]{2})(?::(?P<S>[0-9]{2})(?:\.(?P<f>[0-9]+))?)?(?P<z>[Zz]|[+-][0-9]{2}:?[0-9]{2})?)?"
+)
+
+
+def _days_from_civil(y: int, m: int, d: int) -> int:
+    y -= m <= 2
+    era = y // 400
+    yoe = y - era * 400
+    doy = (153 * (m + (-3 if m > 2 else 9)) + 2) // 5 + d - 1
+    return era * 146097 + yoe * 365 + yoe // 4 - yoe // 100 + doy - 719468
+
+
 def _parse_ms(ts: str) -> int | None:
-    try:
-        dt = datetime.fromisoformat(ts)
-    except ValueError:
+    """JS `Date.parse` for the ISO 8601 forms (date only is UTC, date-time without offset is local time). V8's legacy non-ISO formats return None."""
+    g = _ISO.fullmatch(ts)
+    if g is None or g["y"] == "-000000":
         return None
-    return int(dt.replace(tzinfo=dt.tzinfo or UTC).timestamp() * 1000)
+    m, d = int(g["m"] or 1), int(g["d"] or 1)
+    h, mi, sec = int(g["H"] or 0), int(g["M"] or 0), int(g["S"] or 0)
+    ms = int(((g["f"] or "") + "000")[:3])
+    if not (1 <= m <= 12 and 1 <= d <= 31 and h <= 24 and mi <= 59 and sec <= 59) or (h == 24 and (mi or sec or ms)):
+        return None
+    t = ((_days_from_civil(int(g["y"]), m, 1) + d - 1) * 24 + h) * 3600_000 + mi * 60_000 + sec * 1000 + ms
+    z = g["z"]
+    if z is None and g["H"] is not None:  # local time
+        off = time.localtime((t - time.localtime(t // 1000).tm_gmtoff * 1000) // 1000).tm_gmtoff
+        t -= off * 1000
+    elif z is not None and z not in "Zz":
+        oh, om = int(z[1:3]), int(z[-2:])
+        if oh > 23 or om > 59:
+            return None
+        t -= (1 if z[0] == "+" else -1) * (oh * 60 + om) * 60_000
+    return t if abs(t) <= 8_640_000_000_000_000 else None
 
 
 def collect_transcript_stats(path: str) -> TranscriptStats | None:
@@ -85,12 +124,12 @@ def collect_transcript_stats(path: str) -> TranscriptStats | None:
         by_message: dict[str, tuple[str, Any, Any, Any, Any]] = {}
         first, last, anon = math.inf, -math.inf, 0
         for line in tail.text.split("\n"):
-            if line == "" or len(line) > STATS_MAX_LINE_BYTES:
+            if line == "" or utf16_len(line) > STATS_MAX_LINE_BYTES:
                 continue
             if '"usage"' not in line and '"timestamp"' not in line:
                 continue
             try:
-                entry = json.loads(line)
+                entry = js_json_loads(line)
             except ValueError:
                 continue
             if not isinstance(entry, dict):
@@ -103,7 +142,7 @@ def collect_transcript_stats(path: str) -> TranscriptStats | None:
             if entry.get("type") != "assistant" or not isinstance(m, dict) or not isinstance(u, (dict, list)):
                 continue
             g = u.get if isinstance(u, dict) else (lambda k: None)
-            model = clean_text(m["model"])[:80] if isinstance(m.get("model"), str) else ""
+            model = utf16_head(clean_text(m["model"]), 80) if isinstance(m.get("model"), str) else ""
             if model == "<synthetic>":
                 continue
             mid = m.get("id")
@@ -119,8 +158,10 @@ def collect_transcript_stats(path: str) -> TranscriptStats | None:
             mu.turns += 1
             mu.tokens += i + o + cr + cw
         top = sorted(models.values(), key=lambda mu: (-mu.tokens, -mu.turns))[:MAX_MODELS]
+        for mu in top:
+            mu.tokens = _norm(mu.tokens)
         return TranscriptStats(
-            turns=len(by_message), input=totals[0], output=totals[1], cacheRead=totals[2], cacheWrite=totals[3],
+            turns=len(by_message), input=_norm(totals[0]), output=_norm(totals[1]), cacheRead=_norm(totals[2]), cacheWrite=_norm(totals[3]),
             spanMs=int(last - first) if last > first else 0, truncated=tail.truncated, bytesRead=tail.bytes, models=top,
         )
     except Exception:
@@ -132,7 +173,7 @@ def read_exploration(session_id: str, opts: StateOptions | None = None) -> Explo
     if not isinstance(e, (dict, list)):
         return None
     g = e.get if isinstance(e, dict) else (lambda k: None)
-    return Exploration(lookups=_count(g("lookups")), bytes=_count(g("bytes")))
+    return Exploration(lookups=_norm(_count(g("lookups"))), bytes=_norm(_count(g("bytes"))))
 
 
 def _plural(n: float, word: str) -> str:
@@ -167,7 +208,7 @@ def render_stats(v: StatsView) -> str:
     out = ["odd-claude stats (this session, local data only)"]
     t = v.transcript
     if t is None:
-        out.append(v.note or "No transcript to read for this session yet.")
+        out.append(v.note if v.note is not None else "No transcript to read for this session yet.")
     else:
         out.append(f"turns      {t.turns}{f' · {format_duration(t.spanMs)}' if t.spanMs > 0 else ''}")
         out.append(f"tokens     in {_tokens(t.input)} · out {_tokens(t.output)}")

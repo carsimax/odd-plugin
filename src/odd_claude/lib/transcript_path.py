@@ -3,13 +3,14 @@ import os
 import re
 
 from .state import StateOptions, update_session_state
+from .transcript_tail import utf16_len
 
 MAX_PATH = 4096
 _CONTROL = re.compile("[\x00-\x1f\x7f]")
 
 
 def valid_path(p: object) -> bool:
-    return isinstance(p, str) and len(p) <= MAX_PATH and os.path.isabs(p) and p.endswith(".jsonl") and not _CONTROL.search(p)
+    return isinstance(p, str) and utf16_len(p) <= MAX_PATH and os.path.isabs(p) and p.endswith(".jsonl") and not _CONTROL.search(p)
 
 
 def record_transcript_path(input: dict, opts: StateOptions | None = None) -> None:

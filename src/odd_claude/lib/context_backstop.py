@@ -1,12 +1,12 @@
 """R34 context backstop (port of v9 lib/context-backstop.ts): the last assistant `usage` line of the transcript
 (input + cache_creation + cache_read tokens) against an absolute cap. No usage line: no reading, no notice."""
-import json
 import math
 import os
+import re
 from collections.abc import Mapping
 
 from .state import StateOptions, read_session_state, update_session_state
-from .transcript_tail import read_tail
+from .transcript_tail import JS_WS, js_json_loads, read_tail
 
 CONTEXT_BACKSTOP_TOKENS = 150_000
 CONTEXT_BACKSTOP_TOKENS_ENV = "ODD_CLAUDE_CONTEXT_BACKSTOP_TOKENS"
@@ -15,13 +15,21 @@ TAIL_BYTES = 512 * 1024
 FIRED_TAIL_BYTES = 32 * 1024
 
 
+_JS_DECIMAL = re.compile(r"[+-]?(?:[0-9]+\.?[0-9]*(?:[eE][+-]?[0-9]+)?|\.[0-9]+(?:[eE][+-]?[0-9]+)?|Infinity)")
+_JS_RADIX = re.compile(r"0(?:[xX][0-9a-fA-F]+|[oO][0-7]+|[bB][01]+)")
+
+
+def _js_number(raw: str) -> float:
+    """JS `Number(raw)` for a trimmed string; NaN when it is not a numeric literal."""
+    if _JS_RADIX.fullmatch(raw):
+        return float(int(raw, 0))
+    return float(raw) if _JS_DECIMAL.fullmatch(raw) else math.nan
+
+
 def context_backstop_threshold(env: Mapping[str, str | None] | None = None) -> float:
     env = os.environ if env is None else env
-    raw = (env.get(CONTEXT_BACKSTOP_TOKENS_ENV) or "").strip()
-    try:
-        v = float(raw) if "_" not in raw else 0.0  # Python float() accepts underscores, JS Number() does not
-    except ValueError:
-        return CONTEXT_BACKSTOP_TOKENS
+    raw = re.sub(f"^[{JS_WS}]+|[{JS_WS}]+$", "", env.get(CONTEXT_BACKSTOP_TOKENS_ENV) or "")
+    v = _js_number(raw) if raw else 0.0
     if not (math.isfinite(v) and v > 0):
         return CONTEXT_BACKSTOP_TOKENS
     return int(v) if v.is_integer() else v
@@ -36,7 +44,7 @@ def _last_usage_tokens(path: str, max_bytes: int = TAIL_BYTES) -> int | None:
         if '"usage"' not in line:
             continue
         try:
-            msg = json.loads(line).get("message")
+            msg = js_json_loads(line).get("message")
             u = msg.get("usage") if isinstance(msg, dict) else None
         except (ValueError, AttributeError):
             continue
@@ -45,7 +53,12 @@ def _last_usage_tokens(path: str, max_bytes: int = TAIL_BYTES) -> int | None:
 
         def num(k: str) -> float:
             v = u.get(k)
-            return v if isinstance(v, (int, float)) and not isinstance(v, bool) else 0
+            if not isinstance(v, (int, float)) or isinstance(v, bool):
+                return 0
+            try:
+                return float(v)  # a JS number is a double: integers beyond 2**53 round
+            except OverflowError:
+                return math.inf if v > 0 else -math.inf
 
         total = num("input_tokens") + num("cache_creation_input_tokens") + num("cache_read_input_tokens")
         if total > 0:
@@ -54,7 +67,10 @@ def _last_usage_tokens(path: str, max_bytes: int = TAIL_BYTES) -> int | None:
 
 
 def _count(v: float) -> str:
-    return f"{math.floor(v + 0.5):,}"  # JS Math.round: halves go up
+    if not math.isfinite(v):
+        return "NaN" if math.isnan(v) else "∞" if v > 0 else "-∞"
+    r = math.floor(v + 0.5)  # JS Math.round: halves go up
+    return "-0" if r == 0 and math.copysign(1, v) < 0 else f"{r:,}"  # Math.round(-0.3) is -0
 
 
 def context_backstop_notice(tokens: float, threshold: float, full_delegation: bool) -> str:

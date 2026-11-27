@@ -2,11 +2,12 @@
 file paths, capped commands and 1-based line numbers only: prompt and tool-result bodies are never printed."""
 import json
 import re
+import unicodedata
 from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from .transcript_tail import STATS_MAX_LINE_BYTES, clean_text, read_tail
+from .transcript_tail import JS_WS, STATS_MAX_LINE_BYTES, clean_text, js_json_loads, js_trim, read_tail, utf16_head, utf16_len
 
 MAX_STR = 160
 MAX_ITEMS = 25
@@ -84,19 +85,53 @@ class RetroDigest(BaseModel):
 
 
 def _clean(s: Any) -> str:
-    return clean_text(s)[:MAX_STR]
+    return utf16_head(clean_text(s), MAX_STR)
 
 
 def _is_human_prompt(entry: dict, content: Any) -> bool:
     if entry.get("isMeta") is True or entry.get("isCompactSummary") is True:
         return False
     if isinstance(content, str):
-        return content.strip() != ""
+        return js_trim(content) != ""
     if not isinstance(content, list):
         return False
     if any(isinstance(b, dict) and b.get("type") == "tool_result" for b in content):
         return False
-    return any(isinstance(b, dict) and b.get("type") == "text" and isinstance(b.get("text"), str) and b["text"].strip() != "" for b in content)
+    return any(isinstance(b, dict) and b.get("type") == "text" and isinstance(b.get("text"), str) and js_trim(b["text"]) != "" for b in content)
+
+
+# ICU root collation order of the ASCII punctuation, then digits, then letters (`localeCompare` in Node with full ICU).
+_PUNCT = " _-,;:!?.'\"()[]{}@*/\\&#%`^+<=>|~$"
+_EXPAND = {"\u00e6": "ae", "\u00c6": "AE", "\u00df": "ss", "\u0153": "oe", "\u0152": "OE"}
+
+
+def _locale_key(s: str) -> tuple:
+    """Approximates `String.localeCompare` (ICU, en-US): primary letters/digits/punctuation, then accents, then lowercase before uppercase.
+    shortcut: covers ASCII, Latin letters with accents, ligatures and digits; scripts beyond Latin order by code point, not by ICU table."""
+    prim: list[tuple[int, int]] = []
+    sec: list[tuple[str, ...]] = []
+    ter: list[int] = []
+    for ch in s:
+        expanded = ch in _EXPAND
+        for c in unicodedata.normalize("NFD", _EXPAND.get(ch, ch)):
+            if unicodedata.category(c) == "Mn" and prim:
+                sec[-1] += (c,)
+                continue
+            low = c.lower()
+            if c in _PUNCT:
+                p = (0, _PUNCT.index(c))
+            elif c.isdecimal():
+                p = (2, unicodedata.decimal(c))
+            elif c.isalpha():
+                p = (3 if c.isascii() else 4, ord(low[0]))
+            elif unicodedata.category(c)[0] in "SP":
+                p = (1, ord(c))
+            else:
+                p = (0, -1)
+            prim.append(p)
+            sec.append(())
+            ter.append(2 if expanded else int(c != low))
+    return prim, sec, ter
 
 
 def _grouped(m: dict[str, list[int]], minimum: int) -> list[tuple[str, list[int]]]:
@@ -124,10 +159,10 @@ def collect_retro(path: str, tail_bytes: int | None = None) -> RetroDigest | Non
 
         for i, text in enumerate(lines):
             line = tail.first_line + i
-            if text == "" or len(text) > STATS_MAX_LINE_BYTES:
+            if text == "" or utf16_len(text) > STATS_MAX_LINE_BYTES:
                 continue
             try:
-                entry = json.loads(text)
+                entry = js_json_loads(text)
             except ValueError:
                 continue
             if not isinstance(entry, dict) or entry.get("isSidechain") is True:
@@ -171,7 +206,7 @@ def collect_retro(path: str, tail_bytes: int | None = None) -> RetroDigest | Non
                         first_source_write = first_source_write or line
                     edits.setdefault(file, []).append(line)
                 if name == "Bash" and isinstance(inp.get("command"), str):
-                    cmd = _clean(re.sub(r"\s+", " ", inp["command"]))
+                    cmd = _clean(re.sub(f"[{JS_WS}]+", " ", inp["command"]))
                     if cmd != "" and not any(cmd == e or cmd.startswith(f"{e} ") for e in EXEMPT):
                         commands.setdefault(cmd, []).append(line)
                 if name in ("Agent", "Task"):
@@ -180,8 +215,7 @@ def collect_retro(path: str, tail_bytes: int | None = None) -> RetroDigest | Non
                     agents.append(AgentLaunch(line=line, subagentType=st, model=_clean(inp.get("model")), missingEditSurfaces=st in WORKERS and not (isinstance(prompt, str) and "## Allowed edit surfaces" in prompt)))
 
         cap = lambda l: l[:MAX_LINES_PER_ITEM]  # noqa: E731
-        # shortcut: tie-break approximates localeCompare (case-insensitive, lowercase first); upgrade if non-ASCII tool names matter
-        by_count = sorted(tools.items(), key=lambda kv: (-kv[1], kv[0].casefold(), kv[0].swapcase()))
+        by_count = sorted(tools.items(), key=lambda kv: (-kv[1], _locale_key(kv[0])))
         return RetroDigest(
             lines=len(lines), firstLine=tail.first_line, bytesRead=tail.bytes, truncated=tail.truncated,
             prompts=Prompts(count=len(prompts), lines=cap(prompts)),
