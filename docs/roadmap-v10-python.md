@@ -207,6 +207,7 @@ Risk items use the ODD numbering: 1 persisted data, 2 security, 3 consumed contr
 
 - **Goal.** Python equivalents of the lib layer.
 - **Scope.** State, locks, pids, atomic writes, scratch, profiles, context, quota, exploration budget, context backstop, transcript tail, feature-doc lint, stats, retro, doctor (checks python/uv instead of node). Pydantic models with schema-version validation.
+- **Scope note.** The four dependency modules (background-subagents, system, subagents, transcript-path) are included; the other lib modules port with the phase that consumes them (decision L3 of `odd/tasks/py-core-lib.md`).
 - **Exit criteria.**
   - Fixtures from Phase 1 load and round-trip byte-compatibly where the format is stable.
   - Lock semantics (exclusive create, stale takeover, owned release, EPERM/ESRCH handling) pass cross-process tests, including kill -9 injection.
