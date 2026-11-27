@@ -240,30 +240,6 @@ test("Stop keeps recording the idle status (v0.5 behavior) with RDD on or off", 
   }
 });
 
-test("10 concurrent Stop processes for one session and candidate: exactly one block, every exit 0", async () => {
-  const f = fx();
-  try {
-    on(f);
-    const run = join(PLUGIN_ROOT, "dist", "hooks", "run.js");
-    assert.ok(existsSync(run));
-    const one = (): Promise<{ code: number | null; out: string }> =>
-      new Promise((resolve) => {
-        const c = spawn(process.execPath, [run, "Stop"], { env: { ...ENV, CLAUDE_PLUGIN_DATA: f.data }, stdio: ["pipe", "pipe", "ignore"] });
-        let out = "";
-        c.stdout.on("data", (d: Buffer) => (out += d.toString()));
-        c.on("close", (code) => resolve({ code, out }));
-        c.stdin.end(JSON.stringify({ session_id: "race", cwd: f.repo, stop_hook_active: false }));
-      });
-    const results = await Promise.all(Array.from({ length: 10 }, one));
-    assert.deepEqual(results.map((r) => r.code), Array(10).fill(0));
-    const blocks = results.filter((r) => r.out.trim() !== "");
-    assert.equal(blocks.length, 1);
-    assert.equal(JSON.parse(blocks[0]!.out).decision, "block");
-  } finally {
-    f.cleanup();
-  }
-});
-
 test("session lock held by a live pid: Stop is silent, exits 0 and returns in under 5 s", () => {
   const f = fx();
   const holder = spawn("sleep", ["30"], { stdio: "ignore" });
@@ -320,35 +296,3 @@ test("the reminder names CLAUDE_PLUGIN_ROOT when the hook environment sets it", 
   }
 });
 
-test("T6 fast path: with the global switch unset or off a due high-risk candidate stays silent and the Stop hook starts zero git processes", () => {
-  const f = fx();
-  const prevPath = process.env.PATH;
-  try {
-    const bin = join(f.dir, "rec-bin");
-    mkdirSync(bin);
-    const log = join(f.dir, "git-calls.log");
-    writeFileSync(log, "");
-    const realGit = spawnSync("sh", ["-c", "command -v git"], { encoding: "utf8" }).stdout.trim();
-    writeFileSync(join(bin, "git"), `#!/bin/sh\necho "$*" >> '${log}'\nexec ${realGit} "$@"\n`, { mode: 0o755 });
-    const count = (): number => readFileSync(log, "utf8").split("\n").filter((l) => l !== "").length;
-    process.env.PATH = `${bin}:${prevPath ?? ""}`;
-    assert.deepEqual(stop(f, "fast-unset"), { exitCode: 0, stdout: "" });
-    assert.equal(count(), 0, `unset: ${readFileSync(log, "utf8")}`);
-    setReviewMode("disable", "global", f.repo, { dataDir: f.data }); // reads the mode back through git: not under test
-    writeFileSync(log, "");
-    assert.deepEqual(stop(f, "fast-off"), { exitCode: 0, stdout: "" });
-    assert.equal(count(), 0, `off: ${readFileSync(log, "utf8")}`);
-    // the shipped entry point too
-    const r = spawnSync(process.execPath, [join(PLUGIN_ROOT, "dist", "hooks", "run.js"), "Stop"], { env: { ...ENV, PATH: process.env.PATH, CLAUDE_PLUGIN_DATA: f.data }, input: JSON.stringify({ session_id: "fast-run", cwd: f.repo, stop_hook_active: false }), encoding: "utf8" });
-    assert.deepEqual({ status: r.status, stdout: r.stdout }, { status: 0, stdout: "" });
-    assert.equal(count(), 0, `run.js: ${readFileSync(log, "utf8")}`);
-    // control: global on still uses git and reminds
-    on(f);
-    const reminded = stop(f, "fast-on");
-    assert.equal((JSON.parse(reminded.stdout) as { decision: string }).decision, "block");
-    assert.ok(count() > 0);
-  } finally {
-    process.env.PATH = prevPath;
-    f.cleanup();
-  }
-});

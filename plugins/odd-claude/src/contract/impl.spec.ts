@@ -13,7 +13,7 @@ test(`ODD_IMPL=${IMPL}`, () => {
 });
 
 test("the resolver names the missing entry when the implementation has none (py) and resolves every entry for ts", () => {
-  const names = ["coordinator", "setup", "status", "review-mode", "hook-runner", "review-server", "check-naming"] as const;
+  const names = ["coordinator", "setup", "status", "review-mode", "hook-runner", "review-server", "check-naming", "stats", "retro", "statusline", "release-payload", "bump-version"] as const;
   for (const n of names) {
     if (IMPL === "py") assert.throws(() => entry(n), new RegExp(`ODD_IMPL=py: no Python entry for "${n}"`));
     else assert.ok(entry(n).args.length > 0, n);

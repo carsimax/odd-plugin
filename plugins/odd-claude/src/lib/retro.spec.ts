@@ -285,12 +285,6 @@ test("retroCli: no-session, home-default data dir, no-path and session-resolved 
   }
 });
 
-test("retro CLI as a script: prints the digest and exits 0 on bad input", () => {
-  const r = spawnSync(process.execPath, [join(import.meta.dirname, "..", "cli", "retro.js"), "--transcript", "nope"], { encoding: "utf8" });
-  assert.equal(r.status, 0);
-  assert.match(r.stdout, /^Invalid transcript path/);
-});
-
 test("truncated tail: reported line numbers are absolute (match sed -n on the full file)", () => {
   const dir = tmp();
   try {

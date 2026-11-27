@@ -75,7 +75,10 @@ test("m2: a large reply is complete when stdin closes right after the request", 
 test("the server entry exits cleanly on SIGTERM", async () => {
   const child = spawnServer();
   const exited = new Promise<[number | null, NodeJS.Signals | null]>((res) => child.once("exit", (code, signal) => res([code, signal])));
-  await new Promise((res) => setTimeout(res, 300)); // let the entry install its handlers
+  // Ready = the server answered initialize (a fixed sleep raced node startup under load, so the handlers were not installed yet).
+  const ready = new Promise<void>((res) => child.stdout!.once("data", () => res()));
+  child.stdin!.write('{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18"}}\n');
+  await ready;
   child.kill("SIGTERM");
   assert.deepEqual(await exited, [0, null]);
 });

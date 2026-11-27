@@ -352,13 +352,13 @@ export function storeFiles(commonDir: string): string[] {
 // ---- the entry commands a client drives besides the server (RDD mode switch, delivery hook, Stop hook) ----
 
 /** The RDD mode switch through its CLI entry, scoped to the world's data dir. */
-export function setReviewMode(verb: "enable" | "disable", w: World): void {
+export function setReviewMode(verb: "enable" | "disable", w: Pick<World, "dir" | "data" | "repo">): void {
   const r = run("review-mode", [verb, "--scope", "global", "--cwd", w.repo, "--data-dir", w.data], { env: { PATH: process.env.PATH ?? "", HOME: w.dir } });
   assert.equal(r.status, 0, `review-mode ${verb}: ${r.stderr}`);
 }
 
 /** A hook event as Claude Code invokes it: the hook entry with the JSON on stdin; stdout without the entry's trailing newline. */
-export function runHook(event: string, input: Record<string, unknown>, w: World): { exitCode: number; stdout: string } {
+export function runHook(event: string, input: Record<string, unknown>, w: Pick<World, "dir" | "data">): { exitCode: number; stdout: string } {
   const r = run("hook-runner", [event], { input: JSON.stringify(input), env: { PATH: process.env.PATH ?? "", HOME: w.dir, ODD_CLAUDE_DATA: w.data, GIT_CONFIG_NOSYSTEM: "1" } });
   return { exitCode: r.status ?? -1, stdout: r.stdout.replace(/\n$/, "") };
 }
