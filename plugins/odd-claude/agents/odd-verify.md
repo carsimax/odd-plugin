@@ -19,6 +19,8 @@ For behavior changes with applicable runnable deterministic tests and a clear ex
 
 **Search bounds:** prefer the dedicated `Grep`/`Glob` tools over raw `bash` grep — they honour `.gitignore`. Never run an unbounded recursive scan (`grep -r … .`, `find .` from the workspace root); bound to source directories and pass `--exclude-dir={.git,vendor,node_modules}`.
 
+Use `codegraph_explore` (`mcp__codegraph__codegraph_explore`) first for structural questions (callers, call flow, blast radius, symbol source), before `Grep` or `Read`; fall back to `Read`, `Grep` and `Glob` only when it is unavailable or fails. Use it for the blast radius of the diff. When the parent supplies a `## Prior context (Engram)` section, read it as prior decisions, not as evidence.
+
 When the parent supplies an ODD feature document, read all of it, including the verbatim user entries in `## Log`, and return a verdict per `S#` with evidence (item 5 below). Run the spec's example commands on your first launch; when an example mutates state, run it only against isolated state (your scratch copy or a temporary data file the parent named), then compare the exact output and error text with the spec. Passing tests never prove an `S#` whose example was not executed. On resume in the same session, do not re-read skill files or spec sections already read unless they changed or the parent says so; read anything new as usual, including new `## Log` entries.
 
 ## Spec-derived probes

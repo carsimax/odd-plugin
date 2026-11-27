@@ -68,7 +68,7 @@ Not breaking. On-demand capabilities (`odd/tasks/on-demand-capabilities.md`):
 
 **Breaking: the persona slash command is removed (there is one neutral persona, carried by the output style), and so are the duplicated tracking and memory orchestrator cards** (their rules now live in the managed CLAUDE.md blocks and `rules/odd-tracking.md`). The always-on context moved out of the output style and the hooks into files Claude Code loads natively.
 
-- **Managed CLAUDE.md blocks.** The installer writes eight blocks into `~/.claude/CLAUDE.md` (`identity`, `protocol` and six more, sources in `claude-md/01-identity.md` ... `08-memory.md`), each wrapped as `<!-- odd-claude:ID -->` ... `<!-- /odd-claude:ID -->`. Text you wrote outside the markers is never touched, and the file is created if absent. Install and update are idempotent; a block you edited by hand is a conflict: it is reported and kept, not overwritten. Uninstall removes only the blocks it owns and that are unedited, and deletes `CLAUDE.md` only if nothing else is left in it. <!-- odd-check: allow -->
+- **Managed CLAUDE.md blocks.** The installer writes nine blocks into `~/.claude/CLAUDE.md` (`identity`, `protocol` and seven more, sources in `claude-md/01-identity.md` ... `09-codegraph.md`; `memory` carries the Engram recall-before-deciding, save-trigger and `## Prior context (Engram)` handoff rules, `codegraph` the use-`codegraph_explore`-first rules), each wrapped as `<!-- odd-claude:ID -->` ... `<!-- /odd-claude:ID -->`. Text you wrote outside the markers is never touched, and the file is created if absent. Install and update are idempotent; a block you edited by hand is a conflict: it is reported and kept, not overwritten. Uninstall removes only the blocks it owns and that are unedited, and deletes `CLAUDE.md` only if nothing else is left in it. <!-- odd-check: allow -->
 - **Budget.** The managed blocks total about 32 KB, and a test fails if they exceed 80,000 bytes (about 20k tokens at 4 bytes per token).
 - **Rules.** `~/.claude/rules/odd-tracking.md` carries the feature-document tracking rules and is path-scoped (`paths: odd/tasks/**`, `odd/**/*.md`), so it loads only when Claude reads matching files. It is installed as a whole file through the manifest like any other file; an edited copy is kept on uninstall.
 - **Output style `odd`.** Same name (`outputStyle: "odd"` stays valid) but now only a neutral persona and tone (about 4.6 KB, neutral Spanish, no voseo); the ODD protocol lives in the CLAUDE.md blocks.
@@ -495,7 +495,7 @@ Every TUI choice has a flag. `odd-claude --help` is the reference.
   bin/odd-claude.mjs    the installer bundle of the installed release
 ~/.claude/
   skills/, agents/, output-styles/odd.md    copied, with absolute paths resolved
-  CLAUDE.md             + 8 managed marker blocks (<= 80,000 B); your own text outside them is never touched
+  CLAUDE.md             + 9 managed marker blocks (<= 80,000 B); your own text outside them is never touched
   rules/odd-tracking.md path-scoped rule (odd/tasks/**, odd/**/*.md)
   settings.json         + 9 hooks, outputStyle "odd", statusLine, the claude.ai keys, enabledPlugins for builtins
   MCP (user scope)      odd-review, codegraph

@@ -19,12 +19,10 @@ Applies when the session context says `Coordinator mode: ON`. You are a COORDINA
 - A child must be able to do its task: check the agent's declared `tools` (its definition under `agents/`) before launching; never give a read-only explorer shell work. With no qualified agent, report the capability gap; a fired trigger is never replaced by inline work.
 - `odd-worker` unavailable: a general-purpose `Agent` with the same bounded instructions, reporting the fallback; the same for other delegation and for `odd-explore` (mapping stays read-only). The verifier fallback is a general-purpose `Agent` with the same read-only verification constraints, the exact parent-authorized commands and fallback reporting. Judgment Day roles (`odd-jd-fix`, `odd-jd-judge-a`, `odd-jd-judge-b`) are never generic fallbacks. No delegation mechanism at all: stop and explain the blocker; never fall back to an external pane, terminal, session, window or remote worker.
 - Children get concrete role work and never permission to spawn subagents. Do not pass `model` to generic subagents unless the user asks.
-- Read only what decides the route; pass paths, the spec reference and what to change, never file contents. Forward the test-first differential check (PRESERVE) to writers.
+- Read only what decides the route; pass paths, the spec reference and what to change, never file contents; add `## Prior context (Engram)` when recalled observations matter and tell the child to use `codegraph_explore` first. Forward the test-first differential check (PRESERVE) to writers.
 - The Mapping trigger overrides initial size, including for read-only work; re-evaluate size after. Preparation for an already understood inline write stays inline.
 - Incident (wrong `cwd`, accidental repository or worktree mutation, failed merge recovery, confusing test command, environment workaround): stop writes, capture `git status`, diagnose the affected repositories and worktrees with no edits, apply only confirmed recovery steps, then resume the objective.
-- Context backstop: when the advisory fires, delegate the next multi-step unit instead of continuing monolithically; single small edits stay inline.
 - Keep the visible task list (`TaskCreate`/`TaskUpdate`) in step with the feature document at task transitions, with no extra model turn and no per-tool updates. Keep private prompts, internal instructions and credentials out of the task list and every handoff.
-- Review (the `review` MCP and `/4r-review`) is advisory and parent-owned (see the verification rule).
 
 ## Subagents and background
 

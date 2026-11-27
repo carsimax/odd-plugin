@@ -12,14 +12,14 @@ const ROOT = fileURLToPath(new URL("../../", import.meta.url));
 const read = (rel: string): string => readFileSync(join(ROOT, rel), "utf8");
 const bytes = (s: string): number => Buffer.byteLength(s, "utf8");
 const BUDGET = 80_000;
-const EXPECTED_IDS = ["identity", "continuity", "protocol", "task-size", "delegation", "language", "safety", "memory"];
+const EXPECTED_IDS = ["identity", "continuity", "protocol", "task-size", "delegation", "language", "safety", "memory", "codegraph"];
 
 // A realistic, long resolved root so placeholder expansion cannot hide a budget overrun.
 const values = { root: "/Users/someone/.odd-claude/current", data: "/Users/someone/.odd-claude/data" };
 const blocks = (): { id: string; text: string }[] => readDesiredBlocks(ROOT, (s) => resolvePlaceholders(s, values));
 const blockText = (id: string): string => blocks().find((b) => b.id === id)?.text ?? "";
 
-test("claude-md ships exactly the eight port-map blocks with unique ids", () => {
+test("claude-md ships exactly the nine port-map blocks with unique ids", () => {
   const ids = blocks().map((b) => b.id);
   assert.equal(new Set(ids).size, ids.length, `duplicate ids in ${ids.join(",")}`);
   assert.deepEqual([...ids].sort(), [...EXPECTED_IDS].sort());
