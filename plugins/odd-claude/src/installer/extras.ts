@@ -59,13 +59,21 @@ export async function planExtras(input: PlanInput): Promise<ExtrasPlan> {
   return { changes, warnings, builtin };
 }
 
+const OWNED_ROOTS = new Set([STATUSLINE_PATH[0], "disableClaudeAiConnectors", "syncClaudeAiSkills", "syncClaudeAiPlugins", "enabledPlugins"]);
+
 export async function applyExtras(input: PlanInput & { paths: ManagedPaths }): Promise<ExtrasApplyResult> {
   const plan = await planExtras(input);
-  if (plan.changes.length === 0) return plan;
+  // Owned keys an option now turns off go back to their previous value. enabledPlugins only when builtin is "keep" or
+  // discovery succeeded: a failed discovery also yields no changes and must not undo them.
+  const wanted = new Set(plan.changes.map((c) => JSON.stringify(c.path)));
+  const stale = Object.values(readOddState(input.paths.statePath).settings ?? {})
+    .map((o) => o.path)
+    .filter((p) => OWNED_ROOTS.has(p[0]) && (p[0] !== "enabledPlugins" || input.options.builtin.mode === "keep" || plan.builtin?.ok === true) && !wanted.has(JSON.stringify(p)));
+  const restored = restoreManagedSettings(input.paths, stale);
+  if (restored.status === "error") return { ...plan, settings: { ...restored, changed: [] } };
+  if (plan.changes.length === 0) return restored.status === "applied" ? { ...plan, settings: { ...restored, changed: restored.restored } } : plan;
   return { ...plan, settings: applyManagedSettings(input.paths, plan.changes) };
 }
-
-const OWNED_ROOTS = new Set([STATUSLINE_PATH[0], "disableClaudeAiConnectors", "syncClaudeAiSkills", "syncClaudeAiPlugins", "enabledPlugins"]);
 
 /** Restores every path owned by the extras (never outputStyle or hook paths). */
 export function removeExtras(input: { paths: ManagedPaths }): RestoreManagedResult {

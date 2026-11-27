@@ -1,6 +1,7 @@
 // Copy of every Claude-dir file before the installer changes it.
-import { copyFileSync, existsSync, lstatSync, mkdirSync, readdirSync } from "node:fs";
+import { copyFileSync, existsSync, lstatSync, mkdirSync, readFileSync, readdirSync } from "node:fs";
 import { dirname, join, relative, sep } from "node:path";
+import { readManifest, sha256, writeManifest } from "./manifest.js";
 const posix = (p) => p.split(sep).join("/");
 function relUnder(root, abs) {
     const rel = relative(root, abs);
@@ -42,15 +43,23 @@ export function listBackups(paths) {
         .map((e) => ({ id: e.name, dir: join(paths.backupsDir, e.name), files: walk(join(paths.backupsDir, e.name)).sort() }))
         .sort((a, b) => a.id.localeCompare(b.id));
 }
-/** Copies every file of the backup back under the Claude dir, overwriting. Returns the restored relative paths. */
+/** Backs up the live files it overwrites, copies every file of the backup back under the Claude dir, and re-hashes restored paths in the manifest. Returns the restored relative paths. */
 export function restoreBackup(paths, id) {
     const info = listBackups(paths).find((b) => b.id === id);
     if (!info)
         throw new Error(`unknown backup ${JSON.stringify(id)}`);
+    backupFiles(paths, info.files.map((rel) => join(paths.claudeDir, rel)));
     for (const rel of info.files) {
         const dest = join(paths.claudeDir, rel);
         mkdirSync(dirname(dest), { recursive: true });
         copyFileSync(join(info.dir, rel), dest);
+    }
+    const manifest = readManifest(paths.manifestPath);
+    const tracked = manifest ? info.files.filter((rel) => rel in manifest.files) : [];
+    if (manifest && tracked.length > 0) {
+        for (const rel of tracked)
+            manifest.files[rel] = sha256(readFileSync(join(paths.claudeDir, rel)));
+        writeManifest(paths.manifestPath, manifest);
     }
     return info.files;
 }

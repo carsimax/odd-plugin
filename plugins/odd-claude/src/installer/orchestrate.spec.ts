@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, readlinkSync, writeFileSync } from "node:fs";
+import { existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, readlinkSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, it } from "node:test";
@@ -496,5 +496,71 @@ describe("detect and backups", () => {
     await runFullInstall({ env, homedir: home, runner: machine().runner, source, deps: false });
     assert.ok(backupsOf({ env, homedir: home }).length >= 1);
     assert.ok(existsSync(ctx.paths.backupsDir));
+  });
+});
+
+describe("plugin migration state and the install lock", () => {
+  it("copies plugin state before the uninstall deletes the data dir, honouring CLAUDE_CONFIG_DIR", async () => {
+    const { home, source } = setup();
+    const claudeDir = join(home, "custom-claude");
+    const env = { CLAUDE_CONFIG_DIR: claudeDir };
+    const pluginData = join(claudeDir, "plugins", "data", "odd-claude-odd-claude");
+    writeProfileState(pluginData, buildSelection("economy"));
+    const { runner } = machine({
+      pluginIds: ["odd-claude@odd-claude"],
+      failOn: (c) => {
+        if (c.args[0] === "plugin" && c.args[1] === "uninstall") {
+          rmSync(pluginData, { recursive: true, force: true });
+          return ok("");
+        }
+        return undefined;
+      },
+    });
+    await runFullInstall({ env, homedir: home, runner, source, deps: false });
+    assert.equal(readSelection(flowContext({ env, homedir: home }).paths.dataDir).profile, "economy");
+  });
+
+  it("a held lock stops install and update with a clear message and writes nothing; a stale lock is replaced", async () => {
+    const { home, env, source, ctx } = setup();
+    const lock = join(ctx.paths.oddHome, ".lock");
+    mkdirSync(ctx.paths.oddHome, { recursive: true });
+    writeFileSync(lock, `${process.pid}\n`);
+    const { runner } = machine();
+    const r = await runFullInstall({ env, homedir: home, runner, source, deps: false });
+    assert.equal(r.ok, false);
+    assert.match(r.steps[0]!.detail, /another odd-claude install or update is running.*\.lock/);
+    assert.equal(activeVersion(ctx.paths), null);
+    const u = await runUpdateFlow({ env, homedir: home, runner });
+    assert.equal(u.ok, false);
+    assert.match(u.steps[0]!.detail, /another odd-claude install or update is running.*\.lock/);
+    assert.equal(readFileSync(lock, "utf8"), `${process.pid}\n`);
+    writeFileSync(lock, "2147483646\n");
+    const again = await runFullInstall({ env, homedir: home, runner, source, deps: false });
+    assert.equal(again.ok, true);
+    assert.equal(existsSync(lock), false);
+  });
+
+  it("a corrupt settings-state.json fails the update flow, stays untouched and releases the lock", async () => {
+    const { home, env, source, ctx } = setup();
+    const { runner } = machine();
+    await runFullInstall({ env, homedir: home, runner, source, deps: false });
+    writeFileSync(ctx.managed.statePath, "{nope");
+    const u = await runUpdateFlow({ env, homedir: home, runner: ghRunner(makeRelease("9.9.10")).runner, force: true });
+    assert.equal(u.ok, false);
+    assert.match(u.steps.map((x) => x.detail).join("\n"), /not valid JSON/);
+    assert.equal(readFileSync(ctx.managed.statePath, "utf8"), "{nope");
+    assert.equal(existsSync(join(ctx.paths.oddHome, ".lock")), false);
+  });
+});
+
+describe("lock errors", () => {
+  it("an uncreatable lock is a failed lock step, not a throw", async () => {
+    const { home, env, source, ctx } = setup();
+    mkdirSync(dirname(ctx.paths.oddHome), { recursive: true });
+    writeFileSync(ctx.paths.oddHome, "a file, not a dir");
+    const r = await runFullInstall({ env, homedir: home, runner: machine().runner, source, deps: false });
+    assert.equal(r.ok, false);
+    assert.equal(r.steps[0]!.id, "lock");
+    assert.match(r.steps[0]!.detail, /cannot create the lock/);
   });
 });

@@ -114,7 +114,7 @@ function replaceWith(target: Settings, next: Settings): void {
 
 export function installHooks(opts: HookPaths & { oddRoot: string; oddHome: string; defaultOddHome: string }): WriteResult {
   const entries = buildHookEntries(opts);
-  return updateSettingsFile(opts, (s) => replaceWith(s, mergeHooks(s, entries)));
+  return updateSettingsFile(opts, (s) => replaceWith(s, mergeHooks(unmergeHooks(s, opts.oddRoot), entries)));
 }
 
 export function uninstallHooks(opts: HookPaths & { oddRoot: string }): WriteResult {

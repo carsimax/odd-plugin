@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { existsSync, lstatSync, readFileSync, readdirSync, readlinkSync, statSync, writeFileSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { basename, join, resolve } from "node:path";
 import { resolveInstallPaths } from "./paths.js";
 import { activeVersion, listVersions, stagePayload } from "./payload.js";
 import { resolvePlaceholders } from "./placeholders.js";
@@ -221,4 +221,30 @@ test("applyAgentEffort inserts after model, replaces an existing line, is idempo
   assert.equal(applyAgentEffort("---\nname: x\n---\nbody\n", "low"), "---\nname: x\neffort: low\n---\nbody\n");
   assert.equal(applyAgentEffort("---\r\nname: x\r\nmodel: opus\r\n---\r\nb\r\n", "max"), "---\r\nname: x\r\nmodel: opus\r\neffort: max\r\n---\r\nb\r\n");
   assert.throws(() => applyAgentEffort("no frontmatter", "low"), /no frontmatter/);
+});
+
+test("restoreBackup backs up the live files first and refreshes manifest hashes of restored paths", () => {
+  const { paths } = makeHome();
+  const live = join(paths.claudeDir, "skills/a/SKILL.md");
+  put(paths.claudeDir, "skills/a/SKILL.md", "original\n");
+  const dir = backupFiles(paths, [live])!;
+  writeFileSync(live, "edited\n");
+  const m = { version: 1 as const, oddVersion: "1.0.0", installedAt: "2026-01-01T00:00:00.000Z", files: { "skills/a/SKILL.md": sha256("edited\n") }, models: defaultSelection() };
+  writeManifest(paths.manifestPath, m);
+  restoreBackup(paths, basename(dir));
+  assert.equal(readFileSync(live, "utf8"), "original\n");
+  assert.equal(readManifest(paths.manifestPath)!.files["skills/a/SKILL.md"], sha256("original\n"));
+  const newest = listBackups(paths).at(-1)!;
+  assert.notEqual(newest.id, basename(dir));
+  assert.equal(readFileSync(join(newest.dir, "skills/a/SKILL.md"), "utf8"), "edited\n");
+});
+
+test("restoreBackup leaves untracked paths out of the manifest", () => {
+  const { paths } = makeHome();
+  const live = join(paths.claudeDir, "skills/a/SKILL.md");
+  put(paths.claudeDir, "skills/a/SKILL.md", "original\n");
+  const dir = backupFiles(paths, [live])!;
+  writeManifest(paths.manifestPath, { version: 1 as const, oddVersion: "1.0.0", installedAt: "2026-01-01T00:00:00.000Z", files: {}, models: defaultSelection() });
+  restoreBackup(paths, basename(dir));
+  assert.deepEqual(readManifest(paths.manifestPath)!.files, {});
 });

@@ -2,10 +2,11 @@
 // so the CLI and the Ink TUI share it and tests drive it without a terminal. Every step reports through `onStep`
 // and a failure is returned as a step, never thrown. A dry run plans only: read-only detection commands may run,
 // nothing is written and no external tool mutates anything.
-import { existsSync, mkdtempSync, readFileSync, rmSync, rmdirSync } from "node:fs";
+import { closeSync, existsSync, mkdirSync, mkdtempSync, openSync, readFileSync, rmSync, rmdirSync, unlinkSync, writeSync } from "node:fs";
 import { homedir as osHomedir, tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { atomicWriteFile } from "./manifest.js";
+import { atomicWriteFile } from "../lib/state.js";
+import { isPidAlive } from "../lib/pid.js";
 import { listBackups, restoreBackup, type BackupInfo } from "./backup.js";
 import { detectDeps, installDeps, planDeps, type DepAction, type DepsDetected } from "./deps.js";
 import { DEFAULT_EXTRAS, applyExtras, planExtras, removeExtras, type ExtrasOptions } from "./extras.js";
@@ -96,7 +97,12 @@ export async function detect(o: { env: Env; homedir: string; runner: McpRunner; 
   const auth = gh.code === 0 ? await code("gh", ["auth", "status"]) : { code: null, out: "" };
   const plugin = await detectOddPlugin(o.runner, ctx.env);
   const installedVersion = activeVersion(ctx.paths);
-  const cached = readOddState(ctx.managed.statePath).update as { version?: unknown } | undefined;
+  let cached: { version?: unknown } | undefined;
+  try {
+    cached = readOddState(ctx.managed.statePath).update as { version?: unknown } | undefined;
+  } catch {
+    /* corrupt state: detection only skips the cached update hint; the flows report it */
+  }
   const latest = typeof cached?.version === "string" ? cached.version : null;
   return {
     node: { version: nodeVersion, ok: Number.parseInt(nodeVersion.split(".")[0] ?? "0", 10) >= 22 },
@@ -219,7 +225,62 @@ const INSTALL_STEPS: [string, string][] = [
 ];
 const label = (id: string): string => INSTALL_STEPS.find(([i]) => i === id)![1];
 
+const lockBusy = (path: string): string => `another odd-claude install or update is running; wait for it to finish (or remove ${path} if it crashed)`;
+
+/** Exclusive `<oddHome>/.lock` (pid inside). Returns a release function, or the failure message when another live run holds it or the lock cannot be created. A dead holder's lock is replaced. */
+function acquireLock(oddHome: string): (() => void) | string {
+  const path = join(oddHome, ".lock");
+  try {
+    return tryLock(oddHome, path);
+  } catch (e) {
+    return `cannot create the lock ${path}: ${errMsg(e)}`;
+  }
+}
+
+function tryLock(oddHome: string, path: string): (() => void) | string {
+  const created = !existsSync(oddHome);
+  mkdirSync(oddHome, { recursive: true });
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const fd = openSync(path, "wx");
+      writeSync(fd, `${process.pid}\n`);
+      closeSync(fd);
+      return () => {
+        rmSync(path, { force: true });
+        if (created) {
+          try {
+            rmdirSync(oddHome); // a run that wrote nothing leaves no trace
+          } catch {
+            /* not empty: keep it */
+          }
+        }
+      };
+    } catch (e) {
+      if ((e as NodeJS.ErrnoException).code !== "EEXIST") throw e;
+      const pid = Number.parseInt(readFileSync(path, "utf8"), 10);
+      if (isPidAlive(pid)) return lockBusy(path);
+      unlinkSync(path);
+    }
+  }
+  return lockBusy(path);
+}
+
 export async function runFullInstall(o: InstallFlowOptions, onStep?: OnStep): Promise<FullResult> {
+  if (o.dryRun) return installFlow(o, onStep);
+  const release = acquireLock(flowContext(o).paths.oddHome);
+  if (typeof release === "string") {
+    const { steps, emit } = reporter(onStep);
+    emit("lock", "Install lock", "failed", release);
+    return { ok: false, dryRun: false, version: null, steps };
+  }
+  try {
+    return await installFlow(o, onStep);
+  } finally {
+    release();
+  }
+}
+
+async function installFlow(o: InstallFlowOptions, onStep?: OnStep): Promise<FullResult> {
   const ctx = flowContext(o);
   const dry = o.dryRun === true;
   const { steps, emit } = reporter(onStep);
@@ -240,6 +301,21 @@ export async function runFullInstall(o: InstallFlowOptions, onStep?: OnStep): Pr
     else {
       const parts: string[] = [];
       const states: StepStatus[] = [];
+      // State is copied BEFORE the uninstall: `claude plugin uninstall` deletes the plugin data dir.
+      const dirs = pluginDataDir(ctx.paths.claudeDir);
+      if (dirs.length > 0) {
+        if (dry) parts.push(`would copy state from ${dirs.length} plugin data dir(s)`);
+        else {
+          const copied: string[] = [];
+          try {
+            for (const d of dirs) copied.push(...migratePluginState(d, ctx.paths.dataDir).copied);
+            if (copied.length > 0) parts.push(`copied ${[...new Set(copied)].join(", ")}`);
+          } catch (e) {
+            states.push("warning");
+            parts.push(`state copy failed: ${errMsg(e)}`);
+          }
+        }
+      }
       const det = await detectOddPlugin(o.runner, ctx.env);
       if (!det.ok) parts.push(`plugin detection unavailable (${det.error})`);
       else if (det.ids.length > 0) {
@@ -253,20 +329,6 @@ export async function runFullInstall(o: InstallFlowOptions, onStep?: OnStep): Pr
           if (m.marketplace === "failed") {
             states.push("warning");
             parts.push(`marketplace not removed: ${m.marketplaceError}`);
-          }
-        }
-      }
-      const dirs = pluginDataDir(o.homedir);
-      if (dirs.length > 0) {
-        if (dry) parts.push(`would copy state from ${dirs.length} plugin data dir(s)`);
-        else {
-          const copied: string[] = [];
-          try {
-            for (const d of dirs) copied.push(...migratePluginState(d, ctx.paths.dataDir).copied);
-            if (copied.length > 0) parts.push(`copied ${[...new Set(copied)].join(", ")}`);
-          } catch (e) {
-            states.push("warning");
-            parts.push(`state copy failed: ${errMsg(e)}`);
           }
         }
       }
@@ -492,6 +554,22 @@ export interface UpdateFlowResult extends FullResult {
 
 /** runUpdate, then re-applies hooks, MCP and extras idempotently with the options saved at install. */
 export async function runUpdateFlow(o: UpdateFlowOptions, onStep?: OnStep): Promise<UpdateFlowResult> {
+  if (o.dryRun) return updateFlow(o, onStep);
+  const ctx = flowContext(o);
+  const release = acquireLock(ctx.paths.oddHome);
+  if (typeof release === "string") {
+    const { steps, emit } = reporter(onStep);
+    emit("lock", "Update lock", "failed", release);
+    return { ok: false, dryRun: false, version: null, steps, status: "failed", from: activeVersion(ctx.paths) };
+  }
+  try {
+    return await updateFlow(o, onStep);
+  } finally {
+    release();
+  }
+}
+
+async function updateFlow(o: UpdateFlowOptions, onStep?: OnStep): Promise<UpdateFlowResult> {
   const ctx = flowContext(o);
   const { steps, emit } = reporter(onStep);
   const selection = o.selection ?? readSelection(ctx.paths.dataDir);
