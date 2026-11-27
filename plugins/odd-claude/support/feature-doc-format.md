@@ -6,7 +6,7 @@ Small work creates no document. A requested session task list alone needs no dur
 
 ## Fixed order (stable content first, growing log last)
 
-1. **Header** (2-3 lines): objective, branch, delivery strategy (`ask-on-risk` default, `auto-chain`, `single-pr`, `exception-ok`), test runner.
+1. **Header** (2-3 lines): objective, branch, delivery strategy (`single-pr` default, `ask-on-risk`, `auto-chain`, `exception-ok`), test runner.
 2. **`## Specs`**: numbered `S1`..`Sn` requirements, constraints and acceptance criteria with their checks. Quote the user's exact strings, error messages, commands and examples verbatim, in the user's language; number and order them, never summarize or reword. Add no requirement the user never asked for; mark assumptions as assumptions.
 3. **`## Tasks`**: one line per task with a stable ID `T1`..`Tn`: linked `S#`, route (who writes it), status (`pending`, `done`, `blocked`, `dropped`), and commit identity or RED/GREEN evidence. An optional `Risk:` line names high-risk items that need an independent verifier.
 4. **`## Log`**: `L1` is the user's original request verbatim; later user corrections are logged verbatim with their date as `L2`, `L3`, ... Problem analysis, rationale for meaningful accepted changes, verification evidence, progress and next step go here. Routine corrections stay brief; no exhaustive decision journal.
@@ -17,7 +17,7 @@ Example skeleton:
 
 ```markdown
 # <feature title>
-Objective: ... Branch: `feat/x`. Delivery: `ask-on-risk`. Runner: `npm test`.
+Objective: ... Branch: `feat/x`. Delivery: `single-pr`. Runner: `npm test`.
 
 ## Specs
 - **S1** "<user's exact words>" ...
