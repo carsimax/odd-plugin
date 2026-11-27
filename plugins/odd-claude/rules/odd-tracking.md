@@ -28,6 +28,10 @@ Every task line in `## Tasks` ends with `done when: <observable check>` (the com
 
 At closure, run `node "${CLAUDE_PLUGIN_ROOT}/dist/cli/tasks.js"` (read-only, always exit 0; `--json` for machine output). Fix every finding for the feature document you worked on (stale open tasks, done tasks without a Log entry, tasks without `done when`, missing sections) before reporting completion, closing a task only with git or Log evidence (otherwise report the finding); report findings in other documents without editing them.
 
+#### Plan-check before implementation
+
+For a tracked feature, after creating or revising the document and before the first implementation task: run the lint above, then launch `odd-plan-check` passing only the document locator, never your reasoning, summary or conclusions. It checks the document against `L1` verbatim for missing, unrequested or misread requirements, `done when` checks that are not observable, tasks not linked to an `S#`, and missing Risk lines, and returns finding rows only. One pass, no loop: fix the document yourself (a requirement change follows the Log rule) and ask the human only for a genuine product ambiguity.
+
 #### Research depth without a new phase
 
 Step 3 decides when to research, ask, or challenge. Establish the problem, intended outcome, constraints, and current evidence; inspect relevant code. Adapt depth to uncertainty and consequence: no fixed questionnaire or mandatory rounds. The parent owns product decisions; workers return gaps to the parent rather than assuming choices.
