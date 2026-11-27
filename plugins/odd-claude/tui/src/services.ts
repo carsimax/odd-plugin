@@ -34,16 +34,7 @@ export function createServices(io: CliIo, args: ParsedArgs): Services {
     detect: () => detect(base),
     builtins: () => discoverBuiltinPlugins(io.runner, io.env as NodeJS.ProcessEnv),
     async plan(req) {
-      switch (req.flow) {
-        case "install":
-          return planFullInstall(install(req));
-        case "update":
-          return runUpdateFlow({ ...base, dryRun: true, force: args.force });
-        case "uninstall":
-          return runFullUninstall({ ...base, dryRun: true, purge: req.purge });
-        default:
-          return { ok: true, dryRun: true, version: null, steps: [] };
-      }
+      return req.flow === "install" ? planFullInstall(install(req)) : runUpdateFlow({ ...base, dryRun: true, force: args.force });
     },
     async run(req, onStep) {
       switch (req.flow) {

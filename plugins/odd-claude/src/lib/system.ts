@@ -4,6 +4,33 @@ import { spawnSync } from "node:child_process";
 import { accessSync, constants, existsSync, readFileSync, realpathSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+
+export interface CliResult {
+  exitCode: number;
+  stdout: string;
+  stderr: string;
+}
+
+/** Runs `fn` and writes its result when the module at `metaUrl` is the entry script; only the entry detection is guarded, a thrown action error goes to stderr with exit code 1. */
+export function runMain(metaUrl: string, fn: () => Partial<CliResult>): void {
+  let isMain = false;
+  try {
+    isMain = !!process.argv[1] && realpathSync(process.argv[1]) === realpathSync(fileURLToPath(metaUrl));
+  } catch {
+    // importing must never throw
+  }
+  if (!isMain) return;
+  try {
+    const r = fn();
+    if (r.stdout) process.stdout.write(r.stdout + "\n");
+    if (r.stderr) process.stderr.write(r.stderr + "\n");
+    process.exitCode = r.exitCode ?? 0;
+  } catch (e) {
+    process.stderr.write(`error: ${e instanceof Error ? e.message : String(e)}\n`);
+    process.exitCode = 1;
+  }
+}
 
 export function realExec(cmd: string, args: string[]): string | undefined {
   const r = spawnSync(cmd, args, { encoding: "utf8", timeout: 5000, stdio: ["ignore", "pipe", "pipe"] });
@@ -27,10 +54,10 @@ export function realIsWritable(dir: string): boolean {
   }
 }
 
-/** Keys of ~/.claude/plugins/installed_plugins.json, or undefined when unreadable. */
-export function realInstalledPlugins(): string[] | undefined {
+/** Keys of <CLAUDE_CONFIG_DIR or ~/.claude>/plugins/installed_plugins.json, or undefined when unreadable. */
+export function realInstalledPlugins(env: Record<string, string | undefined> = process.env): string[] | undefined {
   try {
-    const raw = JSON.parse(readFileSync(join(homedir(), ".claude", "plugins", "installed_plugins.json"), "utf8")) as {
+    const raw = JSON.parse(readFileSync(join(env.CLAUDE_CONFIG_DIR || join(homedir(), ".claude"), "plugins", "installed_plugins.json"), "utf8")) as {
       plugins?: Record<string, unknown>;
     };
     return raw.plugins ? Object.keys(raw.plugins) : undefined;
@@ -50,15 +77,21 @@ export function realInstalledVersion(env: Record<string, string | undefined> = p
   }
 }
 
-/** True when `<CLAUDE_CONFIG_DIR or ~/.claude>/settings.json` has a hook command running odd-claude's `dist/hooks/run.js`; undefined when unreadable. */
-export function realHooksInstalled(env: Record<string, string | undefined> = process.env): boolean | undefined {
+/** Hook events of `<CLAUDE_CONFIG_DIR or ~/.claude>/settings.json` with a command running odd-claude's `dist/hooks/run.js`; undefined when unreadable. */
+export function realHookEvents(env: Record<string, string | undefined> = process.env): string[] | undefined {
   try {
     const raw = readFileSync(join(env.CLAUDE_CONFIG_DIR || join(homedir(), ".claude"), "settings.json"), "utf8");
     const hooks = (JSON.parse(raw) as { hooks?: Record<string, unknown> }).hooks ?? {};
-    return /\/dist\/hooks\/run\.js/.test(JSON.stringify(hooks));
+    return Object.keys(hooks).filter((e) => /\/dist\/hooks\/run\.js/.test(JSON.stringify(hooks[e])));
   } catch {
     return undefined;
   }
+}
+
+/** True when settings.json has a hook command running odd-claude's `dist/hooks/run.js`; undefined when unreadable. */
+export function realHooksInstalled(env: Record<string, string | undefined> = process.env): boolean | undefined {
+  const events = realHookEvents(env);
+  return events && events.length > 0;
 }
 
 /** Value of `--name <value>` in argv; undefined when absent or empty. */

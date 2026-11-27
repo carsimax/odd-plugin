@@ -3,11 +3,9 @@
 // state and the session context states it. No hook enforces it.
 // Without --action (or `status`): prints the effective mode (read-only).
 // Exit codes: 0 ok; 1 invalid action; 2 usage error / no data dir.
-import { realpathSync } from "node:fs";
-import { fileURLToPath } from "node:url";
 import { readPluginState } from "../lib/state.js";
 import { readDelegationMode, writeDelegationMode } from "../lib/context.js";
-import { envWithDataDir, flagValue } from "../lib/system.js";
+import { envWithDataDir, flagValue, runMain } from "../lib/system.js";
 const USAGE = "usage: coordinator.js [--action on|off|status] [--data-dir <dir>]";
 const ACTIONS = ["on", "off", "status"];
 const NOTE = "It is a prompt rule the orchestrator follows; no hook blocks edits.";
@@ -53,18 +51,5 @@ export function coordinatorCli(argv, env) {
         stderr: "",
     };
 }
-function main() {
-    const res = coordinatorCli(process.argv.slice(2), process.env);
-    if (res.stdout !== "")
-        process.stdout.write(res.stdout + "\n");
-    if (res.stderr !== "")
-        process.stderr.write(res.stderr + "\n");
-    process.exitCode = res.exitCode;
-}
-try {
-    if (process.argv[1] && realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url)))
-        main();
-}
-catch {
-    // importing must never throw
-}
+const main = () => coordinatorCli(process.argv.slice(2), process.env);
+runMain(import.meta.url, main);

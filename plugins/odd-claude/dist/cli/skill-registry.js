@@ -1,12 +1,10 @@
 // `node dist/cli/skill-registry.js [--cwd <dir>] [--force]`: refresh of <cwd>/.atl/skill-registry.md.
 // Without --force the Git-tracked guard and the opt-out apply (same as the hook). Exit codes: 0 written/unchanged; 1 skipped; 2 usage error.
-import { realpathSync } from "node:fs";
 import { homedir } from "node:os";
-import { fileURLToPath } from "node:url";
 import { realGitTracked, realPluginRoots, refreshRegistry } from "../lib/skill-registry.js";
 import { lockPath, releaseLock } from "../lib/lock.js";
 import { dataDirFromEnv } from "../lib/state.js";
-import { flagValue } from "../lib/system.js";
+import { flagValue, runMain } from "../lib/system.js";
 const USAGE = "usage: skill-registry.js [--cwd <dir>] [--force]";
 export function skillRegistryCli(argv, base) {
     for (let i = 0; i < argv.length; i++) {
@@ -41,18 +39,8 @@ function main() {
         env: process.env,
         gitTracked: realGitTracked,
     });
-    if (res.stdout !== "")
-        process.stdout.write(res.stdout + "\n");
-    if (res.stderr !== "")
-        process.stderr.write(res.stderr + "\n");
-    process.exitCode = res.exitCode;
     // Detached SessionStart refreshes hold an in-flight lock (see session-integrations.ts); free it when done.
     releaseLock(lockPath(dataDirFromEnv(process.env), "registry", flagValue(process.argv.slice(2), "--cwd") ?? process.cwd()), process.pid);
+    return res;
 }
-try {
-    if (process.argv[1] && realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url)))
-        main();
-}
-catch {
-    // importing must never throw
-}
+runMain(import.meta.url, main);

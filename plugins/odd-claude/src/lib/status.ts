@@ -6,7 +6,7 @@ export const ROADMAP_PHASE = "v5.3: harness research, done-when lint and verifie
 export interface StatusDeps {
   pluginVersion: string;
   env: Record<string, string | undefined>;
-  /** Hook events registered in hooks/hooks.json. */
+  /** Hook events registered in the config dir settings.json (commands running dist/hooks/run.js). */
   hooks: () => string[];
   /** Explicit session id (CLI flag); wins over the environment. */
   sessionId?: string;

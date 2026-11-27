@@ -227,7 +227,8 @@ export function App({ services, initial, onExit }: AppProps): ReactNode {
 
   const flowPath = path(flow);
   const stepNo = flowPath.indexOf(screen);
-  const step = stepNo > 0 && flow === "install" ? `${stepNo}/${flowPath.length - 3}` : undefined;
+  const stepTotal = flowPath.length - 3;
+  const step = stepNo > 0 && stepNo <= stepTotal && flow === "install" ? `${stepNo}/${stepTotal}` : undefined;
   const deps = det ? planDeps(det.deps) : [];
 
   let body: ReactNode;

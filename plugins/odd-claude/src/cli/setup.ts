@@ -3,14 +3,13 @@
 // Exit codes: 0 ok (dry run, applied, unchanged, info); 1 refused/failed (invalid mode,
 // invalid JSON settings, unknown backup, write error); 2 usage error.
 import { dataDirFromEnv } from "../lib/state.js";
-import { realpathSync } from "node:fs";
 import { readFileSync, existsSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { fileURLToPath } from "node:url";
 import { MODES, currentMode, modeWarning, planModeChange } from "../lib/setup.js";
 import { applyDenyProfile, applyMode, applyRestore, listBackups, planDeny, planRestore } from "../lib/setup-fs.js";
 import { DENY_ACTIONS, DENY_PROFILE_RULES, isDenyAction } from "../lib/deny-profile.js";
+import { type CliResult, runMain } from "../lib/system.js";
 
 type Env = Record<string, string | undefined>;
 const VALUE_FLAGS = ["--mode", "--deny-profile", "--settings", "--data-dir"];
@@ -59,12 +58,6 @@ function parseArgs(argv: string[]): Args | string {
   return a;
 }
 
-export interface CliResult {
-  exitCode: number;
-  stdout: string;
-  stderr: string;
-}
-
 function errorMessage(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
@@ -92,7 +85,7 @@ function run(argv: string[], env: Env): CliResult {
     stderr: "",
   });
   if (typeof args === "string") return fail(argv, `usage: ${args}`, 2, true);
-  const settingsPath = args.settings ?? join(homedir(), ".claude", "settings.json");
+  const settingsPath = args.settings ?? join(env.CLAUDE_CONFIG_DIR || join(homedir(), ".claude"), "settings.json");
   const dataDir = args.dataDir ?? dataDirFromEnv(env);
 
   if (!args.restore && args.mode === undefined && args.denyProfile === undefined) {
@@ -193,17 +186,6 @@ Known limitations:
   the current file; pass an explicit backup name to pick another one.
 `;
 
-function main(): void {
-  const res = setupCli(process.argv.slice(2), process.env);
-  if (res.stdout !== "") process.stdout.write(res.stdout + "\n");
-  if (res.stderr !== "") process.stderr.write(res.stderr + "\n");
-  process.exitCode = res.exitCode;
-}
+const main = (): CliResult => setupCli(process.argv.slice(2), process.env);
 
-let isMain = false;
-try {
-  isMain = !!process.argv[1] && realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url));
-} catch {
-  // importing must never throw
-}
-if (isMain) main();
+runMain(import.meta.url, main);

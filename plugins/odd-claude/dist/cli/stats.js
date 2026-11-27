@@ -1,9 +1,7 @@
 // `node dist/cli/stats.js [--json] [--session <id>] [--data-dir <dir>]`. Read-only, local only; always exits 0.
-import { realpathSync } from "node:fs";
-import { fileURLToPath } from "node:url";
 import { collectTranscriptStats, readExploration, readTranscriptPath, renderStats } from "../lib/stats.js";
 import { readSubagents } from "../lib/subagents.js";
-import { envWithDataDir, flagValue } from "../lib/system.js";
+import { envWithDataDir, flagValue, runMain } from "../lib/system.js";
 export function statsCli(argv, env = process.env) {
     try {
         const session = flagValue(argv, "--session");
@@ -17,7 +15,7 @@ export function statsCli(argv, env = process.env) {
             transcript,
             subagents: readSubagents(session, opts),
             exploration: readExploration(session, opts),
-            note: path === undefined ? "No transcript path recorded for this session yet (it is saved at the next prompt)." : "Transcript unreadable.",
+            note: path === undefined ? "No transcript path recorded for this session yet (it is saved at the next prompt)." : transcript === undefined ? "Transcript unreadable." : undefined,
         };
         if (argv.includes("--json"))
             return { exitCode: 0, stdout: JSON.stringify({ schema: "odd-claude.stats/v1", session, ...view }, null, 2) };
@@ -27,13 +25,5 @@ export function statsCli(argv, env = process.env) {
         return { exitCode: 0, stdout: "Stats unavailable." };
     }
 }
-function main() {
-    process.stdout.write(statsCli(process.argv.slice(2)).stdout + "\n");
-}
-try {
-    if (process.argv[1] && realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url)))
-        main();
-}
-catch {
-    // importing must never throw
-}
+const main = () => statsCli(process.argv.slice(2));
+runMain(import.meta.url, main);

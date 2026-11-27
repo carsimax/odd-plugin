@@ -2,11 +2,8 @@
 // The RDD mode switch (U13). Review-driven development is OFF until enabled. `global` (default) is the user-wide
 // switch kept in plugin state; `clone` is an off-only override for one repository under <git-common-dir>/odd-plugin.
 // `status` is read-only. Exit codes: 0 ok; 1 the switch could not be written; 2 usage error.
-import { realpathSync } from "node:fs";
-import { fileURLToPath } from "node:url";
 import { MODE_SCHEMA, readReviewMode, ReviewModeError, setReviewMode, type ModeOperation, type ModeScope, type ReviewModeStatus } from "../review/mode.js";
-import { envWithDataDir } from "../lib/system.js";
-import type { CliResult } from "./coordinator.js";
+import { type CliResult, envWithDataDir, runMain } from "../lib/system.js";
 
 const USAGE = "usage: review-mode.js <enable|disable|status> [--scope global|clone] [--cwd <repo>] [--data-dir <dir>] [--json]";
 const VERBS = ["enable", "disable", "status"];
@@ -64,15 +61,6 @@ export function reviewModeCli(argv: string[], env: Record<string, string | undef
   }
 }
 
-function main(): void {
-  const res = reviewModeCli(process.argv.slice(2), process.env);
-  if (res.stdout !== "") process.stdout.write(res.stdout + "\n");
-  if (res.stderr !== "") process.stderr.write(res.stderr + "\n");
-  process.exitCode = res.exitCode;
-}
+const main = (): CliResult => reviewModeCli(process.argv.slice(2), process.env);
 
-try {
-  if (process.argv[1] && realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url))) main();
-} catch {
-  // importing must never throw
-}
+runMain(import.meta.url, main);
