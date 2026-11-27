@@ -2,6 +2,15 @@
 
 A global Claude Code harness (installed with a TUI, no longer a plugin) that ports the ODD harness of gentle-shell (MIT) <!-- odd-check: allow --> to Claude Code. **v2.0** adds native receipt-driven review (RDD) on top of **v1.0** (the parity release): the ODD persona, orchestrator rules, agents, skills, native integrations, advisory review and lifecycle hooks. Apart from the RDD Stop settle reminder, which can block only when you turn RDD on (it is off by default), the plugin ships **no deny/ask/block hook and no `permissions.deny` by default** (user decision, v0.5, amended for v2): its hooks only add context. Coordinator mode and the admission rules are prompt text, not enforcement; otherwise the only enforcement is Claude Code's native permission system (see [Permission modes](#permission-modes)). The plugin collects no data and sends nothing anywhere.
 
+## What's new in 9.2.0
+
+Not breaking:
+
+- Native review (RDD) iterates on its own up to 3 passes (the initial review plus 2 corrections); a second failed correction escalates.
+- Standing review consent: for a tracked feature the parent asks once, records your verbatim answer in the feature document `## Log`, then answers consent and forecasts for that feature branch's work-unit commit candidates only. An escalated review means no work-unit commit and the parent asks you.
+- `single-pr` is now the default delivery strategy (work-unit commits stay local, one PR); the chaining strategies remain explicit choices.
+- New read-only `odd-plan-check` agent: after the feature-document lint, a blind one-pass check of the document against your verbatim request before implementation; registered in all model profiles.
+
 ## What's new in 9.1.1
 
 Not breaking:
