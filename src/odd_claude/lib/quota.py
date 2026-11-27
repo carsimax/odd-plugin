@@ -32,20 +32,32 @@ _KNOWN_TYPES = {
 }
 
 SCAN_MAX = 4096
-_I = re.IGNORECASE
+# JS regex parity: ASCII-only case folding (a non-ASCII char never matches an ASCII letter, e.g. KELVIN SIGN vs k), ASCII `\d`/`\b`,
+# `.` excluding all four line terminators, `$` only at the very end, and JS `\s` spelled out (Python's differs).
+_I = re.IGNORECASE | re.ASCII
+_WS = "\\t\\n\\v\\f\\r \\u00a0\\u1680\\u2000-\\u200a\\u2028\\u2029\\u202f\\u205f\\u3000\\ufeff"
+_DOT = "[^\\n\\r\\u2028\\u2029]"
+
+
+def _rx(pattern: str) -> re.Pattern[str]:
+    return re.compile(pattern.replace(".", _DOT), _I)
+
+
 # First match wins: specific causes before the generic statuses they share (quota and context errors often arrive as 429 or 400).
 _KEYWORDS = [
-    ("context_length", re.compile(r"context.?length|context.?window|maximum context|prompt is too long|too many tokens", _I)),
-    ("quota", re.compile(r"quota|billing|out of budget|usage.?limit|credit balance", _I)),
-    ("auth", re.compile(r"unauthori[sz]ed|forbidden|authenticat|api.?key|permission.?denied", _I)),
-    ("rate_limit", re.compile(r"rate.?limit|too many requests", _I)),
-    ("timeout", re.compile(r"time.?out|timed out|deadline exceeded", _I)),
-    ("network", re.compile(r"network|connection|websocket|ECONN(?:RESET|REFUSED|ABORTED)|ENOTFOUND|EAI_AGAIN|fetch failed|socket hang up|other side closed", _I)),
-    ("provider_unavailable", re.compile(r"overloaded|unavailable|server.?error|internal.?error|server_busy|capacity|high demand", _I)),
-    ("invalid_request", re.compile(r"invalid.?request|bad request", _I)),
+    ("context_length", _rx(r"context.?length|context.?window|maximum context|prompt is too long|too many tokens")),
+    ("quota", _rx(r"quota|billing|out of budget|usage.?limit|credit balance")),
+    ("auth", _rx(r"unauthori[sz]ed|forbidden|authenticat|api.?key|permission.?denied")),
+    ("rate_limit", _rx(r"rate.?limit|too many requests")),
+    ("timeout", _rx(r"time.?out|timed out|deadline exceeded")),
+    ("network", _rx(r"network|connection|websocket|ECONN(?:RESET|REFUSED|ABORTED)|ENOTFOUND|EAI_AGAIN|fetch failed|socket hang up|other side closed")),
+    ("provider_unavailable", _rx(r"overloaded|unavailable|server.?error|internal.?error|server_busy|capacity|high demand")),
+    ("invalid_request", _rx(r"invalid.?request|bad request")),
 ]
 # Only a status in a status position: leading ("429: ..."), parenthesized ("Provider (403): ...") or labeled ("status 503", "HTTP 502").
-_HTTP_STATUS = re.compile(r"(?:^\s*|\(|\b(?:status(?:\s+code)?|http)\s*:?\s*)([45][0-9][0-9])(?=[\s):,{]|$)", _I)
+_HTTP_STATUS = re.compile(
+    rf"(?:^[{_WS}]*|\(|\b(?:status(?:[{_WS}]+code)?|http)[{_WS}]*:?[{_WS}]*)([45][0-9][0-9])(?=[{_WS}):,{{]|\Z)", _I
+)
 
 
 def _status_category(status: int) -> str:
@@ -63,7 +75,8 @@ def _status_category(status: int) -> str:
 def classify_stop_failure(error: str | None = None, details: str | None = None) -> str:
     if error is not None and error in _KNOWN_TYPES:
         return _KNOWN_TYPES[error]
-    text = (details or "")[:SCAN_MAX]
+    # JS `slice` counts UTF-16 units; a cut astral character leaves a lone surrogate that matches nothing.
+    text = (details or "").encode("utf-16-le", "surrogatepass")[: 2 * SCAN_MAX].decode("utf-16-le", "surrogatepass")
     if text == "":
         return "other"
     for category, rx in _KEYWORDS:

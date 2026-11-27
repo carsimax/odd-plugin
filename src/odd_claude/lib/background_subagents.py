@@ -3,6 +3,7 @@ Resolution: stored state > env ODD_CLAUDE_BACKGROUND_SUBAGENTS ("on"|"off") > de
 state file fails closed to "off" and stays attributed to the state."""
 import json
 import os
+import re
 from dataclasses import dataclass
 from typing import Any, Literal
 
@@ -17,6 +18,11 @@ class BackgroundResolution:
     policy: Literal["on", "off"]
     source: Literal["state", "environment", "default"]
     malformed: bool
+
+
+def js_stringify(v: Any) -> str:
+    """`JSON.stringify` for error messages: compact, raw non-ASCII, lone surrogates escaped as `\\udXXX` (a Python str holds no pairs)."""
+    return re.sub(r"[\ud800-\udfff]", lambda m: f"\\u{ord(m.group()):04x}", json.dumps(v, ensure_ascii=False, separators=(",", ":")))
 
 
 def _is_policy(v: Any) -> bool:
@@ -48,7 +54,7 @@ def read_background_subagents(opts: StateOptions | None = None) -> str:
 def write_background_subagents(policy: str, opts: StateOptions | None = None) -> str:
     """Validates then stores; raises on an invalid policy without touching the stored value."""
     if not _is_policy(policy):
-        raise ValueError(f"invalid policy {json.dumps(policy, ensure_ascii=False)}; available policies: {', '.join(BACKGROUND_POLICIES)}")
+        raise ValueError(f"invalid policy {js_stringify(policy)}; available policies: {', '.join(BACKGROUND_POLICIES)}")
     write_plugin_state("background-subagents", {"policy": policy}, opts)
     return policy
 

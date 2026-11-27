@@ -1,11 +1,10 @@
 """Builds the `additionalContext` of the SessionStart / UserPromptSubmit hooks (port of v9 lib/context.ts).
 Only per-session dynamic lines are built here; the static protocol lives in the managed CLAUDE.md blocks."""
-import json
 import re
 from dataclasses import dataclass, field
 from typing import Any
 
-from .background_subagents import background_subagents_line
+from .background_subagents import background_subagents_line, js_stringify
 from .state import StateOptions, read_plugin_state, write_plugin_state
 
 DELEGATION_MODES = ("organic", "full")
@@ -34,7 +33,7 @@ def read_delegation_mode(opts: StateOptions | None = None) -> str:
 def write_delegation_mode(mode: str, opts: StateOptions | None = None) -> str:
     """Validates then stores; raises on an invalid mode without touching the stored value."""
     if mode not in DELEGATION_MODES:
-        raise ValueError(f"invalid delegation mode {json.dumps(mode, ensure_ascii=False)}; available modes: {', '.join(DELEGATION_MODES)}")
+        raise ValueError(f"invalid delegation mode {js_stringify(mode)}; available modes: {', '.join(DELEGATION_MODES)}")
     write_plugin_state("delegation", {"mode": mode}, opts)
     return mode
 
@@ -60,13 +59,16 @@ def build_session_context(i: SessionContextInput) -> str:
 
 
 EXCERPT_CHARS = 100
+# JS `\s` and `trim()` (WhiteSpace + LineTerminator): Python's `\s` differs (it adds \x1c-\x1f and \x85, and lacks \ufeff).
+_WS_CHARS = "\t\n\v\f\r \u00a0\u1680\u2000\u2001\u2002\u2003\u2004\u2005\u2006\u2007\u2008\u2009\u200a\u2028\u2029\u202f\u205f\u3000\ufeff"
+_WS_RUN = re.compile(f"[{_WS_CHARS}]+")
 
 
 def build_prompt_anchor(prompt: Any) -> str | None:
     """Per-turn anchor quoting the start of the human's own prompt; None for prompts that are not human prose."""
     if not isinstance(prompt, str):
         return None
-    collapsed = re.sub(r"[\s﻿]+", " ", prompt).strip(" ﻿")
+    collapsed = _WS_RUN.sub(" ", prompt).strip(_WS_CHARS)
     if collapsed == "" or collapsed.startswith(("/", "!")):
         return None
     # JS parity: length and slice count UTF-16 units.
@@ -74,5 +76,5 @@ def build_prompt_anchor(prompt: Any) -> str | None:
     if len(units) // 2 <= EXCERPT_CHARS:
         excerpt = collapsed
     else:
-        excerpt = units[: EXCERPT_CHARS * 2].decode("utf-16-le", "replace") + "…"
+        excerpt = units[: EXCERPT_CHARS * 2].decode("utf-16-le", "surrogatepass") + "…"
     return f'Reply-language anchor: the human\'s latest message begins "{excerpt}". Reply in the language of that message.'

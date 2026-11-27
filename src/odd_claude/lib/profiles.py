@@ -1,10 +1,10 @@
 """Model profiles (port of v9 lib/profiles.ts). Plugin state `profiles` maps each odd-claude agent to {model, effort};
 `balanced` is the default (absent, corrupt or unknown state reads as it); `clear` returns to it."""
-import json
 from typing import Any
 
 from pydantic import BaseModel
 
+from .background_subagents import js_stringify as _js
 from .state import StateOptions, read_plugin_state, write_plugin_state
 
 #: Agents the profile routes, i.e. every agent file shipped in agents/.
@@ -128,10 +128,6 @@ def read_profile(opts: StateOptions | None = None) -> Profile:
         return Profile(active=active, routing=routing)
     except Exception:
         return default_profile()
-
-
-def _js(v: str) -> str:
-    return json.dumps(v, ensure_ascii=False)
 
 
 def use_profile(name: str, opts: StateOptions | None = None) -> Profile:

@@ -119,10 +119,15 @@ def collect_doctor(deps: DoctorDeps) -> DoctorReport:
     )  # fmt: skip
 
 
+def _u16(s: str) -> int:
+    return len(s.encode("utf-16-le", "surrogatepass")) // 2
+
+
 def render_doctor(report: DoctorReport) -> str:
-    w = max(len(i.label) for i in report.items)
+    # JS parity: `padEnd` and `length` count UTF-16 units, and Math.max() of no items pads nothing.
+    w = max((_u16(i.label) for i in report.items), default=0)
     lines = [f"odd-claude doctor (v{report.version})", ""]
     for i in report.items:
-        lines.append(f"{i.label.ljust(w)}  {'required' if i.required else 'optional'}  {i.status.ljust(7)}  {i.detail}")
+        lines.append(f"{i.label + ' ' * (w - _u16(i.label))}  {'required' if i.required else 'optional'}  {i.status.ljust(7)}  {i.detail}")
     lines += ["", f"missing: {', '.join(report.missing) or 'none'}"]
     return "\n".join(lines)
