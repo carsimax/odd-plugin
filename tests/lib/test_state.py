@@ -268,3 +268,33 @@ def read_back(kind, ident, body, opts):
     os.makedirs(os.path.dirname(p), exist_ok=True)
     open(p, "w").write(json.dumps(body, indent=2) + "\n")
     return reader(ident, opts)
+
+
+@pytest.mark.parametrize(
+    "raw",
+    [b'{"version":1,"sessionId":123,"data":{"keep":1}}', b'{"version":1.0,"sessionId":"s","data":{"keep":1}}'],
+)
+def test_update_preserves_data_v9_reads(opts, raw):
+    p = session_state_path("s", opts)
+    os.makedirs(os.path.dirname(p))
+    open(p, "wb").write(raw)
+    assert read_session_state("s", opts) == {"keep": 1}
+    update_session_state("s", lambda c: {**c, "n": 1}, opts)
+    assert read_session_state("s", opts) == {"keep": 1, "n": 1}
+
+
+def test_invalid_utf8_value_reads_like_v9(opts):
+    p = session_state_path("s", opts)
+    os.makedirs(os.path.dirname(p))
+    open(p, "wb").write(b'{"version":1,"data":{"a":"\xff","b":1}}')
+    assert read_session_state("s", opts) == {"a": "�", "b": 1}
+
+
+@pytest.mark.parametrize("v", ["true", "2", "2.0"])
+def test_other_versions_still_read_empty_and_are_not_overwritten(opts, v):
+    p = session_state_path("s", opts)
+    os.makedirs(os.path.dirname(p))
+    open(p, "w").write('{"version":%s,"data":{"keep":1}}' % v)
+    assert read_session_state("s", opts) == {}
+    with pytest.raises(ValueError, match="refusing to overwrite"):
+        update_session_state("s", lambda c: {**c, "n": 1}, opts)

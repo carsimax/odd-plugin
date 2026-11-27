@@ -5,6 +5,8 @@ import subprocess
 import sys
 import time
 
+import pytest
+
 from odd_claude.lib.lock import LockOptions, acquire_lock, lock_path, release_lock, release_owned_lock, set_lock_pid
 
 from .conftest import dead_pid, run_py, spawn_py
@@ -374,3 +376,15 @@ def test_s3_esrch_dead_pid_is_taken_over(tmp_path):
     assert taker is not None
     assert rd(p)["pid"] == taker
     assert ls(tmp_path / "locks") == ["d.lock"]
+
+
+@pytest.mark.parametrize(
+    "raw", [b"\xff\xfe garbage", ('{"pid":%d,"startedAt":Infinity}' % os.getpid()).encode()]
+)
+def test_old_unparsable_lock_is_taken_over_like_v9(tmp_path, raw):
+    (tmp_path / "locks").mkdir()
+    p = str(tmp_path / "locks" / "g.lock")
+    open(p, "wb").write(raw)
+    old(p, 10)
+    assert try_in_child(p, stale_ms=2000) is not None
+    assert ls(tmp_path / "locks") == ["g.lock"]

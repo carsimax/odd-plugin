@@ -56,10 +56,14 @@ def _is_num(v: object) -> bool:
     return isinstance(v, (int, float)) and not isinstance(v, bool)
 
 
+def _reject_constant(name: str) -> object:
+    raise ValueError(name)  # NaN/Infinity are not JSON: v9 JSON.parse treats such a lock as unreadable
+
+
 def _parse_lock(raw: str) -> tuple[float, float] | None:
     """(pid, startedAt) or None when missing/corrupt (the caller treats an existing file as stale by mtime)."""
     try:
-        v = json.loads(raw)
+        v = json.loads(raw, parse_constant=_reject_constant)
         if isinstance(v, dict) and _is_num(v.get("pid")) and _is_num(v.get("startedAt")):
             return v["pid"], v["startedAt"]
     except ValueError:
@@ -69,14 +73,14 @@ def _parse_lock(raw: str) -> tuple[float, float] | None:
 
 def _read_lock(path: str) -> tuple[float, float] | None:
     try:
-        with open(path, encoding="utf-8") as f:
-            return _parse_lock(f.read())
+        return _parse_lock(_read(path))
     except (OSError, ValueError):
         return None
 
 
 def _read(path: str) -> str:
-    with open(path, encoding="utf-8") as f:
+    # errors="replace": a non-UTF-8 lock is unreadable content (stale by mtime), not an error (v9 parity)
+    with open(path, encoding="utf-8", errors="replace") as f:
         return f.read()
 
 
@@ -103,7 +107,7 @@ def _take_over(path: str, stale_raw: str, alive: Callable[[object], bool], stale
                 continue
             claimant: object = _MISSING
             try:
-                v = json.loads(_read(other))
+                v = json.loads(_read(other), parse_constant=_reject_constant)
                 if not isinstance(v, dict):
                     raise ValueError("not an object")
                 claimant = v.get("pid", _MISSING)

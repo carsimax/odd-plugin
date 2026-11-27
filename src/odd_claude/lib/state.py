@@ -30,7 +30,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
 
-from pydantic import BaseModel, StrictInt, ValidationError
+from pydantic import BaseModel, StrictInt
 
 from .lock import LockOptions, acquire_lock, release_owned_lock
 
@@ -92,14 +92,26 @@ def _reject_constant(name: str) -> Any:
     raise ValueError(name)  # NaN/Infinity are not JSON (v9 JSON.parse rejects them)
 
 
+def _load(path: str) -> Any:
+    # v9 parity: invalid UTF-8 becomes U+FFFD (not an error) and NaN/Infinity are rejected.
+    with open(path, encoding="utf-8", errors="replace") as f:
+        return json.loads(f.read(), parse_constant=_reject_constant)
+
+
+def _is_current_version(v: Any) -> bool:
+    return not isinstance(v, bool) and isinstance(v, (int, float)) and v == STATE_SCHEMA_VERSION  # 1.0 === 1 in JS
+
+
 def _read_envelope(path: str) -> StateData:
-    """The envelope's data, or {} when missing, corrupt, of another schema version or with a non-object `data`."""
+    """The envelope's data, or {} when missing, corrupt, of another schema version or with a non-object `data`.
+    Like v9 only `version` and `data` are checked: `sessionId` may be any type."""
     try:
-        with open(path, encoding="utf-8") as f:
-            env = StateFile.model_validate(json.loads(f.read(), parse_constant=_reject_constant))
-    except (OSError, ValueError, ValidationError):
+        env = _load(path)
+    except (OSError, ValueError):
         return {}
-    return env.data if env.version == STATE_SCHEMA_VERSION else {}
+    if isinstance(env, dict) and _is_current_version(env.get("version")) and isinstance(env.get("data"), dict):
+        return env["data"]
+    return {}
 
 
 def read_session_state(session_id: str, opts: StateOptions | None = None) -> StateData:
@@ -151,12 +163,11 @@ def write_plugin_state(name: str, data: StateData, opts: StateOptions | None = N
 def _assert_schema_matches(path: str) -> None:
     """Raises when the file exists with another schema version: an update would silently destroy it. Missing or corrupt files pass."""
     try:
-        with open(path, encoding="utf-8") as f:
-            raw = json.loads(f.read())
+        raw = _load(path)
     except (OSError, ValueError):
         return
     version = raw.get("version", None) if isinstance(raw, dict) and "version" in raw else None
-    if isinstance(raw, dict) and "version" in raw and version != STATE_SCHEMA_VERSION:
+    if isinstance(raw, dict) and "version" in raw and not _is_current_version(version):
         shown = version if isinstance(version, str) else json.dumps(version)
         raise ValueError(f"session state has schema version {shown}; refusing to overwrite")
 
