@@ -2,7 +2,7 @@
 
 **Goal.** Rebuild odd-claude's deterministic code (hooks, lib, review engine, MCP server, CLI, installer, TUI) in Python 3.14 with Pydantic v2, at behavioral parity with v9, so that the harness can later host its own local-AI services: an own memory (replacing Engram), an own code graph (replacing codegraph) and a curator, backed by Qdrant and Ollama. The tool is personal: it is built to do the job well, not to be fast.
 
-Status: **Planning — no implementation started.** Date: 2026-11-27. The v1-v9 history is in [roadmap.md](roadmap.md).
+Status: **Phase 0 complete on `feat/py-phase0-spikes`; no port started.** Date: 2026-11-27. The v1-v9 history is in [roadmap.md](roadmap.md).
 
 Everything marked *proposal* or *open question* below is not decided. Everything under [Decisions](#2-decisions) is.
 
@@ -112,8 +112,9 @@ Concurrency in place: session lock files, atomic tmp+rename writes, pruning of 7
 | Language / env | Python 3.14, uv | Decided |
 | Models | Pydantic v2 | Decided |
 | Tests | pytest | Proposal |
-| CLI framework | Typer or stdlib argparse | Open (Phase 0) |
-| MCP server | Official Python SDK or hand-rolled | Open (Phase 0 spike; must preserve protocol versions, cancellation, error codes, 4 MiB cap) |
+| CLI framework | stdlib `argparse` | Decided (Phase 0) |
+| MCP server | Hand-rolled (port of `server-core.ts`); must preserve protocol versions, cancellation, error codes, 4 MiB cap | Decided (Phase 0) |
+| Packaging / command shape | Wheel + payload installed into a uv-created venv under `versions/<v>/`; hook command `"$ODD/current/venv/bin/python" ...` (py-04) | Decided (Phase 0) |
 | TUI | Textual | Decided |
 | Post-v10 | docker compose (daemon + Qdrant), Ollama native at `host.docker.internal:11434` | Decided (infra); layout is a proposal |
 
@@ -127,10 +128,10 @@ payload/            # rules, agents, skills, claude-md, output-styles, statuslin
 tests/
   contract/         # implementation-agnostic, black-box
   unit/
-bench/              # open: stays TS or moves to Python
+bench/              # stays TS (decided in Phase 0)
 ```
 
-Single console entrypoint `odd-claude` with subcommands, for example `odd-claude hook <Event>`, `odd-claude mcp review`, `odd-claude tasks`. Final names and the new root are open questions.
+Single console entrypoint `odd-claude` with subcommands, for example `odd-claude hook <Event>`, `odd-claude mcp review`, `odd-claude tasks`. The root `src/odd_claude/` is decided (`plugins/odd-claude/` is retired in Phase 8); bench stays TS.
 
 ### v10 (proposal)
 
@@ -372,16 +373,16 @@ Ordering only, no dates.
 
 ## 9. Open questions
 
-To resolve in Phase 0.
+Resolved in Phase 0 (evidence: `spikes/py-07-open-questions/README.md`).
 
-| Question | Options |
-|----------|---------|
-| CLI framework | Typer vs stdlib argparse |
-| MCP server | Official Python SDK vs hand-rolled |
-| Packaging | Wheel vs payload tarball |
-| Name of the new root | Undecided |
-| bench | Stays TS or moves to Python |
-| Memory store design | Hybrid FTS + vector (leading idea, not decided) |
+| Question | Decision |
+|----------|----------|
+| CLI framework | "argparse (Recommended)": stdlib argparse |
+| MCP server | "A mano (Recommended)": hand-rolled |
+| Packaging | "Wheel (Recommended)": the release publishes a wheel + payload; the installer creates the venv with uv and installs the wheel; rollback = flip the `current` symlink |
+| Name of the new root | "src/odd_claude (Recommended)": stays as is; `plugins/odd-claude/` is retired in Phase 8 |
+| bench | "Se queda en TS (Recommended)": stays TS; revisit after v10.0.0 if it stops being useful |
+| Memory store design | Deferred to Phase 9 ("Diferir a Fase 9 (Recommended)"); hybrid FTS + vector stays the leading idea; the RAM measurement is an input |
 
 ---
 
