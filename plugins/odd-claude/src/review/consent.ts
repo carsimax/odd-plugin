@@ -8,11 +8,10 @@
 // The invocations name the plugin's review MCP tools (src/mcp/review-server.ts registers exactly `REVIEW_TOOL_NAMES`, and a test
 // pins that every name used here exists). The consent choices call `review_answer_consent` with the answer; the off switch is
 // the real `node <plugin root>/dist/cli/review-mode.js disable`.
-import { lstatSync, mkdirSync, readFileSync } from "node:fs";
+import { linkSync, lstatSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { oddClaudeRoot } from "../lib/root.js";
 import { canonicalJson, domainHash } from "./canonical.js";
-import { writeAtomic } from "./store.js";
 
 export const REVIEW_CONTRACT = "odd-claude.review-integration/v2";
 export const CONSENT_SCHEMA = "odd-claude.review-integration.consent/v3";
@@ -220,9 +219,19 @@ function ensureDeclinesDir(commonDir: string): void {
 export function recordDecline(commonDir: string, record: Omit<DeclineRecord, "schema">): { path: string; created: boolean } {
   const path = declinePathFor(commonDir, record.target_identity);
   ensureDeclinesDir(commonDir);
-  if (readDecline(commonDir, record.target_identity)) return { path, created: false };
-  writeAtomic(path, `${canonicalJson({ schema: DECLINE_SCHEMA, ...record })}\n`);
-  return { path, created: true };
+  const tmp = `${path}.${process.pid}.${Date.now()}.tmp`;
+  writeFileSync(tmp, `${canonicalJson({ schema: DECLINE_SCHEMA, ...record })}\n`, { mode: 0o600 });
+  try {
+    linkSync(tmp, path); // create-only and atomic: EEXIST means another record already won
+    return { path, created: true };
+  } catch (e) {
+    if ((e as NodeJS.ErrnoException).code !== "EEXIST") throw e;
+    if (readDecline(commonDir, record.target_identity)) return { path, created: false };
+    renameSync(tmp, path); // the existing file is malformed (reads as absent): the first VALID record replaces it atomically
+    return { path, created: true };
+  } finally {
+    rmSync(tmp, { force: true });
+  }
 }
 
 /** The decline recorded for this exact candidate, or undefined. A malformed file reads as absent. */

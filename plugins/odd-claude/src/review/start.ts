@@ -67,7 +67,8 @@ export type StartRefusalCode =
   | "invalid_lenses"
   | "invalid_risk_assessment"
   | "target_already_acknowledged"
-  | "binding_drift";
+  | "binding_drift"
+  | "authority_error";
 
 export interface Acknowledgement {
   lineage_id: string;
@@ -107,6 +108,13 @@ export type StartOutcome =
   | { status: "refused"; code: StartRefusalCode; message: string; lineage_id?: string };
 
 const refuse = (code: StartRefusalCode, message: string, extra: { lineage_id?: string } = {}): StartOutcome => ({ status: "refused", code, message, ...extra });
+/** The snapshot target a start/status/run input freezes. */
+export function snapshotTargetOf(input: { target?: StartTarget; projection?: Projection }): SnapshotTarget {
+  const t = input.target ?? { kind: "current-changes" as const };
+  if (t.kind === "current-changes") return { kind: "current-changes", projection: input.projection ?? "workspace" };
+  return t.committedOnly === true ? { kind: "base-diff", baseRef: t.baseRef } : { kind: "base-workspace-overlay", baseRef: t.baseRef };
+}
+
 const LEVELS: readonly string[] = ["low", "medium", "high"];
 
 function snapshotTarget(input: StartInput): { target: SnapshotTarget; targetArgs: string[] } | string {
@@ -115,13 +123,13 @@ function snapshotTarget(input: StartInput): { target: SnapshotTarget; targetArgs
   if (t.kind === "current-changes") {
     const projection = input.projection ?? "workspace";
     if (projection !== "workspace" && projection !== "staged") return "projection must be workspace or staged";
-    return { target: { kind: "current-changes", projection }, targetArgs: ["--target", "current-changes"] };
+    return { target: snapshotTargetOf({ target: { kind: "current-changes" }, projection }), targetArgs: ["--target", "current-changes"] };
   }
   if (t.kind === "base-diff") {
     if (typeof t.baseRef !== "string" || t.baseRef.trim() === "") return "base-diff needs a non-empty baseRef";
     const args = ["--target", "base-diff", "--base-ref", t.baseRef];
-    if (t.committedOnly === true) return { target: { kind: "base-diff", baseRef: t.baseRef }, targetArgs: [...args, "--committed-only", "true"] };
-    return { target: { kind: "base-workspace-overlay", baseRef: t.baseRef }, targetArgs: args };
+    const target = snapshotTargetOf({ target: { kind: "base-diff", baseRef: t.baseRef, committedOnly: t.committedOnly === true } });
+    return { target, targetArgs: t.committedOnly === true ? [...args, "--committed-only", "true"] : args };
   }
   return "target kind must be current-changes or base-diff";
 }
@@ -215,6 +223,7 @@ export async function startReview(input: StartInput): Promise<StartOutcome> {
   const existing = findLineage(commonDir, snapshot.identity, snapshot.projection);
   if (existing.live) return { status: "started", result: resultFrom(existing.live, snapshot, assessment, "replayed") };
   if (existing.burned) return refuse("target_already_acknowledged", "this candidate was already reviewed and acknowledged", { lineage_id: existing.burned.lineage_id });
+  if (existing.unreadable !== undefined) return refuse("authority_error", `lineage ${existing.unreadable} cannot be read safely; no new review is opened until it is repaired`, { lineage_id: existing.unreadable });
 
   const needsConsent = assessment.level !== "low";
   if (needsConsent && input.consent === "relay") {
@@ -251,6 +260,7 @@ export async function startReview(input: StartInput): Promise<StartOutcome> {
     const again = findLineage(commonDir, snapshot.identity, snapshot.projection);
     if (again.live) return { status: "started", result: resultFrom(again.live, snapshot, assessment, "replayed") };
     if (again.burned) return refuse("target_already_acknowledged", "this candidate was already reviewed and acknowledged", { lineage_id: again.burned.lineage_id });
+    if (again.unreadable !== undefined) return refuse("authority_error", `lineage ${again.unreadable} cannot be read safely; no new review is opened until it is repaired`, { lineage_id: again.unreadable });
     for (let attempt = 0; ; attempt++) {
       const lineageId = (input.randomLineage ?? newLineage)();
       const started = startTransition({

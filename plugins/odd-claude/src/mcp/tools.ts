@@ -18,13 +18,12 @@ import { completeReview } from "../review/capture.js";
 import { decodeBinding, encodeAckEnvelope, encodeCaptureEnvelope, encodeStartEnvelope } from "../review/contract.js";
 import { consentBinding, REVIEW_CONTRACT, REVIEW_TOOL_NAMES, type ReviewToolName } from "../review/consent.js";
 import { readReviewMode, ReviewModeError, type ModeOptions } from "../review/mode.js";
-import { assessCandidate } from "../review/risk.js";
+import { assessCandidate, assessRisk } from "../review/risk.js";
 import {
-  pendingCorrectionLineage, runReview, snapshotTargetFor, validateReviewerOptions, type ReviewRunInput, type ReviewRunOutcome, type RunDeps,
+  pendingCorrectionLineage, runReview, validateReviewerOptions, type ReviewRunInput, type ReviewRunOutcome, type RunDeps,
 } from "../review/run.js";
 import { resolveRepository, SnapshotError } from "../review/snapshot.js";
-import { startReview, type RiskAssessor, type StartInput, type StartTarget } from "../review/start.js";
-import { assessRisk } from "../review/risk.js";
+import { snapshotTargetOf, startReview, type RiskAssessor, type StartInput, type StartTarget } from "../review/start.js";
 import { reviewStatus, type StatusAcknowledgement } from "../review/status.js";
 import type { Projection } from "../review/state.js";
 import {
@@ -187,7 +186,7 @@ async function guardedStart(a: Args, ctx: ToolContext, consent: StartInput["cons
   const l = lensesOf(a);
   if (typeof l === "string") return invalid(l);
   const cwd = cwdOf(a, ctx);
-  const pending = pendingCorrectionLineage(cwd, snapshotTargetFor({ target: t.target, projection: t.projection }));
+  const pending = pendingCorrectionLineage(cwd, snapshotTargetOf({ target: t.target, projection: t.projection }));
   if (pending !== undefined) {
     if ("unreadable" in pending) {
       return fail("authority_error", `lineage ${pending.unreadable} cannot be read safely; no new review is opened until it is repaired`, { lineage_id: pending.unreadable });
@@ -309,7 +308,7 @@ export const TOOLS: readonly ToolDefinition[] = [
     async run(a, ctx) {
       const t = targetOf(a);
       if (typeof t === "string") return invalid(t);
-      const r = assessCandidate(cwdOf(a, ctx), snapshotTargetFor({ target: t.target, projection: t.projection }));
+      const r = assessCandidate(cwdOf(a, ctx), snapshotTargetOf({ target: t.target, projection: t.projection }));
       if (r.status === "not_due") return ok({ outcome: "not_due", reason: r.reason, review_due: false, kind: r.kind, projection: r.projection });
       return ok({
         outcome: "assessed", risk_level: r.risk, review_due: r.reviewDue, reasons: r.reasons, evidence: r.evidence.slice(0, 50), ...(r.focusLens !== undefined ? { focus_lens: r.focusLens } : {}),
@@ -402,7 +401,7 @@ export const TOOLS: readonly ToolDefinition[] = [
     description:
       "Admit exactly one reviewer slot issued by review_status or a review_run forecast: pass its exact binding. First returns a forecast; call again with reviewer_run_acknowledged and its reviewer_run_binding to run the reviewer. Stops after the batch (never acknowledges or follows another transition); the result may carry the one-shot approval acknowledgement.",
     inputSchema: object(
-      { cwd: CWD, ...TARGET_PROPS, lineage_id: { type: "string", pattern: LINEAGE_PATTERN }, binding: { type: "string", minLength: 1, maxLength: 8192 }, ...RUN_PROPS },
+      { ...TARGET_PROPS, lineage_id: { type: "string", pattern: LINEAGE_PATTERN }, binding: { type: "string", minLength: 1, maxLength: 8192 }, ...RUN_PROPS },
       ["lineage_id", "binding"],
     ),
     annotations: writes,
@@ -413,7 +412,7 @@ export const TOOLS: readonly ToolDefinition[] = [
     description:
       "Admit one complete reviewer group: pass lineage_id and ALL bindings of the current collect, in order, never partial. First returns a forecast; call again with reviewer_run_acknowledged and its reviewer_run_binding. Reviewers run concurrently (bounded) and are admitted in order; stops after the batch.",
     inputSchema: object(
-      { cwd: CWD, ...TARGET_PROPS, lineage_id: { type: "string", pattern: LINEAGE_PATTERN }, bindings: { type: "array", items: { type: "string", minLength: 1, maxLength: 8192 }, minItems: 1, maxItems: 8, uniqueItems: true }, ...RUN_PROPS },
+      { ...TARGET_PROPS, lineage_id: { type: "string", pattern: LINEAGE_PATTERN }, bindings: { type: "array", items: { type: "string", minLength: 1, maxLength: 8192 }, minItems: 1, maxItems: 8, uniqueItems: true }, ...RUN_PROPS },
       ["lineage_id", "bindings"],
     ),
     annotations: writes,
@@ -432,13 +431,8 @@ export const TOOLS: readonly ToolDefinition[] = [
     annotations: writes,
     async run(a, ctx) {
       const repo = resolveRepository(cwdOf(a, ctx));
-      try {
-        const res = await acknowledgeApproved(repo.commonDir, { lineage: str(a, "lineage_id")!, target: str(a, "target_identity")!, expectedRevision: str(a, "expected_revision")!, token: str(a, "token")! });
-        return ok(encodeAckEnvelope(res));
-      } catch (e) {
-        if (e instanceof AckRefusedError) return fail(e.code, e.message);
-        throw e;
-      }
+      const res = await acknowledgeApproved(repo.commonDir, { lineage: str(a, "lineage_id")!, target: str(a, "target_identity")!, expectedRevision: str(a, "expected_revision")!, token: str(a, "token")! });
+      return ok(encodeAckEnvelope(res));
     },
   },
   {

@@ -15,6 +15,8 @@ import {
   reviewerArguments,
   runReviewer,
   sanitizeReviewerEnv,
+  killLiveReviewers,
+  liveReviewerPids,
   type ReviewerPromptInput,
 } from "./runner.js";
 import { grandchildPid, isAlive, makeFakeClaude, reap, type FakeBehavior, type FakeRecord } from "./runner-fake.testkit.js";
@@ -709,4 +711,35 @@ test("group signals: one SIGKILL to -pid per run, none after ESRCH, none on clos
   } finally {
     reap(escaped);
   }
+});
+
+test("killLiveReviewers kills the process group of a tracked live reviewer child", async () => {
+  const { spawn } = await import("node:child_process");
+  const child = spawn(process.execPath, ["-e", "setInterval(()=>{},1000)"], { detached: true, stdio: "ignore" });
+  const pid = child.pid!;
+  try {
+    liveReviewerPids.add(pid);
+    assert.equal(isAlive(pid), true);
+    killLiveReviewers();
+    await new Promise((res) => child.once("exit", res));
+    assert.equal(isAlive(pid), false);
+    killLiveReviewers(); // already gone: ESRCH is ignored
+  } finally {
+    liveReviewerPids.delete(pid);
+    reap(pid);
+  }
+});
+
+test("runReviewer tracks its child pid while running and forgets it after exit", async () => {
+  const dir = track(mkdtempSync(join(tmpdir(), "odd-sleepy-")));
+  const binary = join(dir, "claude");
+  writeFileSync(binary, "#!/bin/sh\nexec /bin/sleep 30\n");
+  chmodSync(binary, 0o755);
+  const before = liveReviewerPids.size;
+  const pending = runReviewer("p", { claudePath: binary, env: { PATH: "/usr/bin:/bin" } });
+  while (liveReviewerPids.size === before) await new Promise((res) => setTimeout(res, 20));
+  assert.equal(liveReviewerPids.size, before + 1);
+  killLiveReviewers();
+  await pending;
+  assert.equal(liveReviewerPids.size, before);
 });

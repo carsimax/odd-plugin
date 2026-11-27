@@ -9,6 +9,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { pluginRootDir } from "../review/consent.js";
+import { killLiveReviewers } from "../review/runner.js";
 import { callTool, fail, TOOL_BY_NAME, TOOLS } from "./tools.js";
 import { inflightKey, isMain, isObject, MAX_LINE_BYTES, rpcError, runMain, serveLines, SUPPORTED_PROTOCOLS } from "./server-core.js";
 export { MAX_LINE_BYTES, SUPPORTED_PROTOCOLS };
@@ -101,5 +102,9 @@ export function serve(input, output, opts = {}) {
     const server = new ReviewServer(opts);
     return serveLines(input, output, (m) => server.handle(m));
 }
-if (isMain(import.meta.url))
+if (isMain(import.meta.url)) {
+    // Reviewer children are detached process groups: without this they would outlive a stopped server.
+    for (const sig of ["SIGTERM", "SIGINT"])
+        process.once(sig, () => { killLiveReviewers(); process.exit(0); });
     runMain(() => serve(process.stdin, process.stdout));
+}

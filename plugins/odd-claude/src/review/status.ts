@@ -16,7 +16,7 @@ import { assessRisk } from "./risk.js";
 import { digestPaths, freezeSnapshot, snapshotIdentity, type Snapshot, type SnapshotOptions, type SnapshotTarget } from "./snapshot.js";
 import { blockingFindingIds, MAX_ADMITTED_ROLE_RESULTS, MAX_CORRECTION_ATTEMPTS, type Projection, type StateRecord } from "./state.js";
 import { findLineage, hasRole, lensesPending } from "./lineage.js";
-import type { StartTarget } from "./start.js";
+import { snapshotTargetOf, type StartTarget } from "./start.js";
 
 export const REVIEWER_RESULT_SCHEMA = "odd-claude.review-reviewer-result/v1";
 
@@ -100,11 +100,10 @@ function mapTarget(opts: StatusOptions): { target: SnapshotTarget; targetArgs: T
   const t = opts.target ?? { kind: "current-changes" as const };
   if (t.kind === "current-changes") {
     const projection = opts.projection ?? "workspace";
-    return { target: { kind: "current-changes", projection }, targetArgs: [arg("target", "current-changes"), arg("projection", projection)] };
+    return { target: snapshotTargetOf({ target: t, projection }), targetArgs: [arg("target", "current-changes"), arg("projection", projection)] };
   }
   const args = [arg("target", "base-diff"), arg("base_ref", t.baseRef)];
-  if (t.committedOnly === true) return { target: { kind: "base-diff", baseRef: t.baseRef }, targetArgs: [...args, arg("committed_only", "true")] };
-  return { target: { kind: "base-workspace-overlay", baseRef: t.baseRef }, targetArgs: args };
+  return { target: snapshotTargetOf({ target: t }), targetArgs: t.committedOnly === true ? [...args, arg("committed_only", "true")] : args };
 }
 
 const REPAIR = {
@@ -310,6 +309,7 @@ export function reviewStatus(cwd: string, opts: StatusOptions = {}): StatusEnvel
 
   if (scan.consumed === true || lineage.burned) return finish(stop("target_already_acknowledged"), snapshot, snapshot.identity, consumed, lineage.burned ?? lineage.live);
   if (lineage.live) return finish(liveHead(commonDir, lineage.live, opts.acknowledgement, { root, targetArgs }), snapshot, snapshot.identity, consumed, lineage.live);
+  if (lineage.unreadable !== undefined) return finish(stop("corrupted_or_unverifiable_authority"), snapshot, snapshot.identity, consumed);
   if (readDecline(commonDir, snapshot.identity)) return finish(stop("consent_declined"), snapshot, snapshot.identity, consumed);
 
   const risk = assessRisk(snapshot, frozen.repository, opts).risk_level;
