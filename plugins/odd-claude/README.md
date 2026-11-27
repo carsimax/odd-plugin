@@ -2,6 +2,17 @@
 
 A global Claude Code harness (installed with a TUI, no longer a plugin) that ports the ODD harness of gentle-shell (MIT) <!-- odd-check: allow --> to Claude Code. **v2.0** adds native receipt-driven review (RDD) on top of **v1.0** (the parity release): the ODD persona, orchestrator rules, agents, skills, native integrations, advisory review and lifecycle hooks. Apart from the RDD Stop settle reminder, which can block only when you turn RDD on (it is off by default), the plugin ships **no deny/ask/block hook and no `permissions.deny` by default** (user decision, v0.5, amended for v2): its hooks only add context. Coordinator mode and the admission rules are prompt text, not enforcement; otherwise the only enforcement is Claude Code's native permission system (see [Permission modes](#permission-modes)). The plugin collects no data and sends nothing anywhere.
 
+## What's new in 9.1.1
+
+Not breaking:
+
+- Installer: user state is kept through plugin migration; `restore` backs up first; a corrupt settings-state file now fails with a readable error; extras you turn off are undone; retired hook events are removed; install and update take a lock so two runs cannot overlap.
+- Update and release: `odd-claude update` checks the latest release live instead of a cached answer; a prerelease rolls back in the right order; the release script now requires `--bundle` and a clean `dist/`.
+- Hooks: sessions started with `--agent` are no longer treated as subagents; session files older than 7 days are pruned; the token count no longer guesses from file size.
+- CLI: failures print an error and exit non-zero; `/odd-setup` and `/odd-status` honour `CLAUDE_CONFIG_DIR`; `/odd-status` now reports the hooks registered in `settings.json`.
+- Review: an unreadable lineage stops the review instead of duplicating it; reviewer processes are killed when the server stops.
+- Existing installs get the fixes on `odd-claude update`.
+
 ## What's new in 9.1.0
 
 Not breaking:
