@@ -57,17 +57,17 @@ Phase 1 deliverable (`docs/roadmap-v10-python.md`, section 6). One row per `*.sp
 | `src/installer/plugin-migration.spec.ts` | port | plugin to installer migration; extended for v9 to v10 | 6 |
 | `src/installer/statusline.spec.ts` | port | statusLineChanges and payload shipping; script cases moved to contract/statusline.spec.ts | 6 |
 | `src/installer/update.spec.ts` | port | update flow | 6 |
-| `src/lib/advisory-notices.spec.ts` | port | advisory notice state and text | 2 |
-| `src/lib/agent-status.spec.ts` | port | agent status persisted format; fixtures in test-fixtures/contracts/ | 2 |
-| `src/lib/agents-frontmatter.spec.ts` | port | agent files must match profile roles (PRESETS); follows the profiles module | 2 |
+| `src/lib/advisory-notices.spec.ts` | port | advisory notice state and text; ports with phase 3: imported by hooks | 3 |
+| `src/lib/agent-status.spec.ts` | port | agent status persisted format; fixtures in test-fixtures/contracts/; ports with phase 3: imported by hooks | 3 |
+| `src/lib/agents-frontmatter.spec.ts` | port | agent files must match profile roles (PRESETS); follows the profiles module; ports with phase 6: no code importer; checks the agent files the installer ships | 6 |
 | `src/lib/agents-guard.spec.ts` | port | payload text check over agents Markdown; language-agnostic, keep as-is | 8 |
 | `src/lib/background-subagents.spec.ts` | port | background subagent policy | 2 |
-| `src/lib/codegraph-trust.spec.ts` | port | trusted-project list persistence | 2 |
-| `src/lib/codegraph.spec.ts` | port | codegraph helper logic | 2 |
+| `src/lib/codegraph-trust.spec.ts` | port | trusted-project list persistence; ports with phase 3: used by session-integrations (hooks) and CLIs | 3 |
+| `src/lib/codegraph.spec.ts` | port | codegraph helper logic; ports with phase 3: used by session-integrations (hooks) and CLIs | 3 |
 | `src/lib/context-backstop.spec.ts` | port | context backstop thresholds and transcript tail | 2 |
 | `src/lib/context.spec.ts` | port | session context lines | 2 |
 | `src/lib/debug-feedback.spec.ts` | port | payload text check pinning rule phrases; language-agnostic, keep as-is | 8 |
-| `src/lib/deny-profile.spec.ts` | port | deny profile logic | 2 |
+| `src/lib/deny-profile.spec.ts` | port | deny profile logic; ports with phase 5: imported only by cli/setup | 5 |
 | `src/lib/doctor.spec.ts` | port | doctor checks; checks python and uv instead of node | 2 |
 | `src/lib/feature-doc.spec.ts` | port | feature-document lint | 2 |
 | `src/lib/lock.spec.ts` | port | lock semantics: exclusive create, stale takeover, owned release | 2 |
@@ -78,23 +78,23 @@ Phase 1 deliverable (`docs/roadmap-v10-python.md`, section 6). One row per `*.sp
 | `src/lib/quota.spec.ts` | port | quota logic | 2 |
 | `src/lib/retro-skill.spec.ts` | port | payload text check over the retro skill; language-agnostic, keep as-is | 8 |
 | `src/lib/retro.spec.ts` | port | retro transcript analysis; CLI case moved to contract/retro.spec.ts | 2 |
-| `src/lib/root.spec.ts` | port | plugin root resolution | 2 |
+| `src/lib/root.spec.ts` | port | plugin root resolution; ports with phase 3: imported by hooks/stop | 3 |
 | `src/lib/rule-hardening.spec.ts` | port | payload text check pinning rule phrases; language-agnostic, keep as-is | 8 |
 | `src/lib/scratch.spec.ts` | port | scratch directory creation and sweep; fixtures in test-fixtures/contracts/ | 2 |
-| `src/lib/session-integrations.spec.ts` | port | session integration detection | 2 |
-| `src/lib/setup-safety.spec.ts` | port | setup safety checks | 2 |
-| `src/lib/setup.spec.ts` | port | setup settings logic | 2 |
+| `src/lib/session-integrations.spec.ts` | port | session integration detection; ports with phase 3: imported by hooks/session-start | 3 |
+| `src/lib/setup-safety.spec.ts` | port | setup safety checks; ports with phase 5: tests setup-fs, used only by cli/setup | 5 |
+| `src/lib/setup.spec.ts` | port | setup settings logic; ports with phase 5: imported by cli/setup and the installer; CLI is earlier | 5 |
 | `src/lib/simplify.spec.ts` | port | repo-state checks that removed files and README text stay absent; language-agnostic, keep as-is; hook-runner case moved to contract/simplify.spec.ts | 8 |
-| `src/lib/skill-registry.spec.ts` | port | skill registry writer | 2 |
+| `src/lib/skill-registry.spec.ts` | port | skill registry writer; ports with phase 3: used by session-integrations (hooks) and the CLI | 3 |
 | `src/lib/skills-guard.spec.ts` | port | payload text check over skills Markdown; language-agnostic, keep as-is | 8 |
 | `src/lib/state.spec.ts` | port | session and plugin state persistence; fixtures in test-fixtures/contracts/ | 2 |
 | `src/lib/stats.spec.ts` | port | stats aggregation | 2 |
-| `src/lib/status.spec.ts` | port | status computation | 2 |
+| `src/lib/status.spec.ts` | port | status computation; ports with phase 3: imported by hooks/stop, the CLI and MCP | 3 |
 | `src/lib/subagents.spec.ts` | port | subagent recording | 2 |
 | `src/lib/system.spec.ts` | port | reads installed_plugins.json under CLAUDE_CONFIG_DIR | 2 |
-| `src/lib/terminal.spec.ts` | port | terminal title escape sequence | 2 |
+| `src/lib/terminal.spec.ts` | port | terminal title escape sequence; ports with phase 3: imported by hooks | 3 |
 | `src/lib/verify-calibration.spec.ts` | port | payload text check pinning rule phrases; language-agnostic, keep as-is | 8 |
-| `src/lib/version.spec.ts` | port | plugin version lookup; reads pyproject.toml instead of package.json | 2 |
+| `src/lib/version.spec.ts` | port | plugin version lookup; reads pyproject.toml instead of package.json; ports with phase 5: imported only by cli/status and cli/doctor | 5 |
 | `src/mcp/concise.spec.ts` | port | review_status detail concise and full output and schema | 4 |
 | `src/mcp/review-server.spec.ts` | port | in-process protocol, schema validation and review_assess cases; stdio cases moved to contract/review-server.spec.ts | 4 |
 | `src/review/ack.spec.ts` | port | acknowledgement logic | 4 |
