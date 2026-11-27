@@ -2,7 +2,7 @@
 // ODD_CLAUDE_DATA, CLAUDE_PLUGIN_DATA (plugin distribution), then `${ODD_CLAUDE_HOME:-~/.odd-claude}/data`;
 // never under ~/.claude directly.
 // Layout: <dataDir>/sessions/<session>.json  and  <dataDir>/logs/hooks.log
-import { appendFileSync, chmodSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { appendFileSync, chmodSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, isAbsolute, join } from "node:path";
 import { acquireLock, releaseOwnedLock } from "./lock.js";
@@ -78,6 +78,18 @@ export function writePluginState(name, data, opts = {}) {
     const body = { version: STATE_SCHEMA_VERSION, sessionId: name, data };
     atomicWriteFile(join(resolveDataDir(opts), `${safeSegment(name)}.json`), JSON.stringify(body, null, 2) + "\n");
 }
+/** Throws when the file exists with another schema version: an update would silently destroy it. Missing or corrupt files pass. */
+function assertSchemaMatches(path) {
+    let version;
+    try {
+        version = JSON.parse(readFileSync(path, "utf8")).version;
+    }
+    catch {
+        return;
+    }
+    if (version !== undefined && version !== STATE_SCHEMA_VERSION)
+        throw new Error(`session state has schema version ${String(version)}; refusing to overwrite`);
+}
 const LOCK_WAIT_MS = 1000;
 const LOCK_STALE_MS = 2000;
 function sleepSync(ms) {
@@ -97,6 +109,7 @@ export function updateSessionState(sessionId, update, opts = {}) {
         sleepSync(3 + Math.random() * 5); // jitter so backing-off takeover claimants do not retry in lockstep
     }
     try {
+        assertSchemaMatches(sessionStatePath(sessionId, opts));
         const current = readSessionState(sessionId, opts);
         const next = update(current);
         if (next !== current)
@@ -116,6 +129,30 @@ export function logError(message, opts = {}) {
     }
     catch {
         // logging must never break a hook
+    }
+}
+const PRUNE_AGE_MS = 7 * 86_400_000;
+/** Deletes `*.json` in sessions/ and status/ older than 7 days (mtime), never `keepId`'s nor one with a `.lock` beside it. Never throws. */
+export function pruneStaleSessionFiles(keepId, opts = {}, now = Date.now()) {
+    for (const sub of ["sessions", "status"]) {
+        try {
+            const dir = join(resolveDataDir(opts), sub);
+            for (const f of readdirSync(dir)) {
+                if (!f.endsWith(".json") || f === `${safeSegment(keepId)}.json`)
+                    continue;
+                try {
+                    const p = join(dir, f);
+                    if (now - statSync(p).mtimeMs > PRUNE_AGE_MS && !existsSync(`${p}.lock`))
+                        rmSync(p, { force: true });
+                }
+                catch {
+                    // vanished or unreadable: leave it
+                }
+            }
+        }
+        catch {
+            // missing dir
+        }
     }
 }
 /** Session ids (file stems) newest first by mtime; [] when the dir is missing. Read-only. */

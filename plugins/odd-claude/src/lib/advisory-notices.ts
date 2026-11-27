@@ -1,5 +1,5 @@
 // S4a/S4b: advisory-only PreToolUse notices. Output is only hookSpecificOutput.additionalContext; nothing here ever
-// stops a tool call, and any error yields no output (fail open). Subagent calls carry agent_id/agent_type.
+// stops a tool call, and any error yields no output (fail open). Subagent calls carry agent_id (agent_type alone only means a `--agent` session).
 import { readDelegationMode } from "./context.js";
 import type { StateOptions } from "./state.js";
 
@@ -17,7 +17,7 @@ export function advisoryNotice(input: unknown, opts: StateOptions = {}): string 
   try {
     if (input === null || typeof input !== "object") return undefined;
     const i = input as Record<string, unknown>;
-    const subagent = Boolean(i.agent_id || i.agent_type);
+    const subagent = Boolean(i.agent_id);
     if (typeof i.tool_name !== "string") return undefined;
     if (WRITE_TOOLS.has(i.tool_name)) return !subagent && readDelegationMode(opts) === "full" ? COORDINATOR_WRITE_NOTICE : undefined;
     if (i.tool_name === "Bash" && subagent) {

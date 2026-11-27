@@ -24,10 +24,6 @@ export function lockPath(dataDir: string, kind: string, project: string): string
   return join(dataDir, "locks", `${kind}-${key}.lock`);
 }
 
-export function pidAlive(pid: number): boolean {
-  return isPidAlive(pid);
-}
-
 function parseLock(raw: string): { pid: number; startedAt: number } | undefined {
   try {
     const v = JSON.parse(raw) as { pid?: unknown; startedAt?: unknown };
@@ -176,7 +172,7 @@ function createExclusive(path: string, content: string): boolean {
 /** True when this caller now owns the lock; false when a live, fresh lock is held. Never throws. */
 export function acquireLock(path: string, pid: number, opts: LockOptions): boolean {
   const now = opts.now ?? Date.now;
-  const alive = opts.isAlive ?? pidAlive;
+  const alive = opts.isAlive ?? isPidAlive;
   try {
     mkdirSync(join(path, ".."), { recursive: true });
     for (let attempt = 0; attempt < 2; attempt++) {

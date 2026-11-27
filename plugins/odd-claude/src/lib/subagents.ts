@@ -43,7 +43,7 @@ function update(input: Input, opts: StateOptions, label: string, change: (list: 
 
 /** Never throws; a failure is logged and the hook stays silent. */
 export function recordSubagentStart(input: Input, opts: StateOptions = {}, now: number = Date.now()): void {
-  update(input, opts, "SubagentStart", (list) => [...list.filter((r) => r.id !== input.agent_id), { id: input.agent_id as string, type: typeOf(input), startedAt: now }]);
+  update(input, opts, "SubagentStart", (list) => [...list.filter((r) => r.id !== input.agent_id), { ...list.find((r) => r.id === input.agent_id), id: input.agent_id as string, type: typeOf(input), startedAt: now }]);
 }
 
 export function recordSubagentStop(input: Input, opts: StateOptions = {}, now: number = Date.now()): void {

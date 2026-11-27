@@ -28,7 +28,7 @@ function update(input, opts, label, change) {
 }
 /** Never throws; a failure is logged and the hook stays silent. */
 export function recordSubagentStart(input, opts = {}, now = Date.now()) {
-    update(input, opts, "SubagentStart", (list) => [...list.filter((r) => r.id !== input.agent_id), { id: input.agent_id, type: typeOf(input), startedAt: now }]);
+    update(input, opts, "SubagentStart", (list) => [...list.filter((r) => r.id !== input.agent_id), { ...list.find((r) => r.id === input.agent_id), id: input.agent_id, type: typeOf(input), startedAt: now }]);
 }
 export function recordSubagentStop(input, opts = {}, now = Date.now()) {
     update(input, opts, "SubagentStop", (list) => {

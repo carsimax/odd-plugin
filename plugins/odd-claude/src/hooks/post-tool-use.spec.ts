@@ -7,7 +7,6 @@ import { execFileSync, spawn, spawnSync } from "node:child_process";
 import { runHook } from "./run.js";
 import { writeDelegationMode } from "../lib/context.js";
 import { readSessionState } from "../lib/state.js";
-import { estimateContextTokens } from "../lib/context-backstop.js";
 
 const runJs = new URL("./run.js", import.meta.url).pathname;
 
@@ -77,26 +76,25 @@ test("UserPromptSubmit resets the counters so the notice can fire again next tur
   }
 });
 
-test("tracks Read/Grep/Glob/WebFetch/WebSearch and the global and legacy plugin codegraph MCP names; ignores other tools", () => {
+test("tracks Read/Grep/Glob/WebFetch/WebSearch and the global codegraph MCP name; ignores other tools", () => {
   const dir = tmp();
   try {
-    const names = ["Read", "Grep", "Glob", "WebFetch", "WebSearch", "mcp__codegraph__codegraph_explore", "mcp__plugin_odd-claude_codegraph__codegraph_query"];
+    const names = ["Read", "Grep", "Glob", "WebFetch", "WebSearch", "mcp__codegraph__codegraph_explore"];
     for (const tool_name of names) post(dir, { tool_name, tool_response: "x" });
-    for (const tool_name of ["Bash", "Edit", "Agent", "mcp__other__thing", "mcp__codegraphx__a"]) post(dir, { tool_name, tool_response: "x" });
+    for (const tool_name of ["Bash", "Edit", "Agent", "mcp__other__thing", "mcp__codegraphx__a", "mcp__plugin_odd-claude_codegraph__codegraph_query"]) post(dir, { tool_name, tool_response: "x" });
     assert.equal((readSessionState("s1", { dataDir: dir }).exploration as { lookups: number }).lookups, names.length);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
 });
 
-test("main thread only: agent_id / agent_type calls neither count nor notify", () => {
+test("main thread only: agent_id calls neither count nor notify; agent_type alone is the main thread", () => {
   const dir = tmp();
   try {
-    for (let i = 0; i < 6; i++) {
-      assert.equal(post(dir, read({ agent_id: "a1" })).stdout, "");
-      assert.equal(post(dir, read({ agent_type: "odd-explore" })).stdout, "");
-    }
+    for (let i = 0; i < 6; i++) assert.equal(post(dir, read({ agent_id: "a1", agent_type: "odd-explore" })).stdout, "");
     assert.equal(readSessionState("s1", { dataDir: dir }).exploration, undefined);
+    post(dir, read({ agent_type: "odd-explore" }));
+    assert.equal((readSessionState("s1", { dataDir: dir }).exploration as { lookups: number }).lookups, 1);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
@@ -169,14 +167,12 @@ test("context backstop: threshold is overridable by env, missing transcript is s
   }
 });
 
-test("context backstop: without usage lines it estimates from the file size (bytes / 4)", () => {
+test("context backstop: without usage lines nothing is estimated and nothing fires", () => {
   const dir = tmp();
   try {
     const p = join(dir, "big.jsonl");
     writeFileSync(p, '{"type":"user","message":"' + "a".repeat(700_000) + '"}\n');
-    assert.ok(estimateContextTokens(p)! > 150_000);
-    assert.match(ctxOf(post(dir, { tool_name: "Bash", transcript_path: p })), /Context backstop/);
-    assert.equal(estimateContextTokens(join(dir, "nope")), undefined);
+    assert.equal(post(dir, { tool_name: "Bash", transcript_path: p }).stdout, "");
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
@@ -258,9 +254,7 @@ test("backstop reads only the transcript tail: an old usage line is not used", (
   try {
     const p = join(dir, "big.jsonl");
     writeFileSync(p, JSON.stringify(usageLine(999_999)) + "\n" + "p".repeat(640_000) + "\n");
-    const out = ctxOf(post(dir, { tool_name: "Bash", tool_response: "x", transcript_path: p }));
-    assert.match(out, /estimated at 160,0\d\d tokens/);
-    assert.ok(!out.includes("999,999"));
+    assert.equal(post(dir, { tool_name: "Bash", tool_response: "x", transcript_path: p }).stdout, "");
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

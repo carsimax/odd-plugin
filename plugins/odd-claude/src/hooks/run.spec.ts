@@ -140,6 +140,7 @@ test("no event emits a decision for a destructive Bash input (PreToolUse, Stop, 
       session_id: "s",
       tool_name: "Bash",
       tool_input: { command: "rm -rf / && git reset --hard" },
+      agent_id: "a1",
       agent_type: "odd-claude:odd-worker",
     });
     for (const event of ["PreToolUse", "Stop", "SubagentStop", "PostToolUse"]) {

@@ -104,6 +104,21 @@ test("corrupt or wrong-version state reads as empty", () => {
   }
 });
 
+test("updateSessionState refuses to overwrite a file of another schema version", () => {
+  const dir = tmp();
+  try {
+    const p = sessionStatePath("s1", { dataDir: dir });
+    mkdirSync(join(p, ".."), { recursive: true });
+    const raw = JSON.stringify({ version: STATE_SCHEMA_VERSION + 1, sessionId: "s1", data: { keep: 1 } });
+    writeFileSync(p, raw);
+    assert.throws(() => updateSessionState("s1", (s) => ({ ...s, x: 1 }), { dataDir: dir }));
+    assert.equal(readFileSync(p, "utf8"), raw);
+    assert.equal(existsSync(`${p}.lock`), false);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test("updateSessionState merges via the updater", () => {
   const dir = tmp();
   try {

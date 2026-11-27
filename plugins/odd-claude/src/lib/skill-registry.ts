@@ -7,6 +7,7 @@ import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { basename, dirname, join, resolve, parse } from "node:path";
+import { truthy } from "./codegraph.js";
 import { oddClaudeRoot } from "./root.js";
 import { atomicWriteFile } from "./state.js";
 
@@ -192,10 +193,6 @@ export function renderRegistry(cwd: string, sources: string[], entries: SkillEnt
     ...entries.map((e) => `| \`${cell(e.name)}\` | ${cell(e.description)} | ${e.scope} | \`${cell(e.path)}\` |`),
     "",
   ].join("\n");
-}
-
-function truthy(v: string | undefined): boolean {
-  return v === "1" || v === "true" || v === "yes" || v === "on";
 }
 
 function readOptional(path: string): Buffer | undefined {

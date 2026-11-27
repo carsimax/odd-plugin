@@ -47,9 +47,15 @@ test("S4a: a main-thread Edit, Write or NotebookEdit with coordinator mode ON yi
   });
 });
 
+test("S13: agent_type alone (session started with --agent) is the main thread, not a subagent", async () => {
+  await withDir(async (dir) => {
+    assert.match(advisory(pre(dir, edit("Edit", { agent_type: "odd-worker" }))), /odd-worker/);
+  });
+});
+
 test("S4a: silent with coordinator mode OFF, from a subagent, for other tools, and for non-object input", async () => {
   await withDir(async (dir) => {
-    for (const extra of [{ agent_id: "a1" }, { agent_type: "odd-worker" }]) {
+    for (const extra of [{ agent_id: "a1" }, { agent_id: "a1", agent_type: "odd-worker" }]) {
       assert.deepEqual(pre(dir, edit("Edit", extra)), silent);
       assert.deepEqual(await preLazy(dir, edit("Edit", extra)), silent);
     }
