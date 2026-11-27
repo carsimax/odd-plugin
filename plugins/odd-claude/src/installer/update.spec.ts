@@ -234,6 +234,22 @@ describe("extractPayload", () => {
   });
 });
 
+describe("listVersions", () => {
+  it("sorts a prerelease before its release, numerically", () => {
+    const h = makeHome();
+    for (const v of ["1.0.0", "1.0.0-rc.1", "1.10.0", "1.9.0"]) mkdirSync(join(h.paths.versionsDir, v), { recursive: true });
+    assert.deepEqual(listVersions(h.paths), ["1.0.0-rc.1", "1.0.0", "1.9.0", "1.10.0"]);
+  });
+});
+
+describe("listVersions prerelease order", () => {
+  it("orders prerelease identifiers per semver", () => {
+    const h = makeHome();
+    for (const v of ["1.0.0-rc.10", "1.0.0-rc.2", "1.0.0-beta", "1.0.0"]) mkdirSync(join(h.paths.versionsDir, v), { recursive: true });
+    assert.deepEqual(listVersions(h.paths), ["1.0.0-beta", "1.0.0-rc.2", "1.0.0-rc.10", "1.0.0"]);
+  });
+});
+
 describe("runUpdate", () => {
   it("downloads, verifies, extracts and installs the newer version", async () => {
     const h = installed("1.0.0");
@@ -250,6 +266,23 @@ describe("runUpdate", () => {
     assert.ok(existsSync(join(h.paths.claudeDir, "output-styles", "odd.md")));
     assert.deepEqual(calls.map((c) => `${c.cmd} ${c.args[0]}`), ["gh release", "gh release", "tar -tzf", "tar -tvzf", "tar -xzf"]);
     assert.equal(readdirSync(h.paths.oddHome).some((n) => n.startsWith(".update")), false, "temp download dir removed");
+  });
+
+  it("ignores a fresh release cache: an explicit update always asks gh", async () => {
+    const h = installed("1.0.0");
+    writeOddState(join(h.paths.oddHome, "settings-state.json"), { update: { checkedAt: Date.now(), repo: RELEASE_REPO, version: "1.0.0", assets: [] } });
+    const r = await runUpdate({ runner: ghRunner(makeRelease("2.0.0")).runner, env: {}, paths: h.paths, selection });
+    assert.equal(r.status, "updated");
+    assert.equal(r.to, "2.0.0");
+  });
+
+  it("dry run also ignores a fresh release cache", async () => {
+    const h = installed("1.0.0");
+    writeOddState(join(h.paths.oddHome, "settings-state.json"), { update: { checkedAt: Date.now(), repo: RELEASE_REPO, version: "1.0.0", assets: [] } });
+    const { runner, calls } = ghRunner(makeRelease("2.0.0"));
+    const r = await runUpdate({ runner, env: {}, paths: h.paths, selection, dryRun: true });
+    assert.equal(r.to, "2.0.0");
+    assert.ok(calls.some((c) => c.cmd === "gh" && c.args[0] === "release" && c.args[1] === "view"));
   });
 
   it("reports up to date and downloads nothing", async () => {

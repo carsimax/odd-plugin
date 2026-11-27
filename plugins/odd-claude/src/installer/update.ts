@@ -1,16 +1,19 @@
 // Update from GitHub Releases through an injected runner (gh, tar): check, download + verify, extract, install, roll back.
 import { existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync } from "node:fs";
 import { join } from "node:path";
-import { atomicWriteFile, sha256 } from "./manifest.js";
+import { atomicWriteFile } from "../lib/state.js";
+import { sha256 } from "./manifest.js";
 import { readOddState, writeOddState } from "./managed-settings.js";
 import type { McpRunner, RunResult } from "./mcp.js";
 import type { ModelSelection } from "./models.js";
-import { activeVersion, assertVersion, listVersions, switchCurrent } from "./payload.js";
+import { activeVersion, assertVersion, compareVersions, listVersions, switchCurrent } from "./payload.js";
 import type { InstallPaths } from "./paths.js";
 import { runInstall, type RunInstallResult } from "./plan.js";
 import { BUNDLE_ASSET, CHECKSUMS_ASSET, payloadAsset, releaseRepo, releaseTag } from "./release.js";
 
 type Env = Record<string, string | undefined>;
+
+export { compareVersions };
 
 export const UPDATE_TTL_MS = 6 * 3600_000;
 
@@ -23,36 +26,6 @@ async function run(runner: McpRunner, cmd: string, args: string[], env?: NodeJS.
 }
 const text = (r: RunResult): string => (r.stderr.trim() || r.stdout.trim() || `exit ${r.code}`).split("\n")[0]!;
 const errMsg = (e: unknown): string => (e instanceof Error ? e.message : String(e));
-
-/** Semver compare without dependencies: numeric core, a prerelease ranks below its release. Returns -1, 0 or 1. */
-export function compareVersions(a: string, b: string): -1 | 0 | 1 {
-  const split = (v: string): { core: number[]; pre: string[] } => {
-    const [main = "", ...rest] = v.replace(/^v/, "").split("+")[0]!.split("-");
-    return { core: main.split(".").map((n) => Number.parseInt(n, 10) || 0), pre: rest.length ? rest.join("-").split(".") : [] };
-  };
-  const x = split(a);
-  const y = split(b);
-  for (let i = 0; i < Math.max(x.core.length, y.core.length); i++) {
-    const d = (x.core[i] ?? 0) - (y.core[i] ?? 0);
-    if (d !== 0) return d > 0 ? 1 : -1;
-  }
-  if (x.pre.length === 0 && y.pre.length === 0) return 0;
-  if (x.pre.length === 0) return 1;
-  if (y.pre.length === 0) return -1;
-  for (let i = 0; i < Math.max(x.pre.length, y.pre.length); i++) {
-    const p = x.pre[i];
-    const q = y.pre[i];
-    if (p === q) continue;
-    if (p === undefined) return -1;
-    if (q === undefined) return 1;
-    const pn = /^\d+$/.test(p);
-    const qn = /^\d+$/.test(q);
-    if (pn && qn) return Number(p) > Number(q) ? 1 : -1;
-    if (pn !== qn) return pn ? -1 : 1;
-    return p > q ? 1 : -1;
-  }
-  return 0;
-}
 
 export type CheckResult = { ok: true; version: string; assets: string[] } | { ok: false; error: string };
 
@@ -219,7 +192,7 @@ function readOptional(path: string): Buffer | null {
 export async function runUpdate(opts: UpdateOptions): Promise<UpdateResult> {
   const { runner, env, paths, selection } = opts;
   const from = activeVersion(paths);
-  const latest = await checkLatest(runner, env, { statePath: statePathOf(paths), force: opts.force, now: opts.now });
+  const latest = await checkLatest(runner, env, { statePath: statePathOf(paths), force: true, now: opts.now });
   if (!latest.ok) return { status: "check-failed", from, error: latest.error };
   const to = latest.version;
   if (!opts.force && from !== null && compareVersions(to, from) <= 0) return { status: "up-to-date", from, to };

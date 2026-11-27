@@ -1,7 +1,9 @@
 #!/usr/bin/env node
-// Builds the release assets: odd-claude-payload-<version>.tar.gz, optionally odd-claude.mjs, and checksums.txt.
-// Usage: node scripts/release-payload.mjs --version <v> --out <dir> [--bundle <path>]
+// Builds the release assets: odd-claude-payload-<version>.tar.gz, odd-claude.mjs, and checksums.txt.
+// Usage: node scripts/release-payload.mjs --version <v> --out <dir> --bundle <path>
+// Runs the build first and fails when dist/ differs from the committed one.
 // The tarball is written in-process (ustar + gzip) so it is byte-identical across platforms and runs.
+import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { copyFileSync, existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
@@ -30,7 +32,15 @@ try {
 } catch (e) {
   fail(e.message);
 }
-if (bundle && !existsSync(bundle)) fail(`bundle not found: ${bundle}`);
+if (!bundle) fail("--bundle <path> is required");
+if (!existsSync(bundle)) fail(`bundle not found: ${bundle}`);
+
+// A stale committed dist/ must never ship: rebuild, then require git to see no modified, deleted or untracked file under dist/.
+const sh = (cmd, a) => spawnSync(cmd, a, { cwd: root, encoding: "utf8", shell: process.platform === "win32" });
+const built = sh("npm", ["run", "build"]);
+if (built.status !== 0) fail(`build failed:\n${built.stdout}${built.stderr}`);
+const drift = sh("git", ["status", "--porcelain", "--", "dist"]);
+if (drift.status !== 0 || drift.stdout.trim() !== "") fail("dist/ is stale: run `npm run build` and commit dist/");
 
 const top = `odd-claude-${version}`;
 
@@ -94,10 +104,8 @@ const assets = [];
 const tarName = `odd-claude-payload-${version}.tar.gz`;
 writeFileSync(join(out, tarName), tgz);
 assets.push(tarName);
-if (bundle) {
-  copyFileSync(bundle, join(out, "odd-claude.mjs"));
-  assets.push("odd-claude.mjs");
-}
+copyFileSync(bundle, join(out, "odd-claude.mjs"));
+assets.push("odd-claude.mjs");
 const sums = assets.sort().map((n) => `${createHash("sha256").update(readFileSync(join(out, n))).digest("hex")}  ${n}\n`);
 writeFileSync(join(out, "checksums.txt"), sums.join(""));
 process.stdout.write(`${assets.map((n) => join(out, n)).join("\n")}\n${join(out, "checksums.txt")}\n`);

@@ -17,6 +17,36 @@ export interface PayloadFile {
 /** Payload-relative posix path -> file. */
 export type PayloadTree = Map<string, PayloadFile>;
 
+/** Semver compare without dependencies: numeric core, a prerelease ranks below its release. Returns -1, 0 or 1. */
+export function compareVersions(a: string, b: string): -1 | 0 | 1 {
+  const split = (v: string): { core: number[]; pre: string[] } => {
+    const [main = "", ...rest] = v.replace(/^v/, "").split("+")[0]!.split("-");
+    return { core: main.split(".").map((n) => Number.parseInt(n, 10) || 0), pre: rest.length ? rest.join("-").split(".") : [] };
+  };
+  const x = split(a);
+  const y = split(b);
+  for (let i = 0; i < Math.max(x.core.length, y.core.length); i++) {
+    const d = (x.core[i] ?? 0) - (y.core[i] ?? 0);
+    if (d !== 0) return d > 0 ? 1 : -1;
+  }
+  if (x.pre.length === 0 && y.pre.length === 0) return 0;
+  if (x.pre.length === 0) return 1;
+  if (y.pre.length === 0) return -1;
+  for (let i = 0; i < Math.max(x.pre.length, y.pre.length); i++) {
+    const p = x.pre[i];
+    const q = y.pre[i];
+    if (p === q) continue;
+    if (p === undefined) return -1;
+    if (q === undefined) return 1;
+    const pn = /^\d+$/.test(p);
+    const qn = /^\d+$/.test(q);
+    if (pn && qn) return Number(p) > Number(q) ? 1 : -1;
+    if (pn !== qn) return pn ? -1 : 1;
+    return p > q ? 1 : -1;
+  }
+  return 0;
+}
+
 const VERSION_RE = /^[0-9A-Za-z][0-9A-Za-z._+-]*$/;
 
 export function assertVersion(version: string): void {
@@ -121,30 +151,13 @@ export function stagePayload(sourceRoot: string, paths: InstallPaths, version: s
   return { versionDir, changed };
 }
 
-function versionParts(v: string): (number | string)[] {
-  return v.split(/[.+-]/).map((p) => (/^\d+$/.test(p) ? Number(p) : p));
-}
-
-/** Staged versions, oldest first (numeric-aware). */
+/** Staged versions, oldest first (semver order: a prerelease ranks below its release). */
 export function listVersions(paths: InstallPaths): string[] {
   if (!existsSync(paths.versionsDir)) return [];
   return readdirSync(paths.versionsDir, { withFileTypes: true })
     .filter((e) => e.isDirectory() && !e.name.startsWith("."))
     .map((e) => e.name)
-    .sort((a, b) => {
-      const pa = versionParts(a);
-      const pb = versionParts(b);
-      for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
-        const x = pa[i];
-        const y = pb[i];
-        if (x === y) continue;
-        if (x === undefined) return -1;
-        if (y === undefined) return 1;
-        if (typeof x === "number" && typeof y === "number") return x - y;
-        return String(x).localeCompare(String(y));
-      }
-      return 0;
-    });
+    .sort(compareVersions);
 }
 
 /** Version `current` points at, or null when there is no (valid) link. */
