@@ -26,7 +26,7 @@ function makeRepo() {
   const plugin = join(root, "plugins", "odd-claude");
   mkdirSync(join(plugin, "scripts"), { recursive: true });
   for (const s of ["release-payload.mjs", "bump-version.mjs"]) if (existsSync(join(SCRIPTS, s))) cpSync(join(SCRIPTS, s), join(plugin, "scripts", s));
-  cpSync(join(PLUGIN_ROOT, "dist", "installer"), join(plugin, "dist", "installer"), { recursive: true });
+  for (const d of ["installer", "lib"]) cpSync(join(PLUGIN_ROOT, "dist", d), join(plugin, "dist", d), { recursive: true });
   const put = (rel: string, body: string, mode = 0o644) => {
     mkdirSync(dirname(join(plugin, rel)), { recursive: true });
     writeFileSync(join(plugin, rel), body, { mode });
@@ -34,9 +34,11 @@ function makeRepo() {
   put("agents/odd-worker.md", "worker ${CLAUDE_PLUGIN_ROOT}\n");
   put("support/a/b.md", "doc\n");
   put("hooks/run.sh", "#!/bin/sh\n", 0o755);
-  put("package.json", '{\n  "name": "odd-claude",\n  "version": "5.3.0"\n}\n');
+  put("package.json", '{\n  "name": "odd-claude",\n  "version": "5.3.0",\n  "scripts": { "build": "node -e 0" }\n}\n');
   put("node_modules/x/index.js", "never shipped\n");
   put("src/not-shipped.ts", "x\n");
+  // The release script requires dist/ to match what the build produces, judged by git.
+  for (const g of [["init", "-q"], ["add", "dist"], ["-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", "dist"]]) spawnSync("git", g, { cwd: plugin });
   return { root, plugin, put, done: () => rmSync(root, { recursive: true, force: true }) };
 }
 
@@ -77,15 +79,90 @@ test("release-payload: tarball has the versioned top dir with only PAYLOAD_ITEMS
   }
 });
 
-test("release-payload: deterministic output; without a bundle only the tarball is listed", () => {
+test("release-payload: deterministic output", () => {
   const r = makeRepo();
   try {
     const a = join(r.root, "a");
     const b = join(r.root, "b");
-    assert.equal(run(r.plugin, "scripts/release-payload.mjs", ["--version", "1.0.0", "--out", a]).status, 0);
-    assert.equal(run(r.plugin, "scripts/release-payload.mjs", ["--version", "1.0.0", "--out", b]).status, 0);
+    const bundle = join(r.root, "b.mjs");
+    writeFileSync(bundle, "// bundle\n");
+    assert.equal(run(r.plugin, "scripts/release-payload.mjs", ["--version", "1.0.0", "--out", a, "--bundle", bundle]).status, 0);
+    assert.equal(run(r.plugin, "scripts/release-payload.mjs", ["--version", "1.0.0", "--out", b, "--bundle", bundle]).status, 0);
     assert.equal(readFileSync(join(a, "checksums.txt"), "utf8"), readFileSync(join(b, "checksums.txt"), "utf8"));
-    assert.equal(readFileSync(join(a, "checksums.txt"), "utf8").trim().split("\n").length, 1);
+  } finally {
+    r.done();
+  }
+});
+
+test("release-payload: --bundle is required, writing nothing", () => {
+  const r = makeRepo();
+  try {
+    const out = join(r.root, "out");
+    const res = run(r.plugin, "scripts/release-payload.mjs", ["--version", "1.0.0", "--out", out]);
+    assert.notEqual(res.status, 0);
+    assert.match(res.stderr, /--bundle <path> is required/);
+    assert.equal(existsSync(out), false);
+  } finally {
+    r.done();
+  }
+});
+
+test("release-payload: fails when dist/ has an untracked new file", () => {
+  const r = makeRepo();
+  try {
+    const out = join(r.root, "out");
+    const bundle = join(r.root, "b.mjs");
+    writeFileSync(bundle, "// bundle\n");
+    writeFileSync(join(r.plugin, "dist", "installer", "new-file.js"), "// new\n");
+    const res = run(r.plugin, "scripts/release-payload.mjs", ["--version", "1.0.0", "--out", out, "--bundle", bundle]);
+    assert.notEqual(res.status, 0);
+    assert.match(res.stderr, /dist\/ is stale/);
+    assert.equal(existsSync(out), false);
+  } finally {
+    r.done();
+  }
+});
+
+test("release-payload: --bundle without a value is rejected, writing nothing", () => {
+  const r = makeRepo();
+  try {
+    const out = join(r.root, "out");
+    const res = run(r.plugin, "scripts/release-payload.mjs", ["--version", "1.0.0", "--out", out, "--bundle"]);
+    assert.notEqual(res.status, 0);
+    assert.match(res.stderr, /--bundle <path> is required/);
+    assert.equal(existsSync(out), false);
+  } finally {
+    r.done();
+  }
+});
+
+test("release-payload: a failing build stops the release, writing nothing", () => {
+  const r = makeRepo();
+  try {
+    const out = join(r.root, "out");
+    const bundle = join(r.root, "b.mjs");
+    writeFileSync(bundle, "// bundle\n");
+    r.put("package.json", '{\n  "name": "odd-claude",\n  "version": "5.3.0",\n  "scripts": { "build": "node -e \\"process.exit(2)\\"" }\n}\n');
+    const res = run(r.plugin, "scripts/release-payload.mjs", ["--version", "1.0.0", "--out", out, "--bundle", bundle]);
+    assert.notEqual(res.status, 0);
+    assert.match(res.stderr, /build failed/);
+    assert.equal(existsSync(out), false);
+  } finally {
+    r.done();
+  }
+});
+
+test("release-payload: fails when the build leaves dist/ different from what is committed", () => {
+  const r = makeRepo();
+  try {
+    const out = join(r.root, "out");
+    const bundle = join(r.root, "b.mjs");
+    writeFileSync(bundle, "// bundle\n");
+    writeFileSync(join(r.plugin, "dist", "installer", "update.js"), "// stale\n");
+    const res = run(r.plugin, "scripts/release-payload.mjs", ["--version", "1.0.0", "--out", out, "--bundle", bundle]);
+    assert.notEqual(res.status, 0);
+    assert.match(res.stderr, /dist\/ is stale/);
+    assert.equal(existsSync(out), false);
   } finally {
     r.done();
   }

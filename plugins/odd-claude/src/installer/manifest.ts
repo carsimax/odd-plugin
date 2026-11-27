@@ -1,7 +1,7 @@
 // Ownership ledger: which files under the Claude dir this installer wrote, with the hash it wrote.
 import { createHash } from "node:crypto";
-import { chmodSync, existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
-import { dirname } from "node:path";
+import { existsSync, readFileSync } from "node:fs";
+import { atomicWriteFile } from "../lib/state.js";
 import type { ModelSelection } from "./models.js";
 
 export const MANIFEST_VERSION = 1;
@@ -21,18 +21,8 @@ export function sha256(data: Buffer | string): string {
   return createHash("sha256").update(data).digest("hex");
 }
 
-export function atomicWriteFile(path: string, data: Buffer | string, mode = 0o644): void {
-  mkdirSync(dirname(path), { recursive: true });
-  const tmp = `${path}.tmp-${process.pid}-${Math.random().toString(36).slice(2)}`;
-  try {
-    writeFileSync(tmp, data, { mode });
-    chmodSync(tmp, mode);
-    renameSync(tmp, path);
-  } catch (e) {
-    rmSync(tmp, { force: true });
-    throw e;
-  }
-}
+// Re-exported so installer modules keep importing it from here.
+export { atomicWriteFile };
 
 /** Null when absent. A present but unreadable ledger throws: guessing could overwrite or delete user files. */
 export function readManifest(path: string): Manifest | null {
