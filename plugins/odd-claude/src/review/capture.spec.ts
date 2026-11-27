@@ -331,7 +331,7 @@ test("planCorrection returns the frozen severe findings, the budget and the allo
     if (!plan.ok) return;
     assert.deepEqual(plan.findings.map((f) => f.id), ["R1-1"]);
     assert.equal(plan.budget, 15);
-    assert.equal(plan.attempts_remaining, 1);
+    assert.equal(plan.attempts_remaining, 2);
     assert.deepEqual(plan.allowed_paths, ["a.txt"]);
     assert.equal(plan.ledger_hash, correction.record.ledger_hash);
     assert.equal(plan.revision, correction.revision);
@@ -368,25 +368,85 @@ test("correction within budget and scope -> validating -> approved with a token"
   }
 });
 
-test("validator that fails either check escalates; the single correction is consumed (second correction refused)", async () => {
-  for (const over of [{ original_criteria: { passed: false, evidence: ["still broken"] } }, { correction_regression: { passed: false, evidence: ["broke b"], regressions: [{ location: "a.txt:3", claim: "new bug", proof_refs: ["a.txt:3"] }] } }]) {
+const FAIL_CRITERIA = { original_criteria: { passed: false, evidence: ["still broken"] } };
+const FAIL_REGRESSION = { correction_regression: { passed: false, evidence: ["broke b"], regressions: [{ location: "a.txt:3", claim: "new bug", proof_refs: ["a.txt:3"] }] } };
+
+test("a validator that fails either check reopens the second correction; its failure escalates and a third is refused", async () => {
+  for (const over of [FAIL_CRITERIA, FAIL_REGRESSION]) {
     const { fx, lineage, correction } = await toCorrection();
     try {
-      const corrected = editA(fx, A_CHANGED.replace("one\n", "ONE\n"));
-      const v = good(await beginCorrectionValidation(fx.repository, lineage, correction.revision, corrected));
-      const s = good(await captureValidatorResult(fx.commonDir, lineage, v.revision, { result: validatorResult(v.record, over) }));
-      assert.equal(s.state, "escalated");
-      assert.equal(s.next, "escalated");
-      assert.equal(s.ackToken, undefined);
-      assert.match(s.record.escalation_reason!, /targeted validator/);
-      // no second correction, from any angle
+      const first = editA(fx, A_CHANGED.replace("one\n", "ONE\n"));
+      const v1 = good(await beginCorrectionValidation(fx.repository, lineage, correction.revision, first));
+      const reopened = good(await captureValidatorResult(fx.commonDir, lineage, v1.revision, { result: validatorResult(v1.record, over), correctionCandidateTree: first.candidateTree }));
+      assert.equal(reopened.state, "correction_required");
+      assert.equal(reopened.next, "correction_required");
+      assert.equal(reopened.ackToken, undefined);
+      assert.equal(reopened.record.correction_attempts, 1);
+      assert.equal(reopened.record.target_identity, first.identity, "the failed correction is the lineage's candidate");
+      assert.equal(reopened.record.original_target_identity, correction.record.target_identity);
+      assert.equal(reopened.record.admitted_role_results.some((e) => e.role === "validator"), false);
+      assert.deepEqual(reopened.record.fix_finding_ids, correction.record.fix_finding_ids);
+      assert.equal(reopened.record.correction_target_identity, undefined);
+      const plan = planCorrection(fx.commonDir, lineage);
+      assert.equal(plan.ok && plan.attempts_remaining, 1);
+
+      // an unchanged candidate is still no correction
+      refused(await beginCorrectionValidation(fx.repository, lineage, reopened.revision, first), "correction_unavailable");
+
+      const second = editA(fx, A_CHANGED.replace("one\n", "UNO\n"));
+      const v2 = good(await beginCorrectionValidation(fx.repository, lineage, reopened.revision, second));
+      assert.equal(v2.state, "validating");
+      assert.equal(v2.record.correction_attempts, 2);
+      const s2 = good(await captureValidatorResult(fx.commonDir, lineage, v2.revision, { result: validatorResult(v2.record, over), correctionCandidateTree: second.candidateTree }));
+      assert.equal(s2.state, "escalated");
+      assert.equal(s2.next, "escalated");
+      assert.equal(s2.ackToken, undefined);
+      assert.match(s2.record.escalation_reason!, /targeted validator/);
+      assert.equal(s2.record.correction_attempts, 2);
+      assert.equal(s2.record.original_target_identity, correction.record.target_identity, "the first reviewed candidate stays the history");
+      // no third correction, from any angle
       refused(planCorrection(fx.commonDir, lineage), "illegal_state");
-      const again = editA(fx, A_CHANGED.replace("one\n", "UNO\n"));
-      refused(await beginCorrectionValidation(fx.repository, lineage, s.revision, again), "illegal_state");
-      unchanged(fx, lineage, s.revision);
+      refused(await beginCorrectionValidation(fx.repository, lineage, s2.revision, editA(fx, A_CHANGED.replace("one\n", "EINS\n"))), "illegal_state");
+      unchanged(fx, lineage, s2.revision);
     } finally {
       fx.cleanup();
     }
+  }
+});
+
+test("the second correction can be approved; the approval binds the second corrected candidate", async () => {
+  const { fx, lineage, correction } = await toCorrection();
+  try {
+    const first = editA(fx, A_CHANGED.replace("one\n", "ONE\n"));
+    const v1 = good(await beginCorrectionValidation(fx.repository, lineage, correction.revision, first));
+    const reopened = good(await captureValidatorResult(fx.commonDir, lineage, v1.revision, { result: validatorResult(v1.record, FAIL_CRITERIA), correctionCandidateTree: first.candidateTree }));
+    const second = editA(fx, A_CHANGED.replace("one\n", "UNO\n"));
+    const v2 = good(await beginCorrectionValidation(fx.repository, lineage, reopened.revision, second));
+    const done = good(await captureValidatorResult(fx.commonDir, lineage, v2.revision, { result: validatorResult(v2.record), correctionCandidateTree: second.candidateTree }));
+    assert.equal(done.state, "approved");
+    assert.match(done.ackToken!, TOKEN);
+    assert.equal(done.record.correction_attempts, 2);
+    assert.equal(done.record.target_identity, second.identity);
+    assert.equal(done.record.candidate_tree, second.candidateTree);
+    assert.equal(done.record.original_target_identity, correction.record.target_identity);
+  } finally {
+    fx.cleanup();
+  }
+});
+
+test("a lineage persisted before the change (one attempt, validating) still reads and resumes to approved", async () => {
+  const { fx, lineage, correction } = await toCorrection();
+  try {
+    const corrected = editA(fx, A_CHANGED.replace("one\n", "ONE\n"));
+    const v = good(await beginCorrectionValidation(fx.repository, lineage, correction.revision, corrected));
+    const stored = readState(fx.commonDir, lineage);
+    assert.equal(stored.correction_attempts, 1);
+    assert.equal(stored.state, "validating");
+    const done = good(await captureValidatorResult(fx.commonDir, lineage, v.revision, { result: validatorResult(stored), correctionCandidateTree: corrected.candidateTree }));
+    assert.equal(done.state, "approved");
+    assert.equal(done.record.correction_attempts, 1);
+  } finally {
+    fx.cleanup();
   }
 });
 
@@ -639,7 +699,7 @@ test("previewCorrectionValidation writes nothing; captureCorrectionResult record
     assert.equal(s.record.admitted_role_results.filter((e) => e.role === "validator").length, 1);
     refused(await captureCorrectionResult(fx.repository, lineage, s.revision, corrected, { result }), "illegal_state");
 
-    // a failing validator escalates in the same single transition (the attempt is consumed with it)
+    // a failing validator reopens the second correction in the same single transition (the attempt is consumed with it)
     const other = await toCorrection();
     try {
       const c2 = editA(other.fx, A_CHANGED.replace("one\n", "ONE\n"));
@@ -647,9 +707,10 @@ test("previewCorrectionValidation writes nothing; captureCorrectionResult record
       assert.equal(p2.ok, true);
       if (!p2.ok) return;
       const e = good(await captureCorrectionResult(other.fx.repository, other.lineage, other.correction.revision, c2, { result: validatorResult(p2.record, { original_criteria: { passed: false, evidence: ["still broken"] } }) }));
-      assert.equal(e.state, "escalated");
+      assert.equal(e.state, "correction_required");
       assert.equal(e.record.correction_attempts, 1);
-      assert.equal(e.record.target_identity, readState(other.fx.commonDir, other.lineage).target_identity);
+      assert.equal(e.record.target_identity, c2.identity);
+      assert.equal(readState(other.fx.commonDir, other.lineage).revision, e.revision);
     } finally {
       other.fx.cleanup();
     }

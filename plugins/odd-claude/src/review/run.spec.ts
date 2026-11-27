@@ -12,7 +12,7 @@ import { readDecline } from "./consent.js";
 import { REVIEWER_ARGUMENTS, reviewerArguments, type RunOutcome, type RunReviewerOptions } from "./runner.js";
 import { clearProfile, setRole, useProfile } from "../lib/profiles.js";
 import { makeFakeClaude, type FakeRecord } from "./runner-fake.testkit.js";
-import { runReview, validateReviewerOptions, MAX_TRANSITIONS, type ReviewRunInput, type ReviewRunOutcome, type RunDeps } from "./run.js";
+import { pendingCorrectionLineage, runReview, validateReviewerOptions, MAX_TRANSITIONS, type ReviewRunInput, type ReviewRunOutcome, type RunDeps } from "./run.js";
 import { startReview, type RiskAssessment, type RiskAssessor } from "./start.js";
 import { listLineages, readReceipt, readState } from "./store.js";
 import { reviewStatus } from "./status.js";
@@ -757,10 +757,24 @@ test("an escalated correction binds the corrected candidate: a run without linea
     const original = stateOf(r, lineage).target_identity;
     writeFileSync(join(r.repo, "a.txt"), "ONE\nTWO\nthree\nfour\nfive\n");
     const f = is(await runReview(input(r, { lineageId: lineage }), deps), "forecast");
-    const esc = is(await runReview(input(r, { lineageId: lineage, reviewerRunAcknowledged: true, reviewerRunBinding: f.reviewer_run_binding }), deps), "stopped");
+    // the first failed validation reopens a second correction on the same lineage (no escalation yet)
+    const reopened = is(await runReview(input(r, { lineageId: lineage, reviewerRunAcknowledged: true, reviewerRunBinding: f.reviewer_run_binding }), deps), "input-required");
+    assert.equal(reopened.lineage_id, lineage);
+    assert.equal(reopened.correction.attempts_remaining, 1);
+    assert.deepEqual(reopened.correction.allowed_paths, ["a.txt"]);
+    const mid = stateOf(r, lineage);
+    assert.equal(mid.state, "correction_required");
+    assert.equal(mid.correction_attempts, 1);
+    assert.equal(mid.original_target_identity, original);
+
+    // the second failed validation escalates
+    writeFileSync(join(r.repo, "a.txt"), "UNO\nTWO\nthree\nfour\nfive\n");
+    const f2 = is(await runReview(input(r, { lineageId: lineage }), deps), "forecast");
+    const esc = is(await runReview(input(r, { lineageId: lineage, reviewerRunAcknowledged: true, reviewerRunBinding: f2.reviewer_run_binding }), deps), "stopped");
     assert.equal(esc.reason_code, "escalated");
     const rec = stateOf(r, lineage);
     assert.equal(rec.state, "escalated");
+    assert.equal(rec.correction_attempts, 2);
     assert.notEqual(rec.target_identity, original);
     assert.equal(rec.original_target_identity, original);
 
@@ -768,7 +782,7 @@ test("an escalated correction binds the corrected candidate: a run without linea
     assert.equal(again.reason_code, "escalated");
     assert.equal(again.lineage_id, lineage);
     assert.deepEqual(listLineages(r.commonDir).lineages, [lineage], "no new review was offered");
-    assert.equal(calls.prompts.length, 2);
+    assert.equal(calls.prompts.length, 3);
     assert.equal(isTargetConsumed(r.commonDir, rec.target_identity).consumed, false);
   });
 });
@@ -958,6 +972,56 @@ test("A2: commit the reviewed work, then correct in the worktree (base == review
     assert.equal(after.original_target_identity, rec.target_identity);
     assert.equal(isTargetConsumed(r.commonDir, closed.target_identity!).status, "consumed");
     assert.equal(isTargetConsumed(r.commonDir, rec.target_identity).status, "not_consumed");
+  });
+});
+
+test("S2: commit the reviewed work, the first correction fails, the second correction on the same base validates (no base drift, lineage still pending)", async () => {
+  await withRepo(async (r) => {
+    const failing: RunDeps = { riskAssessor: assess("medium"), runner: fakeRunner({ findings: { risk: [SEVERE] }, validatorFails: true }).runner };
+    const lineage = await toCorrectionRequired(r, failing);
+    const rec = stateOf(r, lineage);
+    git(r.repo, "commit", "-q", "-am", "reviewed work");
+    writeFileSync(join(r.repo, "a.txt"), FIXED_A);
+    const first = is((await forecastThenRun(r, lineage, failing)).done, "input-required");
+    assert.equal(first.correction.attempts_remaining, 1);
+    const mid = stateOf(r, lineage);
+    assert.equal(mid.state, "correction_required");
+    assert.equal(mid.correction_attempts, 1);
+    assert.equal(mid.original_target_identity, rec.target_identity);
+
+    const passing: RunDeps = { riskAssessor: assess("medium"), runner: fakeRunner().runner };
+    writeFileSync(join(r.repo, "a.txt"), "UNO\nTWO\nthree\nfour\nfive\n");
+    const pending = pendingCorrectionLineage(r.repo, { kind: "current-changes", projection: "workspace" });
+    assert.equal(pending !== undefined && "rec" in pending ? pending.rec.lineage_id : undefined, lineage, "the reopened lineage is still the pending correction");
+    const lineageless = await runReview(input(r), passing);
+    assert.equal(lineageless.lineage_id, lineage, "a run without lineage reports the reopened lineage, never a new review");
+    assert.notEqual(lineageless.outcome, "closed");
+    const closed = is((await forecastThenRun(r, lineage, passing)).done, "closed");
+    const after = stateOf(r, lineage);
+    assert.equal(after.state, "approved");
+    assert.equal(after.correction_attempts, 2);
+    assert.equal(after.original_target_identity, rec.target_identity);
+    assert.equal(after.base_tree, rec.base_tree);
+    assert.equal(isTargetConsumed(r.commonDir, closed.target_identity!).status, "consumed");
+    assert.equal(isTargetConsumed(r.commonDir, rec.target_identity).status, "not_consumed");
+  });
+});
+
+test("S2: a record in validating (attempts 1) resumes and a failing validator reopens the second correction", async () => {
+  await withRepo(async (r) => {
+    const failing: RunDeps = { riskAssessor: assess("medium"), runner: fakeRunner({ findings: { risk: [SEVERE] }, validatorFails: true }).runner };
+    const lineage = await toCorrectionRequired(r, failing);
+    writeFileSync(join(r.repo, "a.txt"), FIXED_A);
+    const frozen = freezeSnapshot(r.repo, { kind: "current-changes", projection: "workspace" });
+    if (frozen.status !== "frozen") throw new Error("not frozen");
+    const began = await beginCorrectionValidation(resolveRepository(r.repo), lineage, stateOf(r, lineage).revision, { candidateTree: frozen.snapshot.candidateTree, identity: frozen.snapshot.identity });
+    assert.equal(began.ok, true);
+    assert.equal(stateOf(r, lineage).state, "validating");
+    const out = is((await forecastThenRun(r, lineage, failing)).done, "input-required");
+    assert.equal(out.correction.attempts_remaining, 1);
+    const rec = stateOf(r, lineage);
+    assert.equal(rec.state, "correction_required");
+    assert.equal(rec.correction_attempts, 1);
   });
 });
 
@@ -1655,4 +1719,30 @@ test("S3 B1 refuter slot view shows resolved route (balanced opus/medium; econom
       });
     });
   }
+});
+
+test("S2: after a reopened correction, a base that is none of base/candidate/original is binding-drift base, nothing written", async () => {
+  await withRepo(async (r) => {
+    const { runner, calls } = fakeRunner({ findings: { risk: [SEVERE] }, validatorFails: true });
+    const deps: RunDeps = { riskAssessor: assess("medium"), runner };
+    const lineage = await toCorrectionRequired(r, deps);
+    git(r.repo, "commit", "-q", "-am", "reviewed work");
+    writeFileSync(join(r.repo, "a.txt"), FIXED_A);
+    is((await forecastThenRun(r, lineage, deps)).done, "input-required");
+    assert.equal(stateOf(r, lineage).correction_attempts, 1);
+
+    // an unrelated change committed on top of the reviewed work moves the base to a tree the lineage never saw
+    writeFileSync(join(r.repo, "b.txt"), "unrelated\n");
+    git(r.repo, "add", "b.txt");
+    git(r.repo, "commit", "-q", "-m", "unrelated");
+    writeFileSync(join(r.repo, "a.txt"), "UNO\nTWO\nthree\nfour\nfive\n");
+    const before = stateOf(r, lineage).revision;
+    const spawned = calls.prompts.length;
+    const out = is(await runReview(input(r, { lineageId: lineage }), deps), "binding-drift");
+    assert.equal(out.field, "base");
+    const after = stateOf(r, lineage);
+    assert.equal(after.revision, before, "nothing written");
+    assert.equal(after.state, "correction_required");
+    assert.equal(calls.prompts.length, spawned, "no reviewer ran");
+  });
 });

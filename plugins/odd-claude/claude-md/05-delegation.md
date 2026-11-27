@@ -16,6 +16,7 @@ Launch them with the Agent tool (SendMessage to continue). They are installed na
 - `odd-explore`: read-only mapping, cheap, launched several at once on distinct fronts.
 - `odd-worker`: bounded writer.
 - `odd-verify`: independent verifier.
+- `odd-plan-check`: blind read-only check of a written feature document before implementation.
 - `odd-jd-fix`, `odd-jd-judge-a`, `odd-jd-judge-b`: Judgment Day (blind double review and fix).
 - `odd-review-*` lens agents are launched only through the `odd-review` tools.
 

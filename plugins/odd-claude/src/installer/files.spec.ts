@@ -24,7 +24,7 @@ test("install plan targets skills, agents and the output style with placeholders
   const plan = planInstallFiles(paths, defaultSelection());
   const byRel = Object.fromEntries(plan.actions.map((a) => [a.rel, a]));
   assert.ok(plan.actions.every((a) => a.action === "create"));
-  assert.deepEqual(Object.keys(byRel).sort(), ["agents/odd-explore.md", "agents/odd-jd-fix.md", "agents/odd-jd-judge-a.md", "agents/odd-jd-judge-b.md", "agents/odd-review-readability.md", "agents/odd-review-reliability.md", "agents/odd-review-resilience.md", "agents/odd-review-risk.md", "agents/odd-verify.md", "agents/odd-worker.md", "output-styles/odd.md", "skills/odd-doctor/SKILL.md", "skills/odd-doctor/refs/extra.md"]);
+  assert.deepEqual(Object.keys(byRel).sort(), ["agents/odd-explore.md", "agents/odd-jd-fix.md", "agents/odd-jd-judge-a.md", "agents/odd-jd-judge-b.md", "agents/odd-plan-check.md", "agents/odd-review-readability.md", "agents/odd-review-reliability.md", "agents/odd-review-resilience.md", "agents/odd-review-risk.md", "agents/odd-verify.md", "agents/odd-worker.md", "output-styles/odd.md", "skills/odd-doctor/SKILL.md", "skills/odd-doctor/refs/extra.md"]);
   assert.equal(byRel["skills/odd-doctor/SKILL.md"]!.target, join(paths.claudeDir, "skills/odd-doctor/SKILL.md"));
   assert.equal(byRel["skills/odd-doctor/SKILL.md"]!.content!.toString(), `---\nname: odd-doctor\n---\nRun \`node "${paths.currentLink}/dist/cli/doctor.js" --data-dir "${paths.dataDir}"\` for \${CLAUDE_SESSION_ID}\n`);
   assert.equal(byRel["output-styles/odd.md"]!.content!.toString(), `style at ${paths.currentLink}/support\n`);
@@ -111,7 +111,7 @@ test("install writes files, manifest and profile state; a second run is all unch
   const { paths, src } = setup();
   const sel = buildSelection("economy");
   const r = runInstall({ paths, sourceRoot: src, version: "1.0.0", selection: sel });
-  assert.equal(r.written.length, 13);
+  assert.equal(r.written.length, 14);
   assert.equal(readFileSync(join(paths.claudeDir, "agents/odd-verify.md"), "utf8").includes("model: haiku"), true);
   const m = readManifest(paths.manifestPath)!;
   assert.equal(m.oddVersion, "1.0.0");
@@ -169,7 +169,7 @@ test("a foreign file at a target path is a conflict and is never overwritten nor
   const r = applyInstallFiles(paths, plan);
   assert.equal(readFileSync(join(paths.claudeDir, "agents/odd-worker.md"), "utf8"), "someone else's agent\n");
   assert.equal(readManifest(paths.manifestPath)!.files["agents/odd-worker.md"], undefined);
-  assert.equal(r.written.length, 12);
+  assert.equal(r.written.length, 13);
   assert.equal(listBackups(paths).length, 0);
 });
 
@@ -206,7 +206,7 @@ test("uninstall removes only hash-matching files, keeps modified ones, data and 
   assert.equal(plan.actions.find((a) => a.rel === "agents/odd-worker.md")!.action, "keep");
   const r = runUninstall({ paths, purge: false });
   assert.deepEqual(r.kept, ["agents/odd-worker.md"]);
-  assert.equal(r.removed.length, 12);
+  assert.equal(r.removed.length, 13);
   assert.equal(readFileSync(join(paths.claudeDir, "agents/odd-worker.md"), "utf8"), "edited\n");
   assert.equal(readFileSync(join(paths.claudeDir, "skills/mine/SKILL.md"), "utf8"), "user skill\n");
   assert.equal(existsSync(join(paths.claudeDir, "skills/odd-doctor")), false);
@@ -246,9 +246,9 @@ test("dry-run plans install and uninstall as serializable actions and writes not
   assert.deepEqual(round, plan.actions);
   assert.ok(plan.actions.some((a) => a.area === "payload" && a.action === "create"));
   assert.ok(plan.actions.some((a) => a.area === "profile" && a.action === "create" && /max/.test(a.detail ?? "")));
-  assert.equal(plan.actions.filter((a) => a.area === "file" && a.action === "create").length, 13);
+  assert.equal(plan.actions.filter((a) => a.area === "file" && a.action === "create").length, 14);
   assert.ok(plan.actions.some((a) => a.area === "manifest"));
-  assert.match(summarizePlan(plan), /13 create/);
+  assert.match(summarizePlan(plan), /14 create/);
   assert.deepEqual(readdirSync(home), [], "nothing written under the home");
   const un = uninstallPlan({ paths, purge: true });
   assert.deepEqual(JSON.parse(JSON.stringify(un.actions)), un.actions);

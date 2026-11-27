@@ -134,7 +134,7 @@ test("backup copies existing targets before a change and restores them", () => {
 test("models: balanced defaults for every role, presets stay selectable, overrides make a custom profile", () => {
   const bal = defaultSelection();
   assert.equal(bal.profile, "balanced");
-  assert.deepEqual(bal.roles, { "odd-explore": "haiku", "odd-verify": "opus", "odd-worker": "sonnet", "odd-jd-fix": "sonnet", "odd-jd-judge-a": "opus", "odd-jd-judge-b": "sonnet", "odd-review-readability": "sonnet", "odd-review-reliability": "sonnet", "odd-review-resilience": "sonnet", "odd-review-risk": "opus" });
+  assert.deepEqual(bal.roles, { "odd-explore": "haiku", "odd-verify": "opus", "odd-plan-check": "sonnet", "odd-worker": "sonnet", "odd-jd-fix": "sonnet", "odd-jd-judge-a": "opus", "odd-jd-judge-b": "sonnet", "odd-review-readability": "sonnet", "odd-review-reliability": "sonnet", "odd-review-resilience": "sonnet", "odd-review-risk": "opus" });
   assert.equal(buildSelection("economy").roles["odd-verify"], "haiku");
   assert.equal(buildSelection("max").roles["odd-worker"], "opus");
   const c = buildSelection("balanced", { "odd-worker": "opus" });

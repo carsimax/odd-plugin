@@ -14,7 +14,7 @@ import { callTool, fail, TOOL_BY_NAME, TOOLS } from "./tools.js";
 import { inflightKey, isMain, isObject, MAX_LINE_BYTES, rpcError, runMain, serveLines, SUPPORTED_PROTOCOLS } from "./server-core.js";
 export { MAX_LINE_BYTES, SUPPORTED_PROTOCOLS };
 export const SERVER_NAME = "odd-review";
-const INSTRUCTIONS = "Review tools of odd-claude. Start with review_status and follow only the next_transition it returns. Consent is the human's: review_start relays the question, review_answer_consent records only their explicit answer. Reviewers cost money: acknowledge a forecast before they run.";
+const INSTRUCTIONS = "Review tools of odd-claude. Start with review_status and follow only the next_transition it returns. Consent is the human's: review_start relays the question, review_answer_consent records only their explicit answer. Reviewers cost money: acknowledge a forecast before they run. Exception: only a standing consent recorded in the feature document `## Log` (asked once per tracked feature, covering only that feature branch's work-unit commit candidates) lets the parent answer consent and acknowledge forecasts for them, never on your own judgment; otherwise the human answers.";
 function serverVersion() {
     try {
         const v = JSON.parse(readFileSync(join(pluginRootDir(), "package.json"), "utf8")).version;

@@ -17,6 +17,7 @@ import {
   inconclusiveFindingIds,
   requireCorrection,
   beginValidation,
+  reopenCorrection,
   approve,
   escalate,
   invalidate,
@@ -218,14 +219,14 @@ test("validateStateRecord: empty lens set only for low risk", () => {
   assert.equal(validateStateRecord(low).ok, true);
 });
 
-test("validateStateRecord: approved needs ack token hash; burned needs approved; attempts <= 1; admitted <= 6", () => {
+test("validateStateRecord: approved needs ack token hash; burned needs approved; attempts <= 2; admitted <= 6", () => {
   const approved = startApproved().record;
   rejects(mutate(approved, (o) => { delete o.approved_ack_token_hash; }), /approved_ack_token_hash/);
   rejects(mutate(approved, (o) => { o.approved_ack_token_hash = "raw-token"; }), /approved_ack_token_hash/);
   rejects(mutate(approved, (o) => { o.burned = true; }), /burn_receipt/);
   rejects(mutate(startReviewing(), (o) => { o.burned = true; o.burn_receipt = sha("9"); }), /burned/);
   rejects(mutate(startReviewing(), (o) => { o.approved_ack_token_hash = sha("9"); }), /approved_ack_token_hash/);
-  rejects(mutate(toValidating(), (o) => { o.correction_attempts = 2; }), /correction_attempts/);
+  rejects(mutate(toValidating(), (o) => { o.correction_attempts = 3; }), /correction_attempts/);
   rejects(
     mutate(startReviewing(), (o) => {
       o.admitted_role_results = Array.from({ length: 7 }, (_, i) => ({ role: "refuter", lens: "reliability", result_hash: sha(String(i)), artifact_digest: sha("f") }));
@@ -664,4 +665,37 @@ test("validateStateRecord rejects a validating record whose correction candidate
   rejects(mutate(withCorrection, (o) => { o.correction_target_identity = o.target_identity; }), /unchanged|equal|same/);
   rejects(mutate(withCorrection, (o) => { o.correction_candidate_tree = o.candidate_tree; }), /unchanged|equal|same/);
   rejects(mutate(v, (o) => { o.correction_target_identity = o.target_identity; }), /unchanged|equal|same/);
+});
+
+const refusalCode = (r: Outcome) => (r.ok ? "ok" : r.refusal.code);
+
+test("reopenCorrection: a failed first validation reopens a correction; the second failure cannot reopen", () => {
+  const v1 = ok(beginValidation(toCorrectionRequired(), { actualCorrectionLines: 2, correctionTargetIdentity: sha("4"), correctionCandidateTree: CORRECTED_TREE, now: T1 })).record;
+  assert.equal(validateStateRecord(v1).ok, true, "a record persisted with one attempt stays valid");
+  const re = ok(reopenCorrection(v1, { now: T1 }));
+  const r1 = re.record;
+  assert.equal(r1.state, "correction_required");
+  assert.equal(r1.correction_attempts, 1);
+  assert.equal(r1.target_identity, sha("4"));
+  assert.equal(r1.candidate_tree, CORRECTED_TREE);
+  assert.equal(r1.original_target_identity, sha("1"));
+  for (const k of ["correction_target_identity", "correction_candidate_tree", "actual_correction_lines"]) assert.equal(k in r1, false, k);
+  assert.deepEqual(r1.fix_finding_ids, v1.fix_finding_ids);
+  assert.deepEqual(validateStateRecord(r1), { ok: true, record: r1 });
+
+  const v2 = ok(beginValidation(r1, { actualCorrectionLines: 1, correctionTargetIdentity: sha("6"), correctionCandidateTree: hex("e", 40), now: T1 })).record;
+  assert.equal(v2.correction_attempts, 2);
+  assert.deepEqual(validateStateRecord(v2), { ok: true, record: v2 });
+  assert.equal(refusalCode(reopenCorrection(v2, { now: T1 })), "illegal_state");
+  const esc = ok(escalate(ok(admitValidatorResult(v2, { resultHash: sha("5"), now: T1 })).record, { reason: "x", now: T1, correctionCandidateTree: hex("e", 40) })).record;
+  assert.equal(esc.original_target_identity, sha("1"), "the first reviewed candidate stays the history");
+  assert.equal(validateStateRecord(esc).ok, true);
+  // a reopened record is not the last attempt's, and a third attempt cannot start a requireCorrection
+  assert.equal(refusalCode(requireCorrection(esc, { now: T1, fixFindingIds: ["R3-001"] })), "illegal_state");
+});
+
+test("reopenCorrection refuses without a corrected tree and from other states", () => {
+  const noTree = ok(beginValidation(toCorrectionRequired(), { actualCorrectionLines: 2, now: T1 })).record;
+  assert.equal(refusalCode(reopenCorrection(noTree, { now: T1 })), "invalid_input");
+  assert.equal(refusalCode(reopenCorrection(startReviewing(), { now: T1 })), "illegal_state");
 });

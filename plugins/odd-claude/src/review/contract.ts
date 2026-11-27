@@ -67,7 +67,7 @@ export const REASON_DESCRIPTIONS: Readonly<Record<ReasonCode, string>> = {
   not_due: "The candidate has no changes, so no review is due",
   escalated: "The review was escalated and needs a human decision",
   target_already_acknowledged: "This candidate was already reviewed and acknowledged",
-  correction_budget_exhausted: "The single correction attempt is already used",
+  correction_budget_exhausted: "The correction attempts are already used",
   role_capacity_exceeded: "The admitted role results are full",
   manual_intervention_required: "Manual intervention is required to proceed",
   invalidated: "The review authority was invalidated; change the candidate and start again",

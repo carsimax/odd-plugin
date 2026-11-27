@@ -47,9 +47,9 @@ The least recommended marker applies only to this oversized menu. An oversized s
 | PR >400, feature must integrate before the default branch | Recommend Feature Branch Chain with tracker; respect the selected delivery strategy. |
 | Generated/vendor/migration diff cannot split cleanly | Report the overage; follow destination policy for any required exception. |
 | No cohesive split fits the budget after one slicing pass | Stop slicing; report the best cohesive split and why it cannot shrink further, then apply the selected delivery strategy and destination policy. |
-| ODD `delivery_strategy` is `ask-on-risk` | When the budget is exceeded, ask once using the menu above for a chain strategy or single PR before the next work-unit commit. |
+| ODD `delivery_strategy` is `ask-on-risk` (explicit choice) | When the budget is exceeded, ask once using the menu above for a chain strategy or single PR before the next work-unit commit. |
 | ODD `delivery_strategy` is `auto-chain` | Ask for a chain strategy only when missing; otherwise use the cached choice. |
-| ODD `delivery_strategy` is `single-pr` | Follow the destination repository's documented contribution/size policy for the overage; do not ask for a chain strategy. |
+| ODD `delivery_strategy` is `single-pr` (default) | Follow the destination repository's documented contribution/size policy for the overage; do not ask for a chain strategy. |
 | ODD `delivery_strategy` is `exception-ok` | Record the explicitly accepted exception under destination policy, including `size:exception` only where applicable; do not ask for a chain strategy. |
 
 ## Execution Steps

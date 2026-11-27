@@ -13,7 +13,7 @@ function tmp(): string {
 
 test("presets cover every odd-claude agent with a whitelisted model and effort", () => {
   assert.deepEqual([...PRESET_NAMES], ["balanced", "economy", "max"]);
-  assert.deepEqual([...PROFILE_ROLES].sort(), ["odd-explore", "odd-jd-fix", "odd-jd-judge-a", "odd-jd-judge-b", "odd-review-readability", "odd-review-reliability", "odd-review-resilience", "odd-review-risk", "odd-verify", "odd-worker"]);
+  assert.deepEqual([...PROFILE_ROLES].sort(), ["odd-explore", "odd-jd-fix", "odd-jd-judge-a", "odd-jd-judge-b", "odd-plan-check", "odd-review-readability", "odd-review-reliability", "odd-review-resilience", "odd-review-risk", "odd-verify", "odd-worker"]);
 });
 
 // S1: the user's table (all effort medium).
@@ -25,6 +25,7 @@ const TABLE: Record<string, string> = {
   "odd-jd-fix": "sonnet",
   "odd-explore": "haiku",
   "odd-verify": "opus",
+  "odd-plan-check": "sonnet",
   "odd-worker": "sonnet",
   "odd-review-readability": "sonnet",
   "odd-review-reliability": "sonnet",
