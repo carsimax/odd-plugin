@@ -1,7 +1,7 @@
 // Compact review state v2 (U4): pure, I/O-free model, validator and transitions.
 //
 // Mirrors the compact state of the reference engine (state enum, 0/1/4 lens policy, floor_two
-// correction budget, one correction attempt, at most six admitted role results, one-shot
+// correction budget, up to two correction attempts, at most six admitted role results, one-shot
 // acknowledgement token) under odd-claude names and hash domains. Nothing here reads a clock, a
 // file or the network: callers pass `now`, and the only entropy is the token generator, which is
 // injectable. Transitions never mutate their input; they return a new sealed record or a typed
@@ -10,7 +10,7 @@ import { randomBytes, timingSafeEqual } from "node:crypto";
 import { domainHash } from "./canonical.js";
 
 export const STATE_SCHEMA = "odd-claude.review-state/v2";
-export const MAX_CORRECTION_ATTEMPTS = 1;
+export const MAX_CORRECTION_ATTEMPTS = 2;
 export const MAX_ADMITTED_ROLE_RESULTS = 6;
 export const MAX_CORRECTION_CHANGED_LINES = 200;
 
@@ -277,7 +277,7 @@ export function validateStateRecord(input: unknown): Validation {
   if (has("actual_correction_lines") && !nonNegInt(o.actual_correction_lines)) errors.push("actual_correction_lines must be a non-negative integer");
   if (has("correction_target_identity")) {
     if (typeof o.correction_target_identity !== "string" || !SHA_RE.test(o.correction_target_identity)) errors.push("correction_target_identity must be sha256:<64 hex>");
-    if (o.correction_attempts !== 1) errors.push("correction_target_identity requires correction_attempts to be 1");
+    if (typeof o.correction_attempts !== "number" || o.correction_attempts < 1) errors.push("correction_target_identity requires correction_attempts to be at least 1");
   }
   if (has("correction_candidate_tree")) {
     if (typeof o.correction_candidate_tree !== "string" || !TREE_RE.test(o.correction_candidate_tree)) errors.push("correction_candidate_tree must be a 40 or 64 hex tree id");
@@ -299,8 +299,18 @@ export function validateStateRecord(input: unknown): Validation {
   if (has("original_target_identity") || has("original_candidate_tree")) {
     if (typeof o.original_target_identity !== "string" || !SHA_RE.test(o.original_target_identity)) errors.push("original_target_identity must be sha256:<64 hex>");
     if (typeof o.original_candidate_tree !== "string" || !TREE_RE.test(o.original_candidate_tree)) errors.push("original_candidate_tree must be a 40 or 64 hex tree id");
-    if (o.state !== "approved" && o.state !== "escalated") errors.push("the original candidate is only kept by an approval or escalation after a correction (original requires the approved or escalated state)");
-    if (!has("correction_target_identity") || !has("correction_candidate_tree")) errors.push("original candidate requires the corrected candidate (correction_target_identity and correction_candidate_tree)");
+    // The original is kept by a settled correction, and across a reopened one: a reopened correction_required (corrected
+    // fields cleared) and the validating of its later attempt (the corrected fields hold the NEW candidate under validation).
+    const reopened = o.state === "correction_required";
+    const laterValidation = o.state === "validating";
+    if (o.state !== "approved" && o.state !== "escalated" && !reopened && !laterValidation) {
+      errors.push("the original candidate is only kept by an approval, an escalation or a reopened correction (original requires the approved, escalated, correction_required or validating state)");
+    }
+    if (reopened) {
+      if (o.correction_attempts === 0 || has("correction_target_identity") || has("correction_candidate_tree")) errors.push("an original candidate on a correction_required record needs spent attempts and no pending corrected candidate");
+    } else if (laterValidation) {
+      if (typeof o.correction_attempts !== "number" || o.correction_attempts < 2) errors.push("an original candidate on a validating record needs a reopened correction (correction_attempts of at least 2)");
+    } else if (!has("correction_target_identity") || !has("correction_candidate_tree")) errors.push("original candidate requires the corrected candidate (correction_target_identity and correction_candidate_tree)");
     else if (o.target_identity !== o.correction_target_identity || o.candidate_tree !== o.correction_candidate_tree) {
       errors.push("target_identity and candidate_tree must be the corrected candidate when the original is kept");
     }
@@ -405,7 +415,7 @@ export function validateStateRecord(input: unknown): Validation {
   // per-state invariants
   const lensAdmitted = selected.every((l) => admitted.some((e) => e.role === "lens" && e.lens === l));
   const hasValidator = admitted.some((e) => e.role === "validator");
-  const attempts = o.correction_attempts;
+  const attempts = o.correction_attempts as number; // shape errors above already reject a non-integer
   const needsComplete = o.state === "correction_required" || o.state === "validating" || o.state === "approved";
   if (needsComplete && !lensAdmitted) errors.push(`${String(o.state)} requires every selected lens result to be admitted`);
   if (o.state === "reviewing") {
@@ -416,11 +426,12 @@ export function validateStateRecord(input: unknown): Validation {
   }
   if (o.state === "correction_required") {
     if (fixIds.length === 0) errors.push("correction_required requires fix_finding_ids");
-    if (attempts !== 0 || has("actual_correction_lines")) errors.push("correction_required precedes the correction attempt");
+    // A reopened correction (a failed validation with attempts left) carries the attempts already spent, never the last allowed one.
+    if (attempts >= MAX_CORRECTION_ATTEMPTS || has("actual_correction_lines")) errors.push("correction_required precedes the correction attempt");
   }
   if (o.state === "validating") {
     if (fixIds.length === 0) errors.push("validating requires fix_finding_ids");
-    if (attempts !== 1) errors.push("validating requires correction_attempts to be 1 (correction_attempts)");
+    if (attempts < 1) errors.push("validating requires correction_attempts to be at least 1 (correction_attempts)");
     if (!nonNegInt(o.actual_correction_lines) || (nonNegInt(o.correction_budget) && o.actual_correction_lines > o.correction_budget)) {
       errors.push("actual_correction_lines must be within correction_budget");
     }
@@ -434,8 +445,8 @@ export function validateStateRecord(input: unknown): Validation {
       return d === "blocking" || d === "inconclusive";
     });
     if (attempts === 0 && (fixIds.length || unresolved)) errors.push("approved without a correction cannot hold severe findings");
-    if (attempts === 1 && !hasValidator) errors.push("approved after a correction requires an admitted validator result");
-    if (attempts === 1 && !nonNegInt(o.actual_correction_lines)) errors.push("approved after a correction requires actual_correction_lines");
+    if (attempts >= 1 && !hasValidator) errors.push("approved after a correction requires an admitted validator result");
+    if (attempts >= 1 && !nonNegInt(o.actual_correction_lines)) errors.push("approved after a correction requires actual_correction_lines");
     if (!has("evidence_hash")) errors.push("approved requires evidence_hash");
   }
   if (o.state !== "validating" && o.state !== "approved" && o.state !== "escalated" && hasValidator) errors.push("validator result requires a validating or later state");
@@ -652,7 +663,7 @@ export interface RequireCorrectionInput extends ClockInput {
   fixFindingIds: string[];
 }
 
-/** Freezes the ledger and opens the single correction phase for the named severe findings. */
+/** Freezes the ledger and opens a correction phase (up to MAX_CORRECTION_ATTEMPTS per lineage) for the named severe findings. */
 export function requireCorrection(record: StateRecord, input: RequireCorrectionInput): Outcome {
   if (record.state !== "reviewing") return refuse("illegal_state", `cannot require a correction from ${record.state}`);
   const now = badNow(input.now);
@@ -666,7 +677,7 @@ export function requireCorrection(record: StateRecord, input: RequireCorrectionI
     const f = record.findings.find((x) => x.id === id);
     if (!f || findingDisposition(f, record.refuted_finding_ids ?? []) !== "blocking") return refuse("invalid_input", `${String(id)} is not a blocking severe finding of this review`);
   }
-  if (record.correction_attempts >= MAX_CORRECTION_ATTEMPTS) return refuse("illegal_state", "the correction attempt is already consumed");
+  if (record.correction_attempts >= MAX_CORRECTION_ATTEMPTS) return refuse("illegal_state", "the correction attempts are already consumed");
   if (record.correction_budget <= 0) return refuse("correction_unavailable", "the correction budget is zero; escalate instead");
   const next = copy(record);
   next.state = "correction_required";
@@ -728,8 +739,9 @@ function adoptCorrected(next: Omit<StateRecord, "revision">, record: StateRecord
   const correctedTree = record.correction_candidate_tree ?? tree;
   if (corrected === undefined || correctedTree === undefined) return false;
   next.correction_candidate_tree = correctedTree;
-  next.original_target_identity = record.target_identity;
-  next.original_candidate_tree = record.candidate_tree;
+  // The first reviewed candidate stays the history across several corrections.
+  next.original_target_identity = record.original_target_identity ?? record.target_identity;
+  next.original_candidate_tree = record.original_candidate_tree ?? record.candidate_tree;
   next.target_identity = corrected;
   next.candidate_tree = correctedTree;
   return true;
@@ -773,6 +785,34 @@ export function approve(record: StateRecord, input: ApproveInput): Outcome<{ ack
   next.approved_ack_token_hash = tokenHashOf(token);
   next.updated_at = input.now;
   return { ok: true, record: seal(next), ackToken: token };
+}
+
+export interface ReopenCorrectionInput extends ClockInput {
+  /** Frozen tree of the corrected candidate that failed validation, for a validating record that does not carry it. */
+  correctionCandidateTree?: string;
+}
+
+/**
+ * A validating correction that failed with attempts left reopens a correction on the same frozen findings. The failed
+ * corrected candidate becomes the lineage's candidate (the next correction is measured and scoped against it). Refused
+ * when no attempt is left or the corrected tree is unknown; the caller then escalates.
+ */
+export function reopenCorrection(record: StateRecord, input: ReopenCorrectionInput): Outcome {
+  if (record.state !== "validating") return refuse("illegal_state", `cannot reopen a correction from ${record.state}`);
+  const now = badNow(input.now);
+  if (now) return now;
+  if (record.correction_attempts >= MAX_CORRECTION_ATTEMPTS) return refuse("illegal_state", "the correction attempts are already consumed");
+  if (input.correctionCandidateTree !== undefined && (typeof input.correctionCandidateTree !== "string" || !TREE_RE.test(input.correctionCandidateTree))) {
+    return refuse("invalid_input", "correctionCandidateTree must be a 40 or 64 hex tree id");
+  }
+  const next = copy(record);
+  if (!adoptCorrected(next, record, input.correctionCandidateTree)) return refuse("invalid_input", "a reopened correction needs the corrected candidate tree (correction_candidate_tree)");
+  next.state = "correction_required";
+  delete next.correction_target_identity;
+  delete next.correction_candidate_tree;
+  delete next.actual_correction_lines;
+  next.updated_at = input.now;
+  return { ok: true, record: seal(next) };
 }
 
 export interface ReasonInput extends ClockInput {

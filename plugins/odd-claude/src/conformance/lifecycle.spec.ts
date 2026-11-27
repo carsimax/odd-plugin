@@ -167,7 +167,7 @@ test("correction: a severe finding asks for a fix; the validator approves the CO
     const asked = await runToOutcome(c, { lineage_id: started.lineage_id });
     assert.equal(asked.outcome, "input-required");
     assert.deepEqual(asked.correction.allowed_paths, ["a.txt"]);
-    assert.equal(asked.correction.attempts_remaining, 1);
+    assert.equal(asked.correction.attempts_remaining, 2);
     assert.equal(readState(w.commonDir, started.lineage_id).state, "correction_required");
     assert.doesNotMatch(gate(w).stdout, /permission/, "a severe finding never denies a delivery");
 

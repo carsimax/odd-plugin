@@ -535,9 +535,9 @@ test("budgetStatus reuses the state budget and attempt cap", async () => {
   const s = scratch();
   try {
     const a = await seedLow(s.dir, 19);
-    assert.deepEqual(budgetStatus(a.record), { correctionBudget: 3, actualCorrectionLines: 0, linesRemaining: 3, attempts: 0, attemptsRemaining: 1 });
+    assert.deepEqual(budgetStatus(a.record), { correctionBudget: 3, actualCorrectionLines: 0, linesRemaining: 3, attempts: 0, attemptsRemaining: 2 });
     assert.deepEqual(budgetStatus({ ...a.record, correction_attempts: 1, actual_correction_lines: 2 }), {
-      correctionBudget: 3, actualCorrectionLines: 2, linesRemaining: 1, attempts: 1, attemptsRemaining: 0,
+      correctionBudget: 3, actualCorrectionLines: 2, linesRemaining: 1, attempts: 1, attemptsRemaining: 1,
     });
   } finally {
     s.cleanup();

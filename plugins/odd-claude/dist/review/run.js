@@ -23,7 +23,7 @@
 // or validating, this module routes from the lineage record directly. From correction_required the forecast and the
 // acknowledged run write NOTHING until the validator answered: the attempt is recorded in the same transition as the
 // validator result (`captureCorrectionResult`), so a forecast, a refined correction or a runner failure never spends the
-// single correction attempt. Once the validator passed, the lineage's candidate IS the corrected one (state.ts `approve`)
+// correction attempts. Once the validator passed, the lineage's candidate IS the corrected one (state.ts `approve`)
 // and the acknowledgement/receipt bind that identity; the reviewed original never counts as consumed.
 // The corrected snapshot must keep the lineage's projection, and its base must be the reviewed base OR the reviewed
 // candidate (upstream compact.go: commit the reviewed work, then correct in the worktree); any other base is binding-drift
@@ -121,7 +121,7 @@ function rawCorrectionMatches(commonDir, id, baseTree, projection) {
         return true;
     if (raw === undefined)
         return false;
-    return (raw.state === "correction_required" || raw.state === "validating") && (raw.base_tree === baseTree || raw.candidate_tree === baseTree) && raw.projection === projection;
+    return (raw.state === "correction_required" || raw.state === "validating") && (raw.base_tree === baseTree || raw.candidate_tree === baseTree || raw.original_candidate_tree === baseTree) && raw.projection === projection;
 }
 /**
  * A lineage still waiting for its correction whose reviewed base is this candidate's base (newest first). A lineage
@@ -148,7 +148,7 @@ export function pendingCorrectionLineage(cwd, target) {
         }
         if (rec.state !== "correction_required" && rec.state !== "validating")
             continue;
-        if ((rec.base_tree !== frozen.snapshot.baseTree && rec.candidate_tree !== frozen.snapshot.baseTree) || rec.projection !== frozen.snapshot.projection)
+        if ((rec.base_tree !== frozen.snapshot.baseTree && rec.candidate_tree !== frozen.snapshot.baseTree && rec.original_candidate_tree !== frozen.snapshot.baseTree) || rec.projection !== frozen.snapshot.projection)
             continue;
         if (found === undefined || rec.updated_at > found.updated_at)
             found = rec;
@@ -357,7 +357,8 @@ export async function runReview(input, deps = {}) {
                 return drift("projection", `the corrected candidate is a ${snap.projection} snapshot, the lineage reviewed a ${rec.projection} one`);
             // upstream accepts a correction whose base is the reviewed base, or the reviewed candidate itself (the reviewed work was
             // committed, then corrected in the worktree); any other base is drift. The lineage keeps its original base_tree.
-            if (snap.baseTree !== rec.base_tree && snap.baseTree !== rec.candidate_tree)
+            // after a reopened correction the lineage's candidate is the failed correction; the reviewed original stays a valid base
+            if (snap.baseTree !== rec.base_tree && snap.baseTree !== rec.candidate_tree && snap.baseTree !== rec.original_candidate_tree)
                 return drift("base", "the corrected candidate is based on neither the reviewed base nor the reviewed candidate");
             // Reference (compact.go BuildCorrectedCandidate): the corrected candidate is the INITIAL snapshot's base plus the corrected
             // tree. When the worktree snapshot used another base (the reviewed candidate), its identity is recomputed from the
@@ -435,6 +436,13 @@ export async function runReview(input, deps = {}) {
                 return acknowledge(lineageId, last.record.target_identity, last.revision, last.ackToken);
             if (last.next === "escalated")
                 return stopped("escalated");
+            // the validator failed with a correction attempt left: the lineage asks for the next correction
+            if (last.next === "correction_required") {
+                const plan = planCorrection(commonDir, lineageId);
+                if (!plan.ok)
+                    return blocked("correction_unavailable", plan.message, { detail: plan.code });
+                return finish({ outcome: "input-required", correction: plan });
+            }
             return blocked("unexpected_state", `the validator left the lineage ${last.state}`);
         };
         // ---- resume by lineage ----

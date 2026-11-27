@@ -37,6 +37,8 @@ import {
   escalate,
   findingIdPrefixForLens,
   inconclusiveFindingIds,
+  MAX_CORRECTION_ATTEMPTS,
+  reopenCorrection,
   requireCorrection,
   type Finding,
   type Outcome,
@@ -709,7 +711,7 @@ type Settled = Outcome<{ ackToken?: string }>;
 
 /**
  * Settles a fully reviewed record. Inconclusive severe findings escalate; nothing blocking approves (follow-ups do not
- * block); blocking findings open the single correction, unless the caller waits for an optional refuter batch.
+ * block); blocking findings open a correction, unless the caller waits for an optional refuter batch.
  */
 function settleReview(record: StateRecord, opts: { now: string; awaitRefuter: boolean; randomToken?: () => string }): Settled {
   const inconclusive = inconclusiveFindingIds(record);
@@ -938,7 +940,7 @@ export function planCorrection(commonDir: string, lineage: string): CorrectionPl
     findings,
     ledger_hash: record.ledger_hash ?? "",
     budget: record.correction_budget,
-    attempts_remaining: Math.max(0, 1 - record.correction_attempts),
+    attempts_remaining: Math.max(0, MAX_CORRECTION_ATTEMPTS - record.correction_attempts),
     allowed_paths: [...paths].sort(),
   };
 }
@@ -993,7 +995,7 @@ const beginInput = (corrected: CorrectedCandidate, lines: number, now: string) =
 
 /**
  * Checks the corrected candidate against the frozen correction (budget in changed lines against the ORIGINAL candidate;
- * only paths of the frozen findings) and opens validation. The single correction attempt is consumed here.
+ * only paths of the frozen findings) and opens validation. One correction attempt is consumed here.
  */
 export async function beginCorrectionValidation(
   repo: RepositoryIdentity,
@@ -1026,7 +1028,7 @@ export interface CorrectionPreview {
 /**
  * What `captureCorrectionResult` would validate, with NO write: the budget and scope checks and the in-memory validating
  * record (its targeted-validation request hash is what the validator echoes). A forecast uses this, so it never spends
- * the single correction attempt.
+ * a correction attempt.
  */
 export function previewCorrectionValidation(repo: RepositoryIdentity, lineage: string, expectedRevision: string, corrected: CorrectedCandidate, opts: CaptureOptions = {}): CorrectionPreview | CaptureRefusal {
   const current = readState(repo.commonDir, lineage);
@@ -1109,9 +1111,11 @@ export async function captureValidatorResult(
       const admitted = admitValidatorResult(record, { resultHash, artifactDigest: requestHash, now });
       if (!admitted.ok) return admitted;
       const tree = input.correctionCandidateTree;
-      return passed
-        ? approve(admitted.record, { now, randomToken: opts.randomToken, ...(tree !== undefined ? { correctionCandidateTree: tree } : {}) })
-        : escalate(admitted.record, { now, reason: failure, ...(tree !== undefined ? { correctionCandidateTree: tree } : {}) });
+      const treeInput = tree !== undefined ? { correctionCandidateTree: tree } : {};
+      if (passed) return approve(admitted.record, { now, randomToken: opts.randomToken, ...treeInput });
+      // A failed validation with attempts left reopens a correction; the last attempt escalates.
+      const reopened = reopenCorrection(record, { now, ...treeInput });
+      return reopened.ok ? reopened : escalate(admitted.record, { now, reason: failure, ...treeInput });
     }),
   );
   if (!("record" in done)) return done;
@@ -1121,7 +1125,7 @@ export async function captureValidatorResult(
 /**
  * Opens validation AND admits the validator result in ONE transition from `correction_required` (reference engine: the
  * attempt is recorded together with the validator's outcome). Nothing is written when the correction is refused or the
- * result does not match; a runner that never answered never spends the single correction attempt. The validator must
+ * result does not match; a runner that never answered never spends a correction attempt. The validator must
  * echo the request hash of `previewCorrectionValidation` for the same corrected candidate.
  */
 export async function captureCorrectionResult(
@@ -1147,7 +1151,9 @@ export async function captureCorrectionResult(
       if (!began.ok) return began;
       const admitted = admitValidatorResult(began.record, { resultHash, artifactDigest: requestHash, now });
       if (!admitted.ok) return admitted;
-      return passed ? approve(admitted.record, { now, randomToken: opts.randomToken }) : escalate(admitted.record, { now, reason: failure });
+      if (passed) return approve(admitted.record, { now, randomToken: opts.randomToken });
+      const reopened = reopenCorrection(began.record, { now });
+      return reopened.ok ? reopened : escalate(admitted.record, { now, reason: failure });
     }),
   );
   if (!("record" in done)) return done;
