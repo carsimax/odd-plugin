@@ -1,0 +1,18 @@
+{
+  "schema": "odd-claude.tasks-lint/v1",
+  "files": 1,
+  "findings": [
+    {
+      "file": "odd/tasks/feature.md",
+      "line": 9,
+      "rule": "open-without-done-when",
+      "message": "open task has no `done when: <observable check>`; append the command or observation that proves it."
+    },
+    {
+      "file": "odd/tasks/feature.md",
+      "line": 2,
+      "rule": "open-tasks-on-closed-branch",
+      "message": "2 open task(s) but branch `feat/sample` no longer exists locally; mark finished tasks done with evidence in ## Log, or close the document."
+    }
+  ]
+}

@@ -15,7 +15,7 @@ export const VENDOR_ROOT = join(REPO_ROOT, "test-fixtures", "review", "vendor");
 export const INTEGRATION_ROOT = join(VENDOR_ROOT, "review-integration");
 export const MIRROR_ROOT = join(VENDOR_ROOT, "provider-mirror", "v1.6.0");
 
-export type EntryName = "coordinator" | "setup" | "status" | "review-mode" | "hook-runner" | "review-server" | "check-naming" | "stats" | "retro" | "statusline" | "release-payload" | "bump-version";
+export type EntryName = "coordinator" | "setup" | "status" | "review-mode" | "hook-runner" | "review-server" | "check-naming" | "stats" | "retro" | "statusline" | "release-payload" | "bump-version" | "tasks" | "installer";
 
 export interface Entry {
   command: string;
@@ -37,6 +37,8 @@ const TS_ENTRIES: Record<EntryName, Entry> = {
   statusline: { command: "/bin/bash", args: [join(PLUGIN_ROOT, "statusline", "statusline.sh")] },
   "release-payload": { command: NODE, args: [join(PLUGIN_ROOT, "scripts", "release-payload.mjs")] },
   "bump-version": { command: NODE, args: [join(PLUGIN_ROOT, "scripts", "bump-version.mjs")] },
+  tasks: { command: NODE, args: [join(PLUGIN_ROOT, "dist", "cli", "tasks.js")] },
+  installer: { command: NODE, args: [join(PLUGIN_ROOT, "dist", "installer", "bin.js")] },
 };
 
 /**

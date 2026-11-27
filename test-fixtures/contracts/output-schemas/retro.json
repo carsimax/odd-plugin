@@ -1,0 +1,23 @@
+{
+  "schema": "odd-claude.retro/v1",
+  "lines": 3,
+  "firstLine": 1,
+  "bytesRead": 362,
+  "truncated": false,
+  "prompts": {
+    "count": 1,
+    "lines": [
+      1
+    ]
+  },
+  "tools": [],
+  "errors": {
+    "count": 0,
+    "items": []
+  },
+  "rereads": [],
+  "reedits": [],
+  "repeatedCommands": [],
+  "agents": [],
+  "compactions": []
+}

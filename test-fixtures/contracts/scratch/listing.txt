@@ -1,0 +1,2 @@
+0700 d scratch/
+0700 d scratch/sess-contract-0001/

@@ -1,0 +1,64 @@
+{
+  "settings": {
+    "[\"outputStyle\"]": {
+      "path": [
+        "outputStyle"
+      ],
+      "previous": {
+        "present": false
+      },
+      "written": "odd"
+    },
+    "[\"statusLine\"]": {
+      "path": [
+        "statusLine"
+      ],
+      "previous": {
+        "present": false
+      },
+      "written": {
+        "type": "command",
+        "command": "bash \"<SANDBOX>/home/.odd-claude/current/statusline/statusline.sh\""
+      }
+    },
+    "[\"disableClaudeAiConnectors\"]": {
+      "path": [
+        "disableClaudeAiConnectors"
+      ],
+      "previous": {
+        "present": false
+      },
+      "written": true
+    },
+    "[\"syncClaudeAiSkills\"]": {
+      "path": [
+        "syncClaudeAiSkills"
+      ],
+      "previous": {
+        "present": false
+      },
+      "written": false
+    },
+    "[\"syncClaudeAiPlugins\"]": {
+      "path": [
+        "syncClaudeAiPlugins"
+      ],
+      "previous": {
+        "present": false
+      },
+      "written": false
+    }
+  },
+  "version": 1,
+  "extras": {
+    "statusLine": true,
+    "claudeAi": {
+      "connectors": true,
+      "skills": true,
+      "plugins": true
+    },
+    "builtin": {
+      "mode": "all"
+    }
+  }
+}
