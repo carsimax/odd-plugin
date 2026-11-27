@@ -55,8 +55,28 @@ def tasks_lint_json(lint: TasksLint) -> str:
     return TasksLintOutput(files=lint.files, findings=lint.findings).model_dump_json(by_alias=True, indent=2)
 
 
+# JS `\s` / `String.prototype.trim` whitespace: differs from Python's (no U+001C-001F and U+0085, but U+FEFF).
+_JS_WS = "\t\n\x0b\x0c\r \u00a0\u1680\u2000\u2001\u2002\u2003\u2004\u2005\u2006\u2007\u2008\u2009\u200a\u2028\u2029\u202f\u205f\u3000\ufeff"
+_WS = f"[{_JS_WS}]"
+# JS multiline `^`: after \n, \r, U+2028 or U+2029 (Python's `re.M` only knows \n).
+_BOL = r"(?:^|(?<=[\r\u2028\u2029]))"
+
+
+def _trim(s: str) -> str:
+    return s.strip(_JS_WS)
+
+
 def _clip(s: str, cap: int) -> str:
-    return s if len(s) <= cap else f"{s[: max(0, cap - 3)]}..."
+    """JS `length`/`slice` count UTF-16 code units; slicing may split a surrogate pair, like in JS."""
+    u = s.encode("utf-16-le", "surrogatepass")
+    if len(u) // 2 <= cap:
+        return s
+    return u[: 2 * max(0, cap - 3)].decode("utf-16-le", "surrogatepass") + "..."
+
+
+def _utf16_key(name: str) -> bytes:
+    """JS `.sort()` compares UTF-16 code units (big-endian bytes compare the same way)."""
+    return name.encode("utf-16-be", "surrogatepass")
 
 
 def _read(path: str) -> str:
@@ -77,7 +97,7 @@ def find_active_feature_doc(cwd: str, exec: ExecFn = real_exec) -> ActiveFeature
             return None
         d = os.path.join(root, "odd", "tasks")
         needle = f"Branch: `{branch}`"
-        for name in sorted(n for n in os.listdir(d) if n.endswith(".md")):
+        for name in sorted((n for n in os.listdir(d) if n.endswith(".md")), key=_utf16_key):
             try:
                 path = os.path.join(d, name)
                 text = _read(path)
@@ -93,7 +113,7 @@ def find_active_feature_doc(cwd: str, exec: ExecFn = real_exec) -> ActiveFeature
 def section_range(text: str, title: str) -> tuple[int, list[str]]:
     """Body of the `## <title>` section as (0-based index of its first body line, lines); the index is -1 when the heading is absent."""
     lines = text.split("\n")
-    at = next((i for i, l in enumerate(lines) if l.strip() == f"## {title}"), -1)
+    at = next((i for i, l in enumerate(lines) if _trim(l) == f"## {title}"), -1)
     if at < 0:
         return -1, []
     rest = lines[at + 1 :]
@@ -107,12 +127,12 @@ def section(text: str, title: str) -> list[str]:
 
 def is_task_line(line: str) -> bool:
     """A task line of `## Tasks`: `- T<n> ...` or a `- [ ]` checkbox."""
-    return re.match(r"- (T[0-9]+|\[ \])", line.strip()) is not None
+    return re.match(r"- (T[0-9]+|\[ \])", _trim(line)) is not None
 
 
 def is_done_task_line(line: str) -> bool:
     """A task line whose route/status column says `done`."""
-    return re.search(r"\|\s*done\b", line, re.I | re.A) is not None
+    return re.search(rf"\|{_WS}*done\b", line, re.I | re.A) is not None
 
 
 def is_open_task_line(line: str) -> bool:
@@ -122,10 +142,10 @@ def is_open_task_line(line: str) -> bool:
 def summarize_feature_doc(doc: ActiveFeatureDoc) -> str:
     """Compact state of a feature document, hard-capped at FEATURE_DOC_SUMMARY_CAP characters."""
     specs = "\n".join(section(doc.text, "Specs"))
-    ids = list(dict.fromkeys(re.findall(r"^- \*\*(S[0-9]+)\*\*", specs, re.M)))
-    open_tasks = [_clip(l, LINE_CAP) for l in (x.strip() for x in section(doc.text, "Tasks")) if is_open_task_line(l)]
-    log = [l for l in (x.strip() for x in section(doc.text, "Log")) if l.startswith("- ")]
-    first = doc.text.split("\n", 1)[0].strip()
+    ids = list(dict.fromkeys(re.findall(rf"{_BOL}- \*\*(S[0-9]+)\*\*", specs, re.M)))
+    open_tasks = [_clip(l, LINE_CAP) for l in (_trim(x) for x in section(doc.text, "Tasks")) if is_open_task_line(l)]
+    log = [l for l in (_trim(x) for x in section(doc.text, "Log")) if l.startswith("- ")]
+    first = _trim(doc.text.split("\n", 1)[0])
     parts = [
         f"Active ODD feature document (reinjected): {doc.path}",
         f"Header: {_clip(first, LINE_CAP)}",
@@ -182,10 +202,10 @@ def lint_feature_doc(file: str, text: str, root: str, exec: ExecFn, base: str) -
         line = tasks[0] + i + 1
         if is_open_task_line(raw):
             open_lines.append(line)
-            if not re.search(r"done when", raw, re.I):
+            if not re.search(r"done when", raw, re.I | re.A):
                 add(line, "open-without-done-when", "open task has no `done when: <observable check>`; append the command or observation that proves it.")
             continue
-        m = re.match(r"- (T[0-9]+)", raw.strip())
+        m = re.match(r"- (T[0-9]+)", _trim(raw))
         if m and is_done_task_line(raw) and not re.search(rf"\b{m.group(1)}\b", log_text, re.A):
             add(line, "done-without-log", f"{m.group(1)} is marked done but never appears in ## Log; append a Log entry with its observed evidence, or reopen the task.")
     bm = re.search(r"Branch: `([^`]+)`", _header(text))
@@ -206,7 +226,7 @@ def lint_feature_docs(cwd: str, exec: ExecFn = real_exec) -> TasksLint | None:
         if not root:
             return None
         d = os.path.join(root, "odd", "tasks")
-        names = sorted(n for n in os.listdir(d) if n.endswith(".md"))
+        names = sorted((n for n in os.listdir(d) if n.endswith(".md")), key=_utf16_key)
         base = _default_branch(root, exec)
         findings: list[LintFinding] = []
         for name in names:
