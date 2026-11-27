@@ -2,6 +2,17 @@
 
 A global Claude Code harness (installed with a TUI, no longer a plugin) that ports the ODD harness of gentle-shell (MIT) <!-- odd-check: allow --> to Claude Code. **v2.0** adds native receipt-driven review (RDD) on top of **v1.0** (the parity release): the ODD persona, orchestrator rules, agents, skills, native integrations, advisory review and lifecycle hooks. Apart from the RDD Stop settle reminder, which can block only when you turn RDD on (it is off by default), the plugin ships **no deny/ask/block hook and no `permissions.deny` by default** (user decision, v0.5, amended for v2): its hooks only add context. Coordinator mode and the admission rules are prompt text, not enforcement; otherwise the only enforcement is Claude Code's native permission system (see [Permission modes](#permission-modes)). The plugin collects no data and sends nothing anywhere.
 
+## What's new in 9.1.0
+
+Not breaking:
+
+- New `codegraph` CLAUDE.md block: `codegraph_explore` first for structural questions (before Grep/Read, with fallbacks); each call counts in the inline evidence budget; a blast-radius check comes before `Risk: none`; delegates are told to use it; `.codegraph/` is never committed.
+- Engram block reinforced: recall before deciding (project-scoped `mem_search`), broad save triggers plus releases, topic keys and update instead of duplicating, and a `## Prior context (Engram)` section in delegation handoffs (workers never run broad recall).
+- `odd-delegation` and `odd-verification` carry short references (handoffs pass Prior context and codegraph-first; the verifier checks the diff's blast radius with codegraph).
+- Two duplicated sentences were removed from `odd-delegation` to stay within the 24,000-byte always-on budget.
+- Every agent that has the codegraph tool (worker, verify, jd-fix, judges, review lenses) now uses it first, with a Read/Grep fallback.
+- Existing installs get the new block on `update`.
+
 ## What's new in 9.0.1
 
 Not breaking:
