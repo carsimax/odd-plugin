@@ -13,7 +13,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from .state import StateOptions, read_session_state
 from .subagents import SubagentRecord, format_duration
 from .transcript_path import record_transcript_path, valid_path
-from .js import js_json_loads, utf16_head, utf16_len
+from .js import js_json_loads, js_number, js_trim, utf16_head, utf16_len
 from .transcript_tail import STATS_MAX_LINE_BYTES, STATS_TAIL_BYTES, clean_text, read_tail
 
 __all__ = ["STATS_MAX_LINE_BYTES", "STATS_TAIL_BYTES", "record_transcript_path"]
@@ -205,6 +205,22 @@ class StatsView:
     note: str | None = None
 
 
+def _to_number(x: Any) -> float:
+    """JS `Number(x)` for a JSON value (hand-edited state may hold any type)."""
+    if x is None:
+        return 0
+    if isinstance(x, (bool, int, float)):
+        return x
+    if isinstance(x, str):
+        t = js_trim(x)
+        return js_number(t) if t else 0
+    return math.nan  # shortcut: arrays/objects coerce via toString in JS, upgrade if a state file ever holds them
+
+
+def _js_max0(x: float) -> float:
+    return x if x != x else max(0, x)  # Math.max(0, NaN) is NaN
+
+
 def render_stats(v: StatsView) -> str:
     out = ["odd-claude stats (this session, local data only)"]
     t = v.transcript
@@ -220,10 +236,10 @@ def render_stats(v: StatsView) -> str:
             out.append(f"  {m.model}  {_plural(m.turns, 'turn')} · {_tokens(m.tokens)} tokens")
         if t.truncated:
             out.append(f"(partial: only the last {_fixed(t.bytesRead / (1024 * 1024), 1)} MiB of the transcript was read)")
-    done = [r for r in v.subagents if r.get("startedAt") is not None and r.get("endedAt") is not None]
-    running = sum(1 for r in v.subagents if r.get("endedAt") is None)
-    total = sum(max(0, r["endedAt"] - r["startedAt"]) for r in done)
-    out.append(f"subagents  {_plural(len(v.subagents), 'subagent')} ({running} running){f' · {format_duration(total)} finished work' if done else ''}")
+    done = [r for r in v.subagents if "startedAt" in r and "endedAt" in r]
+    running = sum(1 for r in v.subagents if "endedAt" not in r)
+    total = sum(_js_max0(_to_number(r["endedAt"]) - _to_number(r["startedAt"])) for r in done)
+    out.append(f"subagents  {_plural(len(v.subagents), 'subagent')} ({running} running){f' · {'NaNs' if total != total else format_duration(total)} finished work' if done else ''}")
     if v.exploration is not None:
         out.append(f"explore    this turn: {_plural(v.exploration.lookups, 'lookup')} · {v.exploration.bytes} bytes")
     return "\n".join(out)

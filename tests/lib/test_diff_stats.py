@@ -11,8 +11,8 @@ from .v9_oracle import needs_v9, v9, v9_many
 
 pytestmark = needs_v9
 
-# Skipped on purpose: Date.parse's legacy (non-ISO) formats, which V8 accepts and Python has no equivalent for; null as a subagent
-# timestamp; numbers that do not cross JSON (NaN, Infinity).
+# Skipped on purpose: Date.parse's legacy (non-ISO) formats, which V8 accepts and Python has no equivalent for;
+# numbers that do not cross JSON (NaN, Infinity).
 
 
 def js(obj):
