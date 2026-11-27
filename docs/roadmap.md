@@ -4,6 +4,8 @@
 
 Status: **v2.0.0 reached** for native RDD (faithful core; Phases 1–5, 7 and the RDD part of 8 done; Phase 6 dropped by user decision 2026-11-19; peer orchestrators R07 shipped in 2.1.0; 2.2.0 is the production-readiness release, Node >= 22; 2.3.0 makes balanced the default model profile; 3.0.0 is the simplification release that removes the hooks module and the visual extras; 4.0.0 aligns with upstream v5: the delivery check only warns; 5.0.0 is the refinement round: agent escalation removed, the tier is decided by assess alone, prompts and hooks simplified; 5.1.0 hardens the rules (completion gate, test-first excuse table, claim-free verifier handoff, never-weaken rule) and adds the systematic-debugging and receiving-review skills (branches feat/harden-rules, feat/debug-feedback); 5.2.0 adds the session retro skill with a local transcript digest CLI and pressure testing in skill-creator and skill-improver (branch feat/retro-pressure); 5.3.0 adds done-when per task with a feature-document lint CLI, odd-verify calibration, concise review_status and the AI-leaders harness research doc (branch feat/harness-research)). Phase contents follow the matrix "Candidate phases" with the adjustments listed under [Deviations](#deviations-from-the-matrix-candidate-phases).
 
+The plan for the Python v10 migration is in [roadmap-v10-python.md](roadmap-v10-python.md).
+
 ## Guiding principles
 
 1. **Critical behaviour works with classic hooks.** The ODD prompt and every guard rely on SessionStart / UserPromptSubmit `additionalContext` and PreToolUse / Stop hooks, never on mods.
