@@ -4,7 +4,7 @@ from typing import Any
 
 from pydantic import BaseModel
 
-from .background_subagents import js_stringify as _js
+from .js import js_stringify as _js
 from .state import StateOptions, read_plugin_state, write_plugin_state
 
 #: Agents the profile routes, i.e. every agent file shipped in agents/.

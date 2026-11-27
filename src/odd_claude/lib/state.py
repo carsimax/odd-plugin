@@ -21,7 +21,6 @@
 
 Data keys the code does not know are preserved: `data` is an open mapping.
 """
-import json
 import os
 import random
 import time
@@ -32,6 +31,7 @@ from typing import Any
 
 from pydantic import BaseModel, StrictInt
 
+from .js import js_json_loads, js_stringify
 from .lock import LockOptions, acquire_lock, release_owned_lock
 
 STATE_SCHEMA_VERSION = 1
@@ -88,14 +88,10 @@ def _plugin_state_path(name: str, opts: StateOptions | None) -> str:
     return os.path.join(resolve_data_dir(opts), f"{safe_segment(name)}.json")
 
 
-def _reject_constant(name: str) -> Any:
-    raise ValueError(name)  # NaN/Infinity are not JSON (v9 JSON.parse rejects them)
-
-
 def _load(path: str) -> Any:
-    # v9 parity: invalid UTF-8 becomes U+FFFD (not an error) and NaN/Infinity are rejected.
+    # v9 parity: invalid UTF-8 becomes U+FFFD (not an error); JSON.parse semantics.
     with open(path, encoding="utf-8", errors="replace") as f:
-        return json.loads(f.read(), parse_constant=_reject_constant)
+        return js_json_loads(f.read())
 
 
 def _is_current_version(v: Any) -> bool:
@@ -141,7 +137,7 @@ def atomic_write_file(path: str, content: str | bytes, mode: int | None = None) 
 
 def _dump(ident: str, data: StateData) -> str:
     body = StateFile(version=STATE_SCHEMA_VERSION, sessionId=ident, data=data).model_dump()
-    return json.dumps(body, indent=2, ensure_ascii=False) + "\n"
+    return js_stringify(body, 2) + "\n"
 
 
 def write_session_state(session_id: str, data: StateData, opts: StateOptions | None = None) -> None:
@@ -168,7 +164,7 @@ def _assert_schema_matches(path: str) -> None:
         return
     version = raw.get("version", None) if isinstance(raw, dict) and "version" in raw else None
     if isinstance(raw, dict) and "version" in raw and not _is_current_version(version):
-        shown = version if isinstance(version, str) else json.dumps(version)
+        shown = version if isinstance(version, str) else js_stringify(version)
         raise ValueError(f"session state has schema version {shown}; refusing to overwrite")
 
 

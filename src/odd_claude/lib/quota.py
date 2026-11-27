@@ -7,6 +7,7 @@ from dataclasses import dataclass
 
 from pydantic import BaseModel
 
+from .js import JS_WS
 from .state import StateOptions, update_session_state
 
 #: How long a failed model should be avoided: spent quota or credentials last longer than a transient hiccup.
@@ -35,7 +36,6 @@ SCAN_MAX = 4096
 # JS regex parity: ASCII-only case folding (a non-ASCII char never matches an ASCII letter, e.g. KELVIN SIGN vs k), ASCII `\d`/`\b`,
 # `.` excluding all four line terminators, `$` only at the very end, and JS `\s` spelled out (Python's differs).
 _I = re.IGNORECASE | re.ASCII
-_WS = "\\t\\n\\v\\f\\r \\u00a0\\u1680\\u2000-\\u200a\\u2028\\u2029\\u202f\\u205f\\u3000\\ufeff"
 _DOT = "[^\\n\\r\\u2028\\u2029]"
 
 
@@ -56,7 +56,7 @@ _KEYWORDS = [
 ]
 # Only a status in a status position: leading ("429: ..."), parenthesized ("Provider (403): ...") or labeled ("status 503", "HTTP 502").
 _HTTP_STATUS = re.compile(
-    rf"(?:^[{_WS}]*|\(|\b(?:status(?:[{_WS}]+code)?|http)[{_WS}]*:?[{_WS}]*)([45][0-9][0-9])(?=[{_WS}):,{{]|\Z)", _I
+    rf"(?:^[{JS_WS}]*|\(|\b(?:status(?:[{JS_WS}]+code)?|http)[{JS_WS}]*:?[{JS_WS}]*)([45][0-9][0-9])(?=[{JS_WS}):,{{]|\Z)", _I
 )
 
 

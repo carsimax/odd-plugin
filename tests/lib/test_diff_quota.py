@@ -68,8 +68,7 @@ def test_quota_advice_categories_and_now():
 
 
 def test_record_quota_failure_results_and_files():
-    # lone-surrogate session ids are excluded: state.py's json.dumps(ensure_ascii=False) cannot encode them (v9 writes \\ud800); reported, not editable here.
-    sids = ["s1", "", "\U0001f600", "a/b", "..", "x" * 300, " ", "a b", "﻿", " "]
+    sids = ["s1", "", "\U0001f600", "\ud800", "a/b", "..", "x" * 300, " ", "a b", "﻿", " "]
     inputs = [{}, {"error": "billing_error"}, {"error": "rate_limit", "details": "x"}, {"details": "status 503"}, {"details": "nothing"}, {"error": "invalid_request"},
               {"details": "quota \U0001f600 \ud800"}, {"error": "max_output_tokens", "details": "quota"}, {"details": "a" * 4090 + "quota"}]
     for sid in sids:

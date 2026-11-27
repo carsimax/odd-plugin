@@ -5,6 +5,7 @@ from typing import Any
 
 from pydantic import BaseModel
 
+from .js import js_double
 from .state import StateOptions, update_session_state
 
 #: Thresholds: the notice fires once lookups > 3 or text bytes > 40,000.
@@ -40,15 +41,6 @@ def response_text_bytes(value: Any, depth: int = 0) -> int:
     return 0
 
 
-def _js_num(v: int | float) -> int | float:
-    """A JS number: an int beyond 2**53 is a double, and an integral double below 1e21 prints as its shortest digits, not as `N.0`."""
-    if isinstance(v, int) and abs(v) > 2**53:
-        v = float(v)
-    if isinstance(v, float) and v.is_integer() and abs(v) < 1e21:
-        return int(Decimal(repr(v)))
-    return v
-
-
 def _num(v: Any) -> bool:
     return isinstance(v, (int, float)) and not isinstance(v, bool)
 
@@ -57,8 +49,8 @@ def _counters(state: dict[str, Any]) -> ExplorationCounters:
     e = state.get("exploration")
     e = e if isinstance(e, dict) else {}
     return ExplorationCounters(
-        lookups=_js_num(e["lookups"]) if _num(e.get("lookups")) else 0,
-        bytes=_js_num(e["bytes"]) if _num(e.get("bytes")) else 0,
+        lookups=js_double(e["lookups"]) if _num(e.get("lookups")) else 0,
+        bytes=js_double(e["bytes"]) if _num(e.get("bytes")) else 0,
         notified=e.get("notified") is True,
     )
 
@@ -90,8 +82,8 @@ def record_exploration(session_id: str, tool_response: Any, notify: bool, opts: 
     def update(s):
         nonlocal notice
         c = _counters(s)
-        c.lookups = _js_num(c.lookups + 1)
-        c.bytes = _js_num(c.bytes + response_text_bytes(tool_response))
+        c.lookups = js_double(c.lookups + 1)
+        c.bytes = js_double(c.bytes + response_text_bytes(tool_response))
         if notify and not c.notified and (c.lookups > EXPLORATION_MAX_LOOKUPS or c.bytes > EXPLORATION_MAX_BYTES):
             c.notified = True
             notice = exploration_notice(c.lookups, c.bytes)

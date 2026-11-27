@@ -4,7 +4,8 @@ import re
 from dataclasses import dataclass, field
 from typing import Any
 
-from .background_subagents import background_subagents_line, js_stringify
+from .background_subagents import background_subagents_line
+from .js import JS_WS, js_stringify, js_trim, utf16_head, utf16_len
 from .state import StateOptions, read_plugin_state, write_plugin_state
 
 DELEGATION_MODES = ("organic", "full")
@@ -59,22 +60,15 @@ def build_session_context(i: SessionContextInput) -> str:
 
 
 EXCERPT_CHARS = 100
-# JS `\s` and `trim()` (WhiteSpace + LineTerminator): Python's `\s` differs (it adds \x1c-\x1f and \x85, and lacks \ufeff).
-_WS_CHARS = "\t\n\v\f\r \u00a0\u1680\u2000\u2001\u2002\u2003\u2004\u2005\u2006\u2007\u2008\u2009\u200a\u2028\u2029\u202f\u205f\u3000\ufeff"
-_WS_RUN = re.compile(f"[{_WS_CHARS}]+")
+_WS_RUN = re.compile(f"[{JS_WS}]+")
 
 
 def build_prompt_anchor(prompt: Any) -> str | None:
     """Per-turn anchor quoting the start of the human's own prompt; None for prompts that are not human prose."""
     if not isinstance(prompt, str):
         return None
-    collapsed = _WS_RUN.sub(" ", prompt).strip(_WS_CHARS)
+    collapsed = js_trim(_WS_RUN.sub(" ", prompt))
     if collapsed == "" or collapsed.startswith(("/", "!")):
         return None
-    # JS parity: length and slice count UTF-16 units.
-    units = collapsed.encode("utf-16-le", "surrogatepass")
-    if len(units) // 2 <= EXCERPT_CHARS:
-        excerpt = collapsed
-    else:
-        excerpt = units[: EXCERPT_CHARS * 2].decode("utf-16-le", "surrogatepass") + "…"
+    excerpt = utf16_head(collapsed, EXCERPT_CHARS) + ("…" if utf16_len(collapsed) > EXCERPT_CHARS else "")  # UTF-16 units like JS
     return f'Reply-language anchor: the human\'s latest message begins "{excerpt}". Reply in the language of that message.'

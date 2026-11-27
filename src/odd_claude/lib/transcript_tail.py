@@ -1,9 +1,10 @@
 """Bounded transcript reading shared by stats and retro (port of v9 lib/transcript-tail.ts): only the tail is read, lines are capped, text is cleaned."""
-import json
 import os
 import re
 import stat
 from dataclasses import dataclass
+
+from .js import js_trim
 
 #: Only the tail of a transcript is read: a long session never costs more than this.
 STATS_TAIL_BYTES = 8 * 1024 * 1024
@@ -13,38 +14,6 @@ STATS_MAX_LINE_BYTES = 2 * 1024 * 1024
 _OSC = re.compile(r"\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)?")
 _CSI = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]?")
 _CONTROL = re.compile("[\u0000-\u001f\u007f-\u009f‎‏؜  ‪-‮⁦-⁩]")
-#: JS whitespace (`\s`, `trim()`): differs from Python's `\s` (no U+001C-001F or U+0085; has the BOM).
-JS_WS = "\t\n\v\f\r \u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000\ufeff"
-_TRIM = re.compile(f"^[{JS_WS}]+|[{JS_WS}]+$")
-
-
-def _reject_constant(name: str) -> object:
-    raise ValueError(name)
-
-
-def js_json_loads(text: str) -> object:
-    """JS `JSON.parse`: NaN and Infinity are not JSON; a nesting too deep for Python's stack is a parse error too."""
-    try:
-        return json.loads(text, parse_constant=_reject_constant)
-    except RecursionError as e:
-        raise ValueError("too deep") from e
-
-
-def utf16_len(s: str) -> int:
-    """JS `String.length`: an astral character counts as two UTF-16 code units."""
-    return len(s) + sum(1 for c in s if ord(c) > 0xFFFF)
-
-
-def utf16_head(s: str, n: int) -> str:
-    """JS `s.slice(0, n)`: may cut an astral character in half, leaving a lone surrogate."""
-    if utf16_len(s) <= n:
-        return s
-    return s.encode("utf-16-le", "surrogatepass")[: 2 * n].decode("utf-16-le", "surrogatepass")
-
-
-def js_trim(s: str) -> str:
-    """JS `String.prototype.trim`."""
-    return _TRIM.sub("", s)
 
 
 def clean_text(s: object) -> str:

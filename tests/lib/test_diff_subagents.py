@@ -11,8 +11,7 @@ from .v9_oracle import needs_v9, v9_many
 
 pytestmark = needs_v9
 
-# Skipped on purpose: null as the hook input (v9 throws a TypeError before its try block); a lone surrogate in an id (state.py cannot
-# dump it, reported to the parent); integer-like keys inside a stored record (JS orders them first, a state.py concern).
+# Skipped on purpose: null as the hook input (v9 throws a TypeError before its try block).
 
 
 def snap(d: str) -> dict:

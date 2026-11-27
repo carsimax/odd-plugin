@@ -13,7 +13,8 @@ from pydantic import BaseModel, ConfigDict, Field
 from .state import StateOptions, read_session_state
 from .subagents import SubagentRecord, format_duration
 from .transcript_path import record_transcript_path, valid_path
-from .transcript_tail import STATS_MAX_LINE_BYTES, STATS_TAIL_BYTES, clean_text, js_json_loads, read_tail, utf16_head, utf16_len
+from .js import js_json_loads, utf16_head, utf16_len
+from .transcript_tail import STATS_MAX_LINE_BYTES, STATS_TAIL_BYTES, clean_text, read_tail
 
 __all__ = ["STATS_MAX_LINE_BYTES", "STATS_TAIL_BYTES", "record_transcript_path"]
 

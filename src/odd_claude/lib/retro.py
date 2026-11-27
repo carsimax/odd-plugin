@@ -7,7 +7,8 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from .transcript_tail import JS_WS, STATS_MAX_LINE_BYTES, clean_text, js_json_loads, js_trim, read_tail, utf16_head, utf16_len
+from .js import JS_WS, js_json_loads, js_trim, utf16_head, utf16_len
+from .transcript_tail import STATS_MAX_LINE_BYTES, clean_text, read_tail
 
 MAX_STR = 160
 MAX_ITEMS = 25

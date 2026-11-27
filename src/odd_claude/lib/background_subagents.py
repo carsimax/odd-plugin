@@ -1,12 +1,11 @@
 """Background subagents policy (port of v9 lib/background-subagents.ts). Plugin-wide state `background-subagents` ({policy}).
 Resolution: stored state > env ODD_CLAUDE_BACKGROUND_SUBAGENTS ("on"|"off") > default "off". A present-but-malformed
 state file fails closed to "off" and stays attributed to the state."""
-import json
 import os
-import re
 from dataclasses import dataclass
 from typing import Any, Literal
 
+from .js import js_stringify
 from .state import StateOptions, read_plugin_state, resolve_data_dir, write_plugin_state
 
 BACKGROUND_POLICIES = ("on", "off")
@@ -18,11 +17,6 @@ class BackgroundResolution:
     policy: Literal["on", "off"]
     source: Literal["state", "environment", "default"]
     malformed: bool
-
-
-def js_stringify(v: Any) -> str:
-    """`JSON.stringify` for error messages: compact, raw non-ASCII, lone surrogates escaped as `\\udXXX` (a Python str holds no pairs)."""
-    return re.sub(r"[\ud800-\udfff]", lambda m: f"\\u{ord(m.group()):04x}", json.dumps(v, ensure_ascii=False, separators=(",", ":")))
 
 
 def _is_policy(v: Any) -> bool:

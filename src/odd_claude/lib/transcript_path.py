@@ -3,7 +3,7 @@ import os
 import re
 
 from .state import StateOptions, update_session_state
-from .transcript_tail import utf16_len
+from .js import utf16_len
 
 MAX_PATH = 4096
 _CONTROL = re.compile("[\x00-\x1f\x7f]")

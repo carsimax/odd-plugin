@@ -61,12 +61,11 @@ def _seed(d: str, sid: str, expl) -> None:
     Path(d, "sessions", f"{sid}.json").write_text(json.dumps({"version": 1, "sessionId": sid, "data": {"keep": "k", **({} if expl is ... else {"exploration": expl})}}))
 
 
-# Exponent-form floats below 1e-6 are excluded: state.py's json.dumps writes `1e-07`, JS `1e-7` (reported, state.py is not editable here).
 SEED_STATES = [
     ..., None, {}, [], 5, "x", {"lookups": 2, "bytes": 100, "notified": False}, {"lookups": 3, "bytes": 0, "notified": False}, {"lookups": 2, "bytes": 39_999, "notified": False},
     {"lookups": 0, "bytes": 40_000, "notified": False}, {"lookups": 9, "bytes": 99_999, "notified": True}, {"lookups": 9, "bytes": 99_999, "notified": "true"},
     {"lookups": "3", "bytes": "x", "notified": 1}, {"lookups": None, "bytes": [], "notified": None}, {"lookups": True, "bytes": False}, {"lookups": 2.5, "bytes": 0.5},
-    {"lookups": -5, "bytes": -100}, {"lookups": 1e21, "bytes": 0.5}, {"lookups": 2**53, "bytes": 2**53}, {"lookups": 12345678901234567890, "bytes": 1}, {"lookups": 1.0, "bytes": 2.0},
+    {"lookups": -5, "bytes": -100}, {"lookups": 1e21, "bytes": 0.5}, {"lookups": 2**53, "bytes": 2**53}, {"lookups": 12345678901234567890, "bytes": 1}, {"lookups": 1.0, "bytes": 2.0}, {"lookups": 1e-7, "bytes": 1e-7}, {"lookups": 1, "bytes": 1e-7, "extra": 1e-7},
     {"lookups": 1, "bytes": 1, "notified": False, "extra": [1, 2]},
 ]
 
@@ -103,8 +102,7 @@ def test_reset_exploration_over_seeded_state_and_odd_session_ids():
             _seed(dp, "s1", expl)
             assert v9("exploration-budget", "resetExploration", "s1", {"dataDir": dj}) == e.reset_exploration("s1", StateOptions(data_dir=dp))
             assert snap(dj) == snap(dp), expl
-    # lone-surrogate session ids are excluded: state.py's json.dumps(ensure_ascii=False) cannot encode them (v9 writes \\ud800).
-    for sid in ("", ASTRAL, "a/b", "..", "x" * 300, " ", "a b", "﻿", " "):
+    for sid in ("", ASTRAL, "\ud800", "a/b", "..", "x" * 300, " ", "a b", "﻿", " "):
         with tempfile.TemporaryDirectory() as dj, tempfile.TemporaryDirectory() as dp:
             assert v9("exploration-budget", "resetExploration", sid, {"dataDir": dj}) == e.reset_exploration(sid, StateOptions(data_dir=dp)), sid
             assert snap(dj) == snap(dp), sid

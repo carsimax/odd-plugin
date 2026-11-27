@@ -38,8 +38,8 @@ INPUTS = [
     {"session_id": "s1", "transcript_path": _pad(2100, 0)}, {"session_id": "s1", "transcript_path": _pad(2000, 89)}, {"session_id": "s1", "transcript_path": None},
     {"session_id": "s1", "transcript_path": "/a\nb.jsonl"}, {"session_id": "s1", "transcript_path": "/\u00e9.jsonl", "extra": 1}, {"session_id": " ", "transcript_path": "/a.jsonl"},
     {"session_id": "x" * 200, "transcript_path": "/a.jsonl"}, {},
+    {"session_id": "s1", "transcript_path": "/\ud800.jsonl"}, {"session_id": "\ud800", "transcript_path": "/a.jsonl"},
 ]
-# Skipped on purpose: a lone surrogate in persisted state. v9 JSON.stringify writes it as a "\ud800" escape, state.py's ensure_ascii=False dump cannot encode it (state.py is not this unit's file; reported to the parent).
 
 
 def test_record_transcript_path_writes_the_same_state_bytes():
