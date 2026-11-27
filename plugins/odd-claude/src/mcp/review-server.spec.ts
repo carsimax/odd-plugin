@@ -7,7 +7,8 @@ import { join } from "node:path";
 import { PassThrough } from "node:stream";
 import { fileURLToPath } from "node:url";
 import { consentBinding, offPathCommand, REVIEW_CONTRACT, REVIEW_TOOL_NAMES } from "../review/consent.js";
-import { pendingCorrectionLineage, snapshotTargetFor, type RunDeps } from "../review/run.js";
+import { pendingCorrectionLineage, type RunDeps } from "../review/run.js";
+import { snapshotTargetOf } from "../review/start.js";
 import type { RiskAssessment, RiskAssessor } from "../review/start.js";
 import { listLineages, readState } from "../review/store.js";
 import { readDecline } from "../review/consent.js";
@@ -655,7 +656,7 @@ test("duplicate-lineage guard: a direct review_start / review_answer_consent whi
     assert.deepEqual(listLineages(f.commonDir).lineages, before, "no second lineage");
     assert.equal(existsSync(join(f.commonDir, "odd-plugin", "declines")), false);
     // the exported helper agrees, and run.ts resumes the same lineage
-    const p = pendingCorrectionLineage(f.repo, snapshotTargetFor({ target: { kind: "current-changes" } }));
+    const p = pendingCorrectionLineage(f.repo, snapshotTargetOf({ target: { kind: "current-changes" } }));
     assert.ok(p && "rec" in p && p.rec.lineage_id === lineage);
     const run = good(await call("review_run", { lineage_id: lineage }));
     assert.equal(run.lineage_id, lineage);
@@ -703,7 +704,7 @@ test("without a pending correction a direct start is unaffected by the guard", a
   await withFx(async (f) => {
     const { call } = makeServer(f, "medium");
     assert.equal(good(await call("review_start")).action, "consent_required");
-    assert.equal(pendingCorrectionLineage(f.repo, snapshotTargetFor({ target: { kind: "current-changes" } })), undefined);
+    assert.equal(pendingCorrectionLineage(f.repo, snapshotTargetOf({ target: { kind: "current-changes" } })), undefined);
   });
 });
 
@@ -1053,4 +1054,14 @@ test("S1/A1: every tool rejects __proto__/constructor/prototype, top level and n
     assert.equal(existsSync(join(f.commonDir, "odd-plugin")), false, "nothing was written");
     assert.equal(({} as Record<string, unknown>).limit, undefined, "Object.prototype was not polluted");
   });
+});
+
+test("the server entry exits cleanly on SIGTERM", async () => {
+  const entry = join(PLUGIN_ROOT, "dist", "mcp", "review-server.js");
+  assert.ok(existsSync(entry), entry);
+  const child = spawn(process.execPath, [entry], { stdio: ["pipe", "pipe", "pipe"], env: { PATH: process.env.PATH ?? "", HOME: tmpdir() } });
+  const exited = new Promise<[number | null, NodeJS.Signals | null]>((res) => child.once("exit", (code, signal) => res([code, signal])));
+  await new Promise((res) => setTimeout(res, 300)); // let the entry install its handlers
+  child.kill("SIGTERM");
+  assert.deepEqual(await exited, [0, null]);
 });

@@ -10,6 +10,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { Readable, Writable } from "node:stream";
 import { pluginRootDir } from "../review/consent.js";
+import { killLiveReviewers } from "../review/runner.js";
 import { callTool, fail, TOOL_BY_NAME, TOOLS, type ToolDeps } from "./tools.js";
 import { inflightKey, isMain, isObject, MAX_LINE_BYTES, rpcError, runMain, serveLines, SUPPORTED_PROTOCOLS, type Id, type Request, type Response } from "./server-core.js";
 
@@ -108,4 +109,8 @@ export function serve(input: Readable, output: Writable, opts: ServerOptions = {
   return serveLines(input, output, (m) => server.handle(m));
 }
 
-if (isMain(import.meta.url)) runMain(() => serve(process.stdin, process.stdout));
+if (isMain(import.meta.url)) {
+  // Reviewer children are detached process groups: without this they would outlive a stopped server.
+  for (const sig of ["SIGTERM", "SIGINT"] as const) process.once(sig, () => { killLiveReviewers(); process.exit(0); });
+  runMain(() => serve(process.stdin, process.stdout));
+}

@@ -323,3 +323,36 @@ test("a declined candidate stops with consent_declined; reading never creates li
     r.cleanup();
   }
 });
+
+test("a corrupt lineage for the same target stops status with corrupted_or_unverifiable_authority", async () => {
+  const r = makeRepo();
+  try {
+    const started = await start(r, "medium");
+    const file = join(storeRootFor(r.commonDir), started.lineage_id, "review-state.json");
+    writeFileSync(file, JSON.stringify({ ...JSON.parse(readFileSync(file, "utf8")), revision: HASH }));
+    assert.throws(() => readState(r.commonDir, started.lineage_id));
+    const env = checked(reviewStatus(r.repo));
+    assert.equal(env.next_transition.kind, "stop");
+    assert.equal(env.next_transition.reason_code, "corrupted_or_unverifiable_authority");
+  } finally {
+    r.cleanup();
+  }
+});
+
+test("an acknowledged target stays terminal target_already_acknowledged even with a corrupt lineage for the same target", async () => {
+  const r = makeRepo();
+  try {
+    const started = await start(r, "low");
+    const ack = started.acknowledgement!;
+    await acknowledgeApproved(r.commonDir, { lineage: ack.lineage_id, target: ack.target_identity, expectedRevision: ack.expected_revision, token: ack.token });
+    const dir = join(storeRootFor(r.commonDir), "review-0000000000000000");
+    mkdirSync(dir);
+    const src = readFileSync(join(storeRootFor(r.commonDir), started.lineage_id, "review-state.json"), "utf8");
+    writeFileSync(join(dir, "review-state.json"), JSON.stringify({ ...JSON.parse(src), revision: HASH }));
+    assert.throws(() => readState(r.commonDir, "review-0000000000000000"));
+    const env = checked(reviewStatus(r.repo));
+    assert.equal(env.next_transition.reason_code, "target_already_acknowledged");
+  } finally {
+    r.cleanup();
+  }
+});

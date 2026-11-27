@@ -7,7 +7,7 @@ import { join } from "node:path";
 import { validate, type Schema } from "./schema.js";
 import { burn, correctionBudget } from "./state.js";
 import { listLineages, readState, updateState } from "./store.js";
-import { offPathCommand, readDecline, REVIEW_CONTRACT } from "./consent.js";
+import { declinePathFor, declinesDirFor, offPathCommand, readDecline, recordDecline, REVIEW_CONTRACT } from "./consent.js";
 import { startReview, START_SCHEMA, type RiskAssessment, type RiskAssessor, type StartInput, type StartOutcome } from "./start.js";
 import { clone, INTEGRATION_ROOT, readJson } from "./fixtures.testkit.js";
 
@@ -430,6 +430,71 @@ test("expectedTargetIdentity: a different candidate is refused with binding_drif
     const ok = await startReview(base(r, "medium", { consent: "granted", expectedTargetIdentity: consent.envelope.target_identity }));
     assert.equal(ok.status, "started");
     assert.equal(listLineages(r.commonDir).lineages.length, 1);
+  } finally {
+    r.cleanup();
+  }
+});
+
+test("a corrupt lineage for the same target refuses START with authority_error", async () => {
+  const r = makeRepo();
+  try {
+    const first = started(await startReview(base(r, "low")));
+    const file = join(r.commonDir, "odd-plugin", "review-transactions", "v2", first.lineage_id, "review-state.json");
+    writeFileSync(file, JSON.stringify({ ...JSON.parse(readFileSync(file, "utf8")), revision: `sha256:${"7".repeat(64)}` }));
+    const o = await startReview(base(r, "low"));
+    assert.equal(o.status, "refused");
+    if (o.status === "refused") assert.equal(o.code, "authority_error");
+    assert.equal(listLineages(r.commonDir).lineages.length, 1);
+  } finally {
+    r.cleanup();
+  }
+});
+
+test("recordDecline is create-only: an existing valid record is never replaced", async () => {
+  const r = makeRepo();
+  try {
+    const rec = { target_identity: `sha256:${"a".repeat(64)}`, projection: "workspace" as const, risk_level: "high" as const, declined_at: "2026-01-01T00:00:00.000Z" };
+    const path = declinePathFor(r.commonDir, rec.target_identity);
+    mkdirSync(declinesDirFor(r.commonDir), { recursive: true });
+    const existing = JSON.stringify({ schema: "odd-claude.review-decline/v1", target_identity: rec.target_identity, projection: "staged", risk_level: "medium", declined_at: "2020-01-01T00:00:00.000Z" });
+    writeFileSync(path, existing);
+    assert.ok(readDecline(r.commonDir, rec.target_identity), "fixture is a valid decline");
+    const out = recordDecline(r.commonDir, rec);
+    assert.equal(out.created, false);
+    assert.equal(readFileSync(path, "utf8"), existing);
+    const fresh = recordDecline(r.commonDir, { ...rec, target_identity: `sha256:${"b".repeat(64)}` });
+    assert.equal(fresh.created, true);
+    assert.equal(readDecline(r.commonDir, `sha256:${"b".repeat(64)}`)?.declined_at, rec.declined_at);
+    assert.equal(recordDecline(r.commonDir, { ...rec, target_identity: `sha256:${"b".repeat(64)}`, declined_at: "2027-01-01T00:00:00.000Z" }).created, false);
+  } finally {
+    r.cleanup();
+  }
+});
+
+test("a malformed existing decline file is replaced by the first valid record", async () => {
+  const r = makeRepo();
+  try {
+    const rec = { target_identity: `sha256:${"c".repeat(64)}`, projection: "workspace" as const, risk_level: "high" as const, declined_at: "2026-01-01T00:00:00.000Z" };
+    mkdirSync(declinesDirFor(r.commonDir), { recursive: true });
+    writeFileSync(declinePathFor(r.commonDir, rec.target_identity), "not json");
+    assert.equal(readDecline(r.commonDir, rec.target_identity), undefined);
+    assert.equal(recordDecline(r.commonDir, rec).created, true);
+    assert.equal(readDecline(r.commonDir, rec.target_identity)?.declined_at, rec.declined_at);
+  } finally {
+    r.cleanup();
+  }
+});
+
+test("a corrupt lineage for a different target does not block START", async () => {
+  const r = makeRepo();
+  try {
+    const first = started(await startReview(base(r, "low")));
+    const file = join(r.commonDir, "odd-plugin", "review-transactions", "v2", first.lineage_id, "review-state.json");
+    writeFileSync(file, JSON.stringify({ ...JSON.parse(readFileSync(file, "utf8")), revision: `sha256:${"7".repeat(64)}` }));
+    writeFileSync(join(r.repo, "a.txt"), "completely\ndifferent\ncontent\n");
+    const second = started(await startReview(base(r, "low")));
+    assert.notEqual(second.lineage_id, first.lineage_id);
+    assert.equal(listLineages(r.commonDir).lineages.length, 2);
   } finally {
     r.cleanup();
   }

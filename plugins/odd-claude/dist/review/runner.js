@@ -25,6 +25,20 @@ import { createHash } from "node:crypto";
 import { canonicalJson } from "./canonical.js";
 import { EMBEDDED_RESULT_SCHEMAS, resultSchemaErrors } from "./capture.js";
 import { SnapshotError, runGit } from "./snapshot.js";
+/** Pids of reviewer children still running (each is its own process group leader). */
+export const liveReviewerPids = new Set();
+/** SIGKILL every live reviewer's process group; used when the server is told to stop. */
+export function killLiveReviewers() {
+    for (const pid of liveReviewerPids) {
+        try {
+            process.kill(-pid, "SIGKILL");
+        }
+        catch (e) {
+            if (e.code !== "ESRCH")
+                throw e;
+        }
+    }
+}
 // ---------------------------------------------------------------------------------------------
 // prompt
 // ---------------------------------------------------------------------------------------------
@@ -431,6 +445,8 @@ export function runReviewer(prompt, opts = {}) {
                     catch { /* already gone */ }
             }
         };
+        if (child.pid !== undefined)
+            liveReviewerPids.add(child.pid);
         const finish = (outcome) => {
             if (settled)
                 return;
@@ -473,7 +489,11 @@ export function runReviewer(prompt, opts = {}) {
         });
         // First moment after the leader is reaped: a backgrounded grandchild must not outlive the review, and killing it closes any
         // stdout it still holds so that `close` can fire for a child that already answered.
-        child.on("exit", () => killGroup());
+        child.on("exit", () => {
+            killGroup();
+            if (child.pid !== undefined)
+                liveReviewerPids.delete(child.pid);
+        });
         child.on("close", (code, signal) => {
             if (timedOut || tooLarge)
                 return;

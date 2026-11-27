@@ -26,6 +26,20 @@ import { canonicalJson } from "./canonical.js";
 import { EMBEDDED_RESULT_SCHEMAS, resultSchemaErrors } from "./capture.js";
 import { SnapshotError, runGit } from "./snapshot.js";
 
+/** Pids of reviewer children still running (each is its own process group leader). */
+export const liveReviewerPids = new Set<number>();
+
+/** SIGKILL every live reviewer's process group; used when the server is told to stop. */
+export function killLiveReviewers(): void {
+  for (const pid of liveReviewerPids) {
+    try {
+      process.kill(-pid, "SIGKILL");
+    } catch (e) {
+      if ((e as NodeJS.ErrnoException).code !== "ESRCH") throw e;
+    }
+  }
+}
+
 export type ReviewerRole = "lens" | "refuter" | "validator";
 
 // ---------------------------------------------------------------------------------------------
@@ -460,6 +474,7 @@ export function runReviewer(prompt: string, opts: RunReviewerOptions = {}): Prom
         else try { child.kill("SIGKILL"); } catch { /* already gone */ }
       }
     };
+    if (child.pid !== undefined) liveReviewerPids.add(child.pid);
     const finish = (outcome: RunOutcome) => {
       if (settled) return;
       settled = true;
@@ -498,7 +513,10 @@ export function runReviewer(prompt: string, opts: RunReviewerOptions = {}): Prom
     });
     // First moment after the leader is reaped: a backgrounded grandchild must not outlive the review, and killing it closes any
     // stdout it still holds so that `close` can fire for a child that already answered.
-    child.on("exit", () => killGroup());
+    child.on("exit", () => {
+      killGroup();
+      if (child.pid !== undefined) liveReviewerPids.delete(child.pid);
+    });
     child.on("close", (code, signal) => {
       if (timedOut || tooLarge) return;
       const stdout = Buffer.concat(out).toString("utf8");

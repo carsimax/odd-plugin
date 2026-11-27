@@ -41,7 +41,6 @@
 // abort, so a child already spawned finishes (or times out) on its own bound and its output is discarded; but once the
 // run is aborted, or any slot failed, or the batch returned, no QUEUED reviewer is started, and nothing is captured or
 // acknowledged after an abort.
-import { closeSync, constants, fstatSync, openSync, readSync } from "node:fs";
 import { join } from "node:path";
 import { domainHash } from "./canonical.js";
 import { acknowledgeApproved, AckRefusedError } from "./ack.js";
@@ -56,11 +55,12 @@ import { encodeAckEnvelope, encodeBinding, encodeCaptureEnvelope, forecastFor, i
 import { StoreLockContended, StoreLockError } from "./lock.js";
 import { assessRisk } from "./risk.js";
 import { buildReviewerPrompt, parseReviewerOutput, runReviewer, type ReviewerPromptInput, type ReviewerRole, type RunOutcome, type RunReviewerOptions } from "./runner.js";
+import { readRawState } from "./lineage.js";
 import { digestPaths, freezeSnapshot, resolveRepository, SnapshotError, snapshotIdentity, type SnapshotTarget } from "./snapshot.js";
 import type { StateOptions } from "../lib/state.js";
 import { readProfile } from "../lib/profiles.js";
 import { reviewerRoute } from "./reviewer-model.js";
-import { startReview, type RiskAssessor, type StartTarget } from "./start.js";
+import { snapshotTargetOf, startReview, type RiskAssessor, type StartTarget } from "./start.js";
 import { blockingFindingIds, type Projection, type StateRecord } from "./state.js";
 import { reviewStatus, type StatusAcknowledgement, type StatusEnvelope } from "./status.js";
 import {
@@ -69,49 +69,6 @@ import {
 } from "./store.js";
 
 /** Bound of the status-driven loop (same as the reference relay). */
-const MAX_RAW_STATE_BYTES = 1 << 20;
-
-/**
- * Secure bounded read of a state file for the lenient pending-correction look. Returns the record; undefined for a content
- * problem that upstream skips (absent, oversized regular file, not JSON, not an object); "unsafe" for a symlink, FIFO,
- * directory, hardlink, open error or read error (the lineage is corrupt or unreadable: fail closed).
- */
-function readRawState(path: string): Record<string, unknown> | undefined | "unsafe" {
-  let fd: number;
-  try {
-    fd = openSync(path, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
-  } catch (e) {
-    return (e as NodeJS.ErrnoException).code === "ENOENT" ? undefined : "unsafe";
-  }
-  try {
-    const st = fstatSync(fd);
-    if (!st.isFile() || st.nlink > 1) return "unsafe";
-    if (st.size > MAX_RAW_STATE_BYTES) return undefined;
-    const buf = Buffer.alloc(st.size);
-    let got = 0;
-    while (got < buf.length) {
-      let n: number;
-      try {
-        n = readSync(fd, buf, got, buf.length - got, null);
-      } catch {
-        return "unsafe";
-      }
-      if (n === 0) break;
-      got += n;
-    }
-    try {
-      const parsed: unknown = JSON.parse(buf.subarray(0, got).toString("utf8"));
-      return typeof parsed === "object" && parsed !== null && !Array.isArray(parsed) ? (parsed as Record<string, unknown>) : undefined;
-    } catch {
-      return undefined;
-    }
-  } catch {
-    return "unsafe";
-  } finally {
-    closeSync(fd);
-  }
-}
-
 export const MAX_TRANSITIONS = 24;
 /** Reviewers of one group running at the same time. */
 export const DEFAULT_CONCURRENCY = 2;
@@ -252,12 +209,6 @@ function boundedAll<T>(count: number, limit: number, task: (index: number) => Pr
   );
 }
 
-function snapshotTargetOf(input: { target?: StartTarget; projection?: Projection }): SnapshotTarget {
-  const t = input.target ?? { kind: "current-changes" as const };
-  if (t.kind === "current-changes") return { kind: "current-changes", projection: input.projection ?? "workspace" };
-  return t.committedOnly === true ? { kind: "base-diff", baseRef: t.baseRef } : { kind: "base-workspace-overlay", baseRef: t.baseRef };
-}
-
 const slotView = (s: Slot, o: RunReviewerOptions): ReviewerSlotView => ({
   role: s.role,
   ...(s.lens !== undefined ? { lens: s.lens } : {}),
@@ -308,9 +259,6 @@ export function pendingCorrectionLineage(cwd: string, target: SnapshotTarget): P
   if (unreadable !== undefined) return { unreadable };
   return found === undefined ? undefined : { rec: found };
 }
-
-/** The snapshot target a run/start input freezes (same mapping `runReview` uses). */
-export const snapshotTargetFor = (input: { target?: StartTarget; projection?: Projection }): SnapshotTarget => snapshotTargetOf(input);
 
 /** Drives one review. Never throws for typed failures; see the module header for the outcomes. */
 export async function runReview(input: ReviewRunInput, deps: RunDeps = {}): Promise<ReviewRunOutcome> {
