@@ -55,9 +55,9 @@ export async function migrateFromPlugin(runner, ids, env) {
     const rm = await run(runner, ["plugin", "marketplace", "remove", MARKETPLACE], env);
     return rm.code === 0 ? { uninstalled, failed, marketplace: "removed" } : { uninstalled, failed, marketplace: "failed", marketplaceError: firstLine(rm) };
 }
-/** Candidate plugin data dirs: <home>/.claude/plugins/data/odd-claude-*, sorted. */
-export function pluginDataDir(home) {
-    const base = join(home, ".claude", "plugins", "data");
+/** Candidate plugin data dirs: <claudeDir>/plugins/data/odd-claude-*, sorted. */
+export function pluginDataDir(claudeDir) {
+    const base = join(claudeDir, "plugins", "data");
     try {
         return readdirSync(base, { withFileTypes: true })
             .filter((d) => d.isDirectory() && d.name.startsWith("odd-claude-"))

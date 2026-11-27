@@ -95,7 +95,7 @@ function replaceWith(target, next) {
 }
 export function installHooks(opts) {
     const entries = buildHookEntries(opts);
-    return updateSettingsFile(opts, (s) => replaceWith(s, mergeHooks(s, entries)));
+    return updateSettingsFile(opts, (s) => replaceWith(s, mergeHooks(unmergeHooks(s, opts.oddRoot), entries)));
 }
 export function uninstallHooks(opts) {
     return updateSettingsFile(opts, (s) => replaceWith(s, unmergeHooks(s, opts.oddRoot)));

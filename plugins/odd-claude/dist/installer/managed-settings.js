@@ -11,13 +11,23 @@ import { fileMode, lstatDangling, notWritable, resolveTarget } from "../lib/setu
 const isObject = (v) => typeof v === "object" && v !== null && !Array.isArray(v);
 const keyOf = (path) => JSON.stringify(path);
 export function readOddState(statePath) {
+    let raw;
     try {
-        const parsed = JSON.parse(readFileSync(statePath, "utf8"));
-        return isObject(parsed) ? parsed : {};
+        raw = readFileSync(statePath, "utf8");
+    }
+    catch (e) {
+        if (e.code === "ENOENT")
+            return {};
+        throw e;
+    }
+    let parsed;
+    try {
+        parsed = JSON.parse(raw);
     }
     catch {
-        return {};
+        throw new Error(`settings state ${statePath} is not valid JSON; fix or remove it before continuing`);
     }
+    return isObject(parsed) ? parsed : {};
 }
 export function writeOddState(statePath, state) {
     atomicWriteFile(statePath, JSON.stringify({ ...state, version: 1 }, null, 2) + "\n", 0o600);

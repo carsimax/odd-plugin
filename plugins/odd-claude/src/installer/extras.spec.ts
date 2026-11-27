@@ -117,3 +117,32 @@ test("discovery is not run when builtin mode is keep", async () => {
   assert.equal(calls, 0);
   assert.equal(p.builtin, undefined);
 });
+
+test("reinstalling with an extra turned off restores the value odd owned", async () => {
+  const s = sandbox({ statusLine: { type: "command", command: "mine" } });
+  try {
+    await applyExtras({ paths: s.paths, oddRoot: ROOT, options: DEFAULT_EXTRAS, runner });
+    const off = { ...DEFAULT_EXTRAS, statusLine: false, claudeAi: { connectors: false, skills: true, plugins: true } };
+    await applyExtras({ paths: s.paths, oddRoot: ROOT, options: off, runner });
+    const cur = s.read();
+    assert.deepEqual(cur.statusLine, { type: "command", command: "mine" });
+    assert.equal("disableClaudeAiConnectors" in cur, false);
+    assert.equal(cur.syncClaudeAiSkills, false);
+    assert.deepEqual(cur.enabledPlugins, { "a@builtin": false, "b@builtin": false });
+  } finally {
+    s.cleanup();
+  }
+});
+
+test("a builtin subset that shrinks restores the plugins it no longer disables; a failed discovery keeps them", async () => {
+  const s = sandbox({});
+  try {
+    await applyExtras({ paths: s.paths, oddRoot: ROOT, options: DEFAULT_EXTRAS, runner });
+    await applyExtras({ paths: s.paths, oddRoot: ROOT, options: { ...DEFAULT_EXTRAS, builtin: { mode: "subset", ids: ["a@builtin"] } }, runner: failing });
+    assert.deepEqual(s.read().enabledPlugins, { "a@builtin": false, "b@builtin": false });
+    await applyExtras({ paths: s.paths, oddRoot: ROOT, options: { ...DEFAULT_EXTRAS, builtin: { mode: "subset", ids: ["a@builtin"] } }, runner });
+    assert.deepEqual(s.read().enabledPlugins, { "a@builtin": false });
+  } finally {
+    s.cleanup();
+  }
+});

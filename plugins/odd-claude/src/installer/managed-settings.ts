@@ -50,12 +50,20 @@ const isObject = (v: unknown): v is Record<string, unknown> => typeof v === "obj
 const keyOf = (path: string[]): string => JSON.stringify(path);
 
 export function readOddState(statePath: string): OddState {
+  let raw: string;
   try {
-    const parsed: unknown = JSON.parse(readFileSync(statePath, "utf8"));
-    return isObject(parsed) ? (parsed as OddState) : {};
-  } catch {
-    return {};
+    raw = readFileSync(statePath, "utf8");
+  } catch (e) {
+    if ((e as NodeJS.ErrnoException).code === "ENOENT") return {};
+    throw e;
   }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    throw new Error(`settings state ${statePath} is not valid JSON; fix or remove it before continuing`);
+  }
+  return isObject(parsed) ? (parsed as OddState) : {};
 }
 
 export function writeOddState(statePath: string, state: OddState): void {

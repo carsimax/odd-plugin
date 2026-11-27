@@ -1,9 +1,9 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { existsSync, lstatSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
+import { existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { applyManagedSettings, restoreManagedSettings } from "./managed-settings.js";
+import { dirname, join } from "node:path";
+import { applyManagedSettings, readOddState, restoreManagedSettings } from "./managed-settings.js";
 
 function sandbox(initial?: string) {
   const dir = mkdtempSync(join(tmpdir(), "odd-managed-"));
@@ -133,6 +133,21 @@ test("a symlinked settings.json keeps its link and updates the target", () => {
     applyManagedSettings(s.paths, [{ path: ["outputStyle"], value: "odd" }]);
     assert.equal(lstatSync(s.paths.settingsPath).isSymbolicLink(), true);
     assert.deepEqual(JSON.parse(readFileSync(target, "utf8")), { outputStyle: "odd" });
+  } finally {
+    s.cleanup();
+  }
+});
+
+test("a corrupt settings-state.json is an error, not an empty ledger; a missing one is empty", () => {
+  const s = sandbox("{}");
+  try {
+    assert.deepEqual(readOddState(s.paths.statePath), {});
+    mkdirSync(dirname(s.paths.statePath), { recursive: true });
+    writeFileSync(s.paths.statePath, "{nope");
+    assert.throws(() => readOddState(s.paths.statePath), /not valid JSON/);
+    assert.throws(() => applyManagedSettings(s.paths, [{ path: ["a"], value: 1 }]), /not valid JSON/);
+    assert.deepEqual(s.read(), {});
+    assert.equal(readFileSync(s.paths.statePath, "utf8"), "{nope");
   } finally {
     s.cleanup();
   }

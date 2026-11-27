@@ -69,11 +69,11 @@ test("marketplace states: absent, and unsupported when the list command fails", 
   assert.equal(unsupported.marketplace, "unsupported");
 });
 
-test("pluginDataDir lists ~/.claude/plugins/data/odd-claude-* candidates only", () => {
+test("pluginDataDir lists <claudeDir>/plugins/data/odd-claude-* candidates only", () => {
   const home = mkdtempSync(join(tmpdir(), "odd-pm-"));
   try {
     assert.deepEqual(pluginDataDir(home), []);
-    const base = join(home, ".claude", "plugins", "data");
+    const base = join(home, "plugins", "data");
     mkdirSync(join(base, "odd-claude-odd-plugin"), { recursive: true });
     mkdirSync(join(base, "odd-claude-local"));
     mkdirSync(join(base, "other-plugin"));

@@ -152,3 +152,18 @@ test("installHooks refuses invalid settings JSON and uninstall without a setting
     s.cleanup();
   }
 });
+
+test("installHooks drops odd events a newer hooks.json no longer ships and keeps foreign hooks", () => {
+  const s = sandbox({ hooks: { SubagentStart: [FOREIGN] } });
+  try {
+    installHooks(s);
+    assert.equal(s.read().hooks.SubagentStart.length, 2);
+    const { SubagentStart: _gone, ...rest } = HOOKS_JSON.hooks;
+    writeFileSync(join(s.oddRoot, "hooks", "hooks.json"), JSON.stringify({ hooks: rest }));
+    installHooks(s);
+    assert.deepEqual(s.read().hooks.SubagentStart, [FOREIGN]);
+    assert.ok(s.read().hooks.SessionStart);
+  } finally {
+    s.cleanup();
+  }
+});
