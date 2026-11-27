@@ -2,15 +2,13 @@
 // Pi exposes ctx.getContextUsage(); a Claude Code hook does not (PostToolUse input has session_id,
 // transcript_path, cwd, permission_mode, agent_id/agent_type, tool_name/tool_input/tool_response, no usage and
 // no window size). So the measurement reads the transcript: the last assistant `usage` line
-// (input + cache_creation + cache_read tokens = the prompt the model just saw), or, when no usage line is in
-// the tail, a heuristic of file bytes / 4. The window size is unknown, so only the absolute cap applies.
-import { closeSync, fstatSync, openSync, readSync, statSync } from "node:fs";
+// (input + cache_creation + cache_read tokens = the prompt the model just saw) (no usage line: no reading, no notice). The window size is unknown, so only the absolute cap applies.
+import { statSync } from "node:fs";
+import { readTail } from "./transcript-tail.js";
 import { readSessionState, updateSessionState, type StateOptions } from "./state.js";
 
 export const CONTEXT_BACKSTOP_TOKENS = 150_000;
 export const CONTEXT_BACKSTOP_TOKENS_ENV = "ODD_CLAUDE_CONTEXT_BACKSTOP_TOKENS";
-/** Rough tokens-per-byte for the size fallback (the transcript also carries JSON overhead, so it overestimates). */
-export const BYTES_PER_TOKEN = 4;
 const TAIL_BYTES = 512 * 1024;
 /** Once the notice fired only a measured drop (re-arm) matters, so each PostToolUse reads this short tail instead of TAIL_BYTES. */
 const FIRED_TAIL_BYTES = 32 * 1024;
@@ -22,25 +20,9 @@ export function contextBackstopThreshold(env: Env = process.env): number {
   return Number.isFinite(v) && v > 0 ? v : CONTEXT_BACKSTOP_TOKENS;
 }
 
-function tail(path: string, max: number = TAIL_BYTES): string | undefined {
-  if (!statSync(path).isFile()) return undefined; // a FIFO or device would hang openSync / block reads
-  const fd = openSync(path, "r");
-  try {
-    const size = fstatSync(fd).size;
-    const len = Math.min(size, max);
-    const buf = Buffer.alloc(len);
-    readSync(fd, buf, 0, len, size - len);
-    const text = buf.toString("utf8");
-    // A tail read can start mid-line: drop the partial first line.
-    return size > len ? text.slice(text.indexOf("\n") + 1) : text;
-  } finally {
-    closeSync(fd);
-  }
-}
-
 /** Prompt tokens of the last assistant turn in the transcript tail; undefined when none is found. */
 function lastUsageTokens(path: string, max: number = TAIL_BYTES): number | undefined {
-  const text = tail(path, max);
+  const text = readTail(path, max)?.text;
   if (text === undefined) return undefined;
   const lines = text.split("\n");
   for (let i = lines.length - 1; i >= 0; i--) {
@@ -58,35 +40,18 @@ function lastUsageTokens(path: string, max: number = TAIL_BYTES): number | undef
   return undefined;
 }
 
-/** Context tokens for a transcript path; undefined when unreadable. `measured` is true for a real usage figure. */
-export function measureContext(path: string): { tokens: number; measured: boolean } | undefined {
-  try {
-    if (!statSync(path).isFile()) return undefined;
-    const real = lastUsageTokens(path);
-    if (real !== undefined) return { tokens: real, measured: true };
-    return { tokens: Math.round(statSync(path).size / BYTES_PER_TOKEN), measured: false };
-  } catch {
-    return undefined;
-  }
-}
-
-export function estimateContextTokens(path: string): number | undefined {
-  return measureContext(path)?.tokens;
-}
-
 const count = (v: number) => Math.round(v).toLocaleString("en-US");
 
-export function contextBackstopNotice(tokens: number, threshold: number, measured: boolean, fullDelegation: boolean): string {
-  const how = measured ? "measures" : "is estimated at";
+export function contextBackstopNotice(tokens: number, threshold: number, fullDelegation: boolean): string {
   const tail = fullDelegation
     ? "delegate the next bounded unit with a short handoff, and keep only state checks in this context."
     : "delegate the next bounded unit that needs several steps (its reads, edits, and checks) with a short handoff, while single small edits and state checks stay inline.";
-  return `Context backstop: the parent context ${how} ${count(tokens)} tokens, at or past the ${count(threshold)}-token backstop (advisory, nothing is blocked): ${tail}`;
+  return `Context backstop: the parent context measures ${count(tokens)} tokens, at or past the ${count(threshold)}-token backstop (advisory, nothing is blocked): ${tail}`;
 }
 
 /**
- * One notice per crossing per session (state key `contextBackstop`). A measured reading below the threshold
- * re-arms it (compaction); an estimate never re-arms because the transcript file only grows.
+ * One notice per crossing per session (state key `contextBackstop`). A reading below the threshold
+ * re-arms it (compaction).
  */
 export function checkContextBackstop(
   sessionId: string,
@@ -108,11 +73,15 @@ export function checkContextBackstop(
     if (tokens !== undefined && tokens < threshold) updateSessionState(sessionId, (s) => (s.contextBackstop === true ? { ...s, contextBackstop: false } : s), opts);
     return undefined;
   }
-  const m = measureContext(transcriptPath);
-  if (!m) return undefined;
-  if (m.tokens < threshold) {
-    // re-arm only on a measured reading; no write when already disarmed
-    if (m.measured) updateSessionState(sessionId, (s) => (s.contextBackstop === true ? { ...s, contextBackstop: false } : s), opts);
+  let tokens: number | undefined;
+  try {
+    tokens = lastUsageTokens(transcriptPath);
+  } catch {
+    tokens = undefined;
+  }
+  if (tokens === undefined) return undefined;
+  if (tokens < threshold) {
+    updateSessionState(sessionId, (s) => (s.contextBackstop === true ? { ...s, contextBackstop: false } : s), opts);
     return undefined;
   }
   let fire = false;
@@ -126,5 +95,5 @@ export function checkContextBackstop(
     opts,
   );
   if (!fire) return undefined;
-  return contextBackstopNotice(m.tokens, threshold, m.measured, fullDelegation);
+  return contextBackstopNotice(tokens, threshold, fullDelegation);
 }

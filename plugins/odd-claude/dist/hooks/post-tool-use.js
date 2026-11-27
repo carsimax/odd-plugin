@@ -4,13 +4,13 @@ import { isExplorationTool, recordExploration } from "../lib/exploration-budget.
 /**
  * R14 exploration budget + R34 context backstop. ADVISORY ONLY: the only output is
  * hookSpecificOutput.additionalContext; it never blocks, asks or denies, and any error is swallowed by run.js.
- * Main thread only (subagent calls carry agent_id/agent_type). The exploration notice needs coordinator mode ON.
+ * Main thread only (subagent calls carry agent_id; agent_type alone only means a `--agent` session). The exploration notice needs coordinator mode ON.
  */
 export function postToolUse(input, opts = {}) {
     const sessionId = input.session_id;
     if (typeof sessionId !== "string" || sessionId === "" || typeof input.tool_name !== "string")
         return undefined;
-    if (input.agent_id || input.agent_type)
+    if (input.agent_id)
         return undefined;
     const full = readDelegationMode(opts) === "full";
     const notices = [];

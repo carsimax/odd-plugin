@@ -33,7 +33,7 @@ export interface WarmupResult extends WarmupPlan {
   outcome: "skipped" | "ok" | "timeout" | "missing-binary" | "failed";
 }
 
-function truthy(v: string | undefined): boolean {
+export function truthy(v: string | undefined): boolean {
   return v === "1" || v === "true" || v === "yes" || v === "on";
 }
 

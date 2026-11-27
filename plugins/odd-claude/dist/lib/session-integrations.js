@@ -5,16 +5,14 @@
 import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { INIT_TIMEOUT_MS, isBroadDirectory, planWarmup, realHasIndex } from "./codegraph.js";
+import { INIT_TIMEOUT_MS, isBroadDirectory, planWarmup, realHasIndex, truthy } from "./codegraph.js";
 import { isTrustedProject } from "./codegraph-trust.js";
-import { acquireLock, lockPath, pidAlive, releaseLock, setLockPid } from "./lock.js";
+import { acquireLock, lockPath, releaseLock, setLockPid } from "./lock.js";
+import { isPidAlive } from "./pid.js";
 import { NO_REGISTRY_ENV, peekRegistry } from "./skill-registry.js";
 import { resolveDataDir } from "./state.js";
 export const WARMUP_STALE_MS = INIT_TIMEOUT_MS + 60_000;
 export const REGISTRY_STALE_MS = 120_000;
-function truthy(v) {
-    return v === "1" || v === "true" || v === "yes" || v === "on";
-}
 export function runSessionIntegrations(cwd, deps) {
     const extraLines = [];
     try {
@@ -81,7 +79,7 @@ export function realIntegrationDeps(home, env, log, opts = {}) {
     catch {
         dataDir = undefined;
     }
-    const ctx = { dataDir, env, spawnChild: realSpawnChild, isAlive: pidAlive };
+    const ctx = { dataDir, env, spawnChild: realSpawnChild, isAlive: isPidAlive };
     const launch = (kind, label) => (cwd) => {
         const r = launchLocked(kind, cwd, ctx);
         if (r === "no-data-dir")

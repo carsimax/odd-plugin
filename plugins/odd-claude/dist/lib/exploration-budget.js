@@ -6,8 +6,7 @@ import { updateSessionState } from "./state.js";
 export const EXPLORATION_MAX_LOOKUPS = 3;
 export const EXPLORATION_MAX_BYTES = 40_000;
 const BUILTIN = new Set(["Read", "Grep", "Glob", "WebFetch", "WebSearch"]);
-// MCP name forms: the global `codegraph` server, plus the legacy plugin-bundled one (tolerated).
-const CODEGRAPH = /^mcp__(?:plugin_odd-claude_)?codegraph__/;
+const CODEGRAPH = /^mcp__codegraph__/;
 export function isExplorationTool(name) {
     return BUILTIN.has(name) || CODEGRAPH.test(name);
 }

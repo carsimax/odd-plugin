@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, mkdirSync, mkdtempSync, realpathSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { runHook } from "./run.js";
@@ -52,5 +52,49 @@ test("SessionStart compact outside a git repository stays silent about the featu
     assert.doesNotMatch(ctx(dir, dir, "compact"), /Active ODD feature document/);
   } finally {
     rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("SessionStart prunes per-session files older than 7 days, keeping fresh, current and locked ones", () => {
+  const data = mkdtempSync(join(tmpdir(), "odd-ss-prune-"));
+  try {
+    const old = new Date(Date.now() - 8 * 86_400_000);
+    const files = ["sessions/old.json", "sessions/cur.json", "sessions/held.json", "sessions/held.json.lock", "sessions/new.json", "status/old.json", "status/cur.json", "status/new.json"];
+    for (const f of files) {
+      mkdirSync(join(data, f, ".."), { recursive: true });
+      writeFileSync(join(data, f), "{}");
+      if (!f.includes("new")) utimesSync(join(data, f), old, old);
+    }
+    runHook("SessionStart", JSON.stringify({ session_id: "cur", source: "startup" }), { dataDir: data, env: {} });
+    const left = (f: string) => existsSync(join(data, f));
+    assert.equal(left("sessions/old.json"), false);
+    assert.equal(left("status/old.json"), false);
+    for (const f of ["sessions/cur.json", "sessions/held.json", "sessions/held.json.lock", "sessions/new.json", "status/cur.json", "status/new.json"]) assert.ok(left(f), f);
+  } finally {
+    rmSync(data, { recursive: true, force: true });
+  }
+});
+
+test("SessionStart prune keeps the current id's sanitized files and non-.json leftovers; a newer-schema state file survives a hook update", () => {
+  const data = mkdtempSync(join(tmpdir(), "odd-ss-prune2-"));
+  try {
+    const old = new Date(Date.now() - 8 * 86_400_000);
+    const kept = ["sessions/a_b.json", "status/a_b.json", "sessions/x.json.1.2.tmp", "sessions/y.json.lock.1.stale", "sessions/notes.txt"];
+    for (const f of kept) {
+      mkdirSync(join(data, f, ".."), { recursive: true });
+      writeFileSync(join(data, f), "{}");
+      utimesSync(join(data, f), old, old);
+    }
+    runHook("SessionStart", JSON.stringify({ session_id: "a/b", source: "startup" }), { dataDir: data, env: {} });
+    for (const f of kept) assert.ok(existsSync(join(data, f)), f);
+    const v = join(data, "sessions", "v.json");
+    const raw = JSON.stringify({ version: 2, sessionId: "v", data: { keep: 1 } });
+    writeFileSync(v, raw);
+    const r = runHook("PostToolUse", JSON.stringify({ session_id: "v", tool_name: "Read", tool_response: "x" }), { dataDir: data, env: {} });
+    assert.equal(r.exitCode, 0);
+    assert.equal(readFileSync(v, "utf8"), raw);
+    assert.equal(existsSync(`${v}.lock`), false);
+  } finally {
+    rmSync(data, { recursive: true, force: true });
   }
 });

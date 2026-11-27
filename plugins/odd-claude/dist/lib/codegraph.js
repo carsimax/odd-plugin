@@ -8,7 +8,7 @@ import { spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { homedir } from "node:os";
 import { join, resolve, parse } from "node:path";
-function truthy(v) {
+export function truthy(v) {
     return v === "1" || v === "true" || v === "yes" || v === "on";
 }
 export function planWarmup(cwd, deps) {

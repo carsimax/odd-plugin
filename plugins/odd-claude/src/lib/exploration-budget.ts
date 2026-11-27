@@ -14,8 +14,7 @@ export interface ExplorationCounters {
 }
 
 const BUILTIN = new Set(["Read", "Grep", "Glob", "WebFetch", "WebSearch"]);
-// MCP name forms: the global `codegraph` server, plus the legacy plugin-bundled one (tolerated).
-const CODEGRAPH = /^mcp__(?:plugin_odd-claude_)?codegraph__/;
+const CODEGRAPH = /^mcp__codegraph__/;
 
 export function isExplorationTool(name: string): boolean {
   return BUILTIN.has(name) || CODEGRAPH.test(name);

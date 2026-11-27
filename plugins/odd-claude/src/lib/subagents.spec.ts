@@ -23,6 +23,17 @@ test("start then stop records one entry with type, start, end", () => {
   }
 });
 
+test("a late SubagentStart keeps the endedAt of an already stopped record", () => {
+  const dir = tmp();
+  try {
+    recordSubagentStop({ session_id: "s1", agent_id: "a1", agent_type: "t" }, { dataDir: dir }, 5_000);
+    recordSubagentStart({ session_id: "s1", agent_id: "a1", agent_type: "t" }, { dataDir: dir }, 1_000);
+    assert.deepEqual(readSubagents("s1", { dataDir: dir }), [{ id: "a1", type: "t", startedAt: 1_000, endedAt: 5_000 }]);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test("stop without a recorded start adds an ended entry with unknown start; other state keys survive", () => {
   const dir = tmp();
   try {

@@ -1,5 +1,5 @@
 import { homedir } from "node:os";
-import { logError, updateSessionState } from "../lib/state.js";
+import { logError, pruneStaleSessionFiles, updateSessionState } from "../lib/state.js";
 import { readBackgroundSubagents } from "../lib/background-subagents.js";
 import { realIntegrationDeps, runSessionIntegrations } from "../lib/session-integrations.js";
 import { buildSessionContext, readDelegationMode } from "../lib/context.js";
@@ -7,7 +7,7 @@ import { recordAgentStatus } from "../lib/agent-status.js";
 import { createSessionScratch, sweepStaleTombstones } from "../lib/scratch.js";
 import { titleSequence } from "../lib/terminal.js";
 import { profileContextLine } from "../lib/profiles.js";
-import { recordTranscriptPath } from "../lib/stats.js";
+import { recordTranscriptPath } from "../lib/transcript-path.js";
 import { activeFeatureDocSummary } from "../lib/feature-doc.js";
 /**
  * Records the session start in state (when a session id and data dir exist) and injects the
@@ -33,6 +33,7 @@ export function sessionStart(input, opts = {}) {
     const scratchLines = [];
     if (typeof input.session_id === "string" && input.session_id !== "") {
         sweepStaleTombstones(opts);
+        pruneStaleSessionFiles(input.session_id, opts);
         try {
             const dir = createSessionScratch(input.session_id, opts);
             scratchLines.push(`Session scratch dir (R56): ${dir}. Use it for throwaway files; it is removed when the session ends. \`/odd-scratch\` shows it.`);

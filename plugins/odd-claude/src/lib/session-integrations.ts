@@ -5,9 +5,10 @@
 import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { INIT_TIMEOUT_MS, isBroadDirectory, planWarmup, realHasIndex } from "./codegraph.js";
+import { INIT_TIMEOUT_MS, isBroadDirectory, planWarmup, realHasIndex, truthy } from "./codegraph.js";
 import { isTrustedProject } from "./codegraph-trust.js";
-import { acquireLock, lockPath, pidAlive, releaseLock, setLockPid } from "./lock.js";
+import { acquireLock, lockPath, releaseLock, setLockPid } from "./lock.js";
+import { isPidAlive } from "./pid.js";
 import { NO_REGISTRY_ENV, peekRegistry } from "./skill-registry.js";
 import { resolveDataDir, type StateOptions } from "./state.js";
 
@@ -26,10 +27,6 @@ export interface IntegrationDeps {
   /** Starts the registry refresh detached from the hook; must return immediately. */
   launchRegistryRefresh: (cwd: string) => void;
   log: (message: string) => void;
-}
-
-function truthy(v: string | undefined): boolean {
-  return v === "1" || v === "true" || v === "yes" || v === "on";
 }
 
 export function runSessionIntegrations(cwd: string, deps: IntegrationDeps): { extraLines: string[] } {
@@ -105,7 +102,7 @@ export function realIntegrationDeps(home: string, env: Record<string, string | u
   } catch {
     dataDir = undefined;
   }
-  const ctx: LaunchCtx = { dataDir, env, spawnChild: realSpawnChild, isAlive: pidAlive };
+  const ctx: LaunchCtx = { dataDir, env, spawnChild: realSpawnChild, isAlive: isPidAlive };
   const launch = (kind: LaunchKind, label: string) => (cwd: string): void => {
     const r = launchLocked(kind, cwd, ctx);
     if (r === "no-data-dir") log(`${label} not launched: no data dir for the in-flight lock`);

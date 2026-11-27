@@ -14,9 +14,6 @@ export function lockPath(dataDir, kind, project) {
     const key = createHash("sha1").update(resolve(project)).digest("hex").slice(0, 16);
     return join(dataDir, "locks", `${kind}-${key}.lock`);
 }
-export function pidAlive(pid) {
-    return isPidAlive(pid);
-}
 function parseLock(raw) {
     try {
         const v = JSON.parse(raw);
@@ -181,7 +178,7 @@ function createExclusive(path, content) {
 /** True when this caller now owns the lock; false when a live, fresh lock is held. Never throws. */
 export function acquireLock(path, pid, opts) {
     const now = opts.now ?? Date.now;
-    const alive = opts.isAlive ?? pidAlive;
+    const alive = opts.isAlive ?? isPidAlive;
     try {
         mkdirSync(join(path, ".."), { recursive: true });
         for (let attempt = 0; attempt < 2; attempt++) {
