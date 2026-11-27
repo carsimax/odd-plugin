@@ -2,15 +2,13 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { spawnSync } from "node:child_process";
-import { PLUGIN_ROOT, REPO_ROOT, VENDOR_ROOT } from "./fixtures.testkit.js";
+import { PLUGIN_ROOT, REPO_ROOT, VENDOR_ROOT, run as runEntry } from "./impl.testkit.js";
 
 // Forbidden words are assembled at runtime so this file passes its own check.
 const G = "gen" + "tle";
-const script = join(PLUGIN_ROOT, "scripts", "check-naming.mjs");
 
 test("the plugin tree passes the naming check (the vendored corpus is outside it)", () => {
-  const r = spawnSync(process.execPath, [script, PLUGIN_ROOT], { encoding: "utf8" });
+  const r = runEntry("check-naming", [PLUGIN_ROOT]);
   assert.equal(r.status, 0, r.stderr);
   assert.equal(existsSync(join(PLUGIN_ROOT, "test-fixtures")), false);
 });

@@ -3,8 +3,7 @@
 // Stress is bounded: ROUNDS rounds of CLIENTS processes per race, every round on a fresh copy of a template world.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { isTargetConsumed } from "../review/ack.js";
-import { readState } from "../review/store.js";
+import { isTargetConsumed, readState } from "./store.testkit.js";
 import {
   commitHigh, commitLow, consentArgs, copyWorld, lineageDirs, makeFakeReviewer, makeWorld, McpClient, RANGE, storeFiles, withClient, type Called, type FakeReviewer, type World,
 } from "./harness.testkit.js";

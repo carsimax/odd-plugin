@@ -1,21 +1,18 @@
-// Public-interface tests: the built CLIs run as real processes (needs `npm run build`).
+// Public-interface tests: the entry commands run as real processes (needs `npm run build`; the implementation comes from impl.testkit.ts).
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { spawnSync } from "node:child_process";
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { join } from "node:path";
+import { run as runEntry, type EntryName } from "./impl.testkit.js";
 
-const DIST = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "dist", "cli");
-const run = (cli: string, args: string[], env: Record<string, string> = {}) =>
-  spawnSync(process.execPath, [join(DIST, `${cli}.js`), ...args], { encoding: "utf8", env: { PATH: process.env.PATH ?? "", ...env } });
+const run = (cli: EntryName, args: string[], env: Record<string, string> = {}) => runEntry(cli, args, { env: { PATH: process.env.PATH ?? "", ...env } });
 const tmp = () => mkdtempSync(join(tmpdir(), "odd-main-"));
 
 test("S21: a failing action prints to stderr and exits non-zero (relative --data-dir)", () => {
   const cwd = tmp();
   try {
-    const r = spawnSync(process.execPath, [join(DIST, "coordinator.js"), "--action", "on", "--data-dir", "rel/dir"], { encoding: "utf8", cwd, env: { PATH: process.env.PATH ?? "" } });
+    const r = runEntry("coordinator", ["--action", "on", "--data-dir", "rel/dir"], { cwd, env: { PATH: process.env.PATH ?? "" } });
     assert.notEqual(r.status, 0);
     assert.notEqual(r.stderr, "");
   } finally {

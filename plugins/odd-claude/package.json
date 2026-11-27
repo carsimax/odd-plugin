@@ -10,6 +10,7 @@
     "build": "tsc -p tsconfig.json",
     "build:test": "tsc -p tsconfig.test.json",
     "clean:test": "node -e \"require('fs').rmSync('dist-test',{recursive:true,force:true})\"",
+    "test:contract": "npm run clean:test && npm run build && npm run build:test && node --test \"dist-test/contract/*.spec.js\"",
     "test": "npm run clean:test && npm run build && npm run build:test && node --test \"dist-test/**/*.spec.js\"",
     "check": "node scripts/check-naming.mjs",
     "measure": "node scripts/measure.mjs"
