@@ -42,7 +42,7 @@ function reminderText(root: string, status: StatusEnvelope, target: StartTarget,
     `Review-driven development is enabled for this repository, and it holds an unreviewed candidate (target_identity ${status.target_identity}).${range}`,
     "By the review entry rule, call the review_status tool of the odd-claude review tools (MCP server `odd-review`; Claude Code lists it as mcp__odd-review__review_status) for this repository and route only from the next_transition it returns before reporting completion; never infer a command from prose or a stale reply.",
     "The START that status offers names review_start: call it with the arguments status gives, unchanged and never edited. It always relays consent and never answers it.",
-    "If review_start returns a consent envelope, relay it to the human losslessly and never answer it on the human's behalf: only the human's explicit answer goes to review_answer_consent.",
+    "If review_start returns a consent envelope, relay it to the human losslessly and never answer it on the human's behalf: only the human's explicit answer goes to review_answer_consent. The one exception is a standing consent recorded in the feature document `## Log`, which covers only that tracked feature branch's work-unit commit candidates (never on your own judgment).",
     "This hook never runs review start itself, and it reminds once per session and candidate.",
     `To turn review-driven development off, the human can run: ${modeCommand("disable")} (user-wide), or ${modeCommand(`disable --scope clone --cwd ${shellQuote(root)}`)} (this repository only).`,
   ].join("\n");

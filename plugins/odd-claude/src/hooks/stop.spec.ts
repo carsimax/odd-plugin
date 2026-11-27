@@ -101,6 +101,7 @@ test("RDD on and a high-risk candidate is due: one block with a reminder, once p
     assert.ok(named.length > 0);
     for (const n of named) assert.ok(existsSync(join(PLUGIN_ROOT, "dist", "cli", n)), n);
     assert.match(reason, /relay it to the human losslessly and never answer it on the human's behalf/);
+    assert.match(reason, /standing consent recorded in the feature document `## Log`/);
     assert.match(reason, /never runs review start itself/);
     assert.match(reason, /once per session and candidate/);
     // same session, same candidate: silent

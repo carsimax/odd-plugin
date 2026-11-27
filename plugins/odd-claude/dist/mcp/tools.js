@@ -5,11 +5,13 @@
 //    `invalid_input` listing the problems (never a protocol error, so the model can correct the call).
 //  - Routing comes only from `review_status` transitions. Consent is never answered here: `review_start` always relays (the
 //    consent envelope comes back untouched) and only `review_answer_consent`, which takes the human's explicit answer plus the
-//    exact target identity the question was asked for, records it.
+//    exact target identity the question was asked for, records it. Exception (guidance only):
+//    a standing consent recorded in the feature document `## Log` lets the parent answer for that feature branch's work-unit commit candidates, never on its own judgment.
 //  - A direct start never duplicates a lineage waiting for its correction: `pendingCorrectionLineage` (run.ts) is checked first
 //    and the pending lineage is returned as the typed error `correction_lineage_pending`.
 //  - Reviewer runs cost money: `review_run`, `review_capture` and `review_capture_group` return a forecast first and run
-//    reviewers only when called again with `reviewer_run_acknowledged: true` and the forecast's `reviewer_run_binding`.
+//    reviewers only when called again with `reviewer_run_acknowledged: true` and the forecast's `reviewer_run_binding` (the user saw
+//    the forecast, or a standing consent recorded in the feature document `## Log` covers that feature branch's work-unit commit candidates).
 //  - Reviewers run through the injected runner (default: the isolated `claude -p` runner of review/runner.ts).
 //  - Outputs are bounded (MAX_OUTPUT_BYTES), errors are typed (`{error:{code,message,...}}` with `isError: true`), nothing is
 //    reported to anyone.
@@ -77,7 +79,7 @@ const RUN_PROPS = {
     model: { type: "string", enum: ["fable", "opus", "sonnet", "haiku"], description: "Reviewer model family for every reviewer of this run. Omit it to follow the active model profile per role (balanced by default)." },
     effort: { type: "string", enum: ["low", "medium", "high", "xhigh", "max"], description: "Reviewer effort (needs a model; not for haiku)." },
     timeout_ms: { type: "integer", minimum: 1000, maximum: 7_200_000 },
-    reviewer_run_acknowledged: { type: "boolean", description: "Authorizes the reviewer batch of the forecast named by reviewer_run_binding. Never set it before the user saw the forecast." },
+    reviewer_run_acknowledged: { type: "boolean", description: "Authorizes the reviewer batch of the forecast named by reviewer_run_binding. Never set it before the user saw the forecast, unless a standing consent recorded in the feature document `## Log` covers that feature branch's work-unit commit candidates (never on your own judgment)." },
     reviewer_run_binding: { type: "string", minLength: 1, maxLength: 200, description: "reviewer_run_binding of the forecast being acknowledged." },
 };
 const DETAIL = { type: "string", enum: ["concise", "full"], description: "Response size. full (default) is the complete status; concise drops only the projection detail and the per-slot schema, capture operation and artifact subject, and keeps every id, binding, identity, argument, next_transition, forecast, repair and consumed field." };
@@ -305,7 +307,7 @@ export const TOOLS = [
     },
     {
         name: "review_start",
-        description: "Start a review of the candidate. It ALWAYS relays consent: a medium/high-risk candidate returns the consent envelope untouched (show it to the human losslessly) and creates nothing; only review_answer_consent, with the human's explicit answer, can grant or decline. A low-risk candidate is approved at once and returns its one-shot acknowledgement. Refuses to open a second lineage while one waits for its correction.",
+        description: "Start a review of the candidate. It ALWAYS relays consent: a medium/high-risk candidate returns the consent envelope untouched (show it to the human losslessly) and creates nothing; only review_answer_consent, with the human's explicit answer, can grant or decline (the one exception: a standing consent recorded in the feature document `## Log` for a tracked feature's work-unit commit candidates, see review_answer_consent). A low-risk candidate is approved at once and returns its one-shot acknowledgement. Refuses to open a second lineage while one waits for its correction.",
         inputSchema: object({
             ...TARGET_PROPS, ...LENS_PROPS,
             contract: { type: "string", const: REVIEW_CONTRACT },
@@ -337,12 +339,12 @@ export const TOOLS = [
     },
     {
         name: "review_answer_consent",
-        description: "Record the HUMAN's explicit answer to a consent question (granted or declined) for the exact candidate it was asked for. Call it only with the answer the human gave, never on your own judgment and never to 'relay'. target_identity must be the one in the consent envelope; if the candidate moved, nothing is recorded (binding_drift).",
+        description: "Record the HUMAN's explicit answer to a consent question (granted or declined) for the exact candidate it was asked for. Call it only with the answer the human gave, never on your own judgment and never to 'relay'. The one exception: a standing consent recorded in the feature document `## Log` (asked once per feature, human's verbatim answer) covers only that feature branch's work-unit commit candidates, up to 3 passes each; without it, after a decline, or for any other candidate, relay to the human. target_identity must be the one in the consent envelope; if the candidate moved, nothing is recorded (binding_drift).",
         inputSchema: object({
             ...TARGET_PROPS, ...LENS_PROPS,
             contract: { type: "string", const: REVIEW_CONTRACT },
             target_identity: { type: "string", pattern: SHA_PATTERN, description: "target_identity of the consent envelope." },
-            consent: { type: "string", enum: ["granted", "declined"], description: "The human's explicit answer." },
+            consent: { type: "string", enum: ["granted", "declined"], description: "The human's explicit answer (or the standing consent recorded in the feature document `## Log`, for that feature branch's work-unit commit candidates only)." },
             consent_binding: { type: "string", pattern: SHA_PATTERN, description: "consent-binding of the chosen consent invocation: binds the answer to the target and the lens selection the human saw." },
         }, ["target_identity", "consent", "consent_binding"]),
         annotations: writes,
@@ -357,14 +359,14 @@ export const TOOLS = [
     },
     {
         name: "review_capture",
-        description: "Admit exactly one reviewer slot issued by review_status or a review_run forecast: pass its exact binding. First returns a forecast; call again with reviewer_run_acknowledged and its reviewer_run_binding to run the reviewer. Stops after the batch (never acknowledges or follows another transition); the result may carry the one-shot approval acknowledgement.",
+        description: "Admit exactly one reviewer slot issued by review_status or a review_run forecast: pass its exact binding. First returns a forecast; call again with reviewer_run_acknowledged and its reviewer_run_binding to run the reviewer (after the user saw the forecast, or under a standing consent recorded in the feature document `## Log` that covers that feature branch's work-unit commit candidates). Stops after the batch (never acknowledges or follows another transition); the result may carry the one-shot approval acknowledgement.",
         inputSchema: object({ ...TARGET_PROPS, lineage_id: { type: "string", pattern: LINEAGE_PATTERN }, binding: { type: "string", minLength: 1, maxLength: 8192 }, ...RUN_PROPS }, ["lineage_id", "binding"]),
         annotations: writes,
         run: (a, ctx) => captureBatch(a, ctx, [str(a, "binding")], true),
     },
     {
         name: "review_capture_group",
-        description: "Admit one complete reviewer group: pass lineage_id and ALL bindings of the current collect, in order, never partial. First returns a forecast; call again with reviewer_run_acknowledged and its reviewer_run_binding. Reviewers run concurrently (bounded) and are admitted in order; stops after the batch.",
+        description: "Admit one complete reviewer group: pass lineage_id and ALL bindings of the current collect, in order, never partial. First returns a forecast; call again with reviewer_run_acknowledged and its reviewer_run_binding (same rule: the user saw the forecast, or a standing consent recorded in the feature document `## Log` covers that feature branch's work-unit commit candidates). Reviewers run concurrently (bounded) and are admitted in order; stops after the batch.",
         inputSchema: object({ ...TARGET_PROPS, lineage_id: { type: "string", pattern: LINEAGE_PATTERN }, bindings: { type: "array", items: { type: "string", minLength: 1, maxLength: 8192 }, minItems: 1, maxItems: 8, uniqueItems: true }, ...RUN_PROPS }, ["lineage_id", "bindings"]),
         annotations: writes,
         run: (a, ctx) => captureBatch(a, ctx, a.bindings, false),
@@ -398,7 +400,7 @@ export const TOOLS = [
     },
     {
         name: "review_run",
-        description: "Drive one review end to end by following status transitions: start, reviewers, capture, acknowledge. It returns a typed outcome: closed, not-due, consent-required (relay the envelope to the human; consent is never answered here), input-required (a correction is needed), forecast (reviewers cost money: call again with reviewer_run_acknowledged and the forecast's reviewer_run_binding), stopped, binding-drift, transition-limit or cancelled. Resume a consented or corrected review with lineage_id.",
+        description: "Drive one review end to end by following status transitions: start, reviewers, capture, acknowledge. It returns a typed outcome: closed, not-due, consent-required (relay the envelope to the human; consent is never answered here, except under a standing consent recorded in the feature document `## Log` for that feature branch's work-unit commit candidates), input-required (a correction is needed), forecast (reviewers cost money: call again with reviewer_run_acknowledged and the forecast's reviewer_run_binding), stopped, binding-drift, transition-limit or cancelled. Resume a consented or corrected review with lineage_id.",
         inputSchema: object({ ...TARGET_PROPS, ...LENS_PROPS, lineage_id: { type: "string", pattern: LINEAGE_PATTERN }, ...RUN_PROPS }),
         annotations: writes,
         async run(a, ctx) {
