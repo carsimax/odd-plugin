@@ -18,3 +18,8 @@ plugins/odd-claude/tui/dist-test/
 
 # Dev-only bench build output (bench/ is not part of the plugin payload)
 /bench/dist/
+
+# Python (uv) venv and caches
+.venv/
+__pycache__/
+.pytest_cache/
