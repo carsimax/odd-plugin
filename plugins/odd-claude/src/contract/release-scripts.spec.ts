@@ -1,19 +1,19 @@
+// Black-box tests of the release scripts (release-payload, bump-version), moved from installer/release-scripts.spec.ts.
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
-import { PAYLOAD_ITEMS } from "./payload.js";
+import { dirname, join } from "node:path";
+import { entry, PLUGIN_ROOT } from "./impl.testkit.js";
 
-// Compiled to dist-test/installer/, so the plugin root is two levels up.
-const PLUGIN_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..");
-const SCRIPTS = join(PLUGIN_ROOT, "scripts");
+// The shipped payload top-level items, frozen here as the contract (the in-process installer/payload.ts list stays tested there).
+const PAYLOAD_ITEMS: readonly string[] = ["dist", "agents", "workflows", "skills", "claude-md", "rules", "output-styles", "support", "hooks", "statusline", "package.json"];
 
 const sha = (b: Buffer): string => createHash("sha256").update(b).digest("hex");
-const run = (cwd: string, script: string, args: string[]) => spawnSync(process.execPath, [script, ...args], { cwd, encoding: "utf8" });
+// `script` is the plugin-relative path inside the temp layout, where makeRepo copied the entry script.
+const run = (cwd: string, script: string, args: string[]) => spawnSync(entry(script.includes("bump") ? "bump-version" : "release-payload").command, [script, ...args], { cwd, encoding: "utf8" });
 const tar = (args: string[]): string => {
   const r = spawnSync("tar", args, { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
   assert.equal(r.status, 0, r.stderr);
@@ -25,7 +25,7 @@ function makeRepo() {
   const root = mkdtempSync(join(tmpdir(), "odd-rel-"));
   const plugin = join(root, "plugins", "odd-claude");
   mkdirSync(join(plugin, "scripts"), { recursive: true });
-  for (const s of ["release-payload.mjs", "bump-version.mjs"]) if (existsSync(join(SCRIPTS, s))) cpSync(join(SCRIPTS, s), join(plugin, "scripts", s));
+  for (const [name, file] of [["release-payload", "release-payload.mjs"], ["bump-version", "bump-version.mjs"]] as const) cpSync(entry(name).args[0]!, join(plugin, "scripts", file));
   for (const d of ["installer", "lib"]) cpSync(join(PLUGIN_ROOT, "dist", d), join(plugin, "dist", d), { recursive: true });
   const put = (rel: string, body: string, mode = 0o644) => {
     mkdirSync(dirname(join(plugin, rel)), { recursive: true });
@@ -56,7 +56,7 @@ test("release-payload: tarball has the versioned top dir with only PAYLOAD_ITEMS
     assert.ok(names.some((n) => n.startsWith("odd-claude-5.3.0/dist/installer/payload.js")));
     for (const n of names) {
       assert.ok(n.startsWith("odd-claude-5.3.0/"), n);
-      assert.ok((PAYLOAD_ITEMS as readonly string[]).includes(n.split("/")[1]!), `unexpected top item in ${n}`);
+      assert.ok((PAYLOAD_ITEMS).includes(n.split("/")[1]!), `unexpected top item in ${n}`);
     }
     // content is raw (placeholders unresolved) and the exec bit survives
     const ex = mkdtempSync(join(tmpdir(), "odd-rel-x-"));

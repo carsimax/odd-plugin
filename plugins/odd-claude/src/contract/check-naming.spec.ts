@@ -3,13 +3,11 @@ import assert from "node:assert/strict";
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { spawnSync } from "node:child_process";
+import { run as runEntry } from "./impl.testkit.js";
 
 // Forbidden words are assembled at runtime so this file passes its own check.
 const G = "gen" + "tle";
 const T = "tele" + "metry";
-
-const script = new URL("../../scripts/check-naming.mjs", import.meta.url).pathname;
 
 function run(files: Record<string, string>) {
   const dir = mkdtempSync(join(tmpdir(), "odd-naming-"));
@@ -18,7 +16,7 @@ function run(files: Record<string, string>) {
       mkdirSync(dirname(join(dir, name)), { recursive: true });
       writeFileSync(join(dir, name), body);
     }
-    return spawnSync(process.execPath, [script, dir], { encoding: "utf8" });
+    return runEntry("check-naming", [dir]);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

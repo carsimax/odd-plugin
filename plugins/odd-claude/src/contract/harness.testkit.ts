@@ -1,18 +1,14 @@
 // Test-only harness of the U16 conformance layer (excluded from the dist build by tsconfig.json):
 //  - real temp git worlds (a bare origin plus a clone on a feature branch) and plugin-data dirs, removed in teardown;
 //  - a FAKE `claude` reviewer executable (never the real binary) that answers from the prompt's own echo line;
-//  - a stdio MCP client that spawns the REAL server entry (`dist-test/mcp/review-server.js`) with that fake first on PATH.
+//  - a stdio MCP client that spawns the REAL server entry (resolved by impl.testkit.ts) with that fake first on PATH.
 // Every spawned process gets a scrubbed environment (no GIT_*, no inherited secrets beyond PATH).
 import { spawn, spawnSync, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { chmodSync, cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { delimiter, join } from "node:path";
-import { fileURLToPath, pathToFileURL } from "node:url";
 import assert from "node:assert/strict";
-
-/** <plugin>/dist-test/conformance/harness.testkit.js -> <plugin> */
-export const PLUGIN = fileURLToPath(new URL("../../", import.meta.url));
-export const SERVER_ENTRY = join(PLUGIN, "dist-test", "mcp", "review-server.js");
+import { entry, run } from "./impl.testkit.js";
 
 export const CLEAN_ENV: NodeJS.ProcessEnv = (() => {
   const env: NodeJS.ProcessEnv = {};
@@ -173,7 +169,7 @@ export interface ServerEnv {
   world: World;
   /** Extra environment for the server process. */
   env?: Record<string, string>;
-  /** Load kill-preload.testkit.js into the server (crash injection; configured through ODD_KILL_* in `env`). */
+  /** Load the kill -9 injector into the server (crash injection; configured through ODD_KILL_* in `env`). */
   preload?: boolean;
 }
 
@@ -192,8 +188,8 @@ export class McpClient {
       GIT_CONFIG_NOSYSTEM: "1",
       ...se.env,
     };
-    const execArgv = se.preload === true ? ["--import", pathToFileURL(join(PLUGIN, "dist-test", "conformance", "kill-preload.testkit.js")).href] : [];
-    this.child = spawn(process.execPath, [...execArgv, SERVER_ENTRY], { stdio: ["pipe", "pipe", "pipe"], env, cwd: se.world.repo });
+    const server = entry("review-server", { preload: se.preload === true });
+    this.child = spawn(server.command, server.args, { stdio: ["pipe", "pipe", "pipe"], env, cwd: se.world.repo });
     this.child.stdout.setEncoding("utf8");
     this.child.stdout.on("data", (c: string) => {
       this.buf += c;
@@ -352,3 +348,28 @@ export function storeFiles(commonDir: string): string[] {
   if (existsSync(join(commonDir, "odd-plugin"))) walk("");
   return out.sort();
 }
+
+// ---- the entry commands a client drives besides the server (RDD mode switch, delivery hook, Stop hook) ----
+
+/** The RDD mode switch through its CLI entry, scoped to the world's data dir. */
+export function setReviewMode(verb: "enable" | "disable", w: Pick<World, "dir" | "data" | "repo">): void {
+  const r = run("review-mode", [verb, "--scope", "global", "--cwd", w.repo, "--data-dir", w.data], { env: { PATH: process.env.PATH ?? "", HOME: w.dir } });
+  assert.equal(r.status, 0, `review-mode ${verb}: ${r.stderr}`);
+}
+
+/** A hook event as Claude Code invokes it: the hook entry with the JSON on stdin; stdout without the entry's trailing newline. */
+export function runHook(event: string, input: Record<string, unknown>, w: Pick<World, "dir" | "data">): { exitCode: number; stdout: string } {
+  const r = run("hook-runner", [event], { input: JSON.stringify(input), env: { PATH: process.env.PATH ?? "", HOME: w.dir, ODD_CLAUDE_DATA: w.data, GIT_CONFIG_NOSYSTEM: "1" } });
+  return { exitCode: r.status ?? -1, stdout: r.stdout.replace(/\n$/, "") };
+}
+
+// ---- frozen contract strings clients rely on ----
+
+/** The tools the review server registers (tools/list order). */
+export const REVIEW_TOOL_NAMES = [
+  "review_assess", "review_inspect", "review_start", "review_status", "review_answer_consent",
+  "review_capture", "review_capture_group", "review_acknowledge_approved", "review_complete", "review_run",
+] as const;
+
+/** The one advisory notice of the delivery hook for an unreviewed candidate. */
+export const UNREVIEWED_DELIVERY_NOTICE = "RDD: this repository has an unreviewed candidate; review it before delivery.";

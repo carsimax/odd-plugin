@@ -1,18 +1,15 @@
-// U16 (S1, S4): the review lifecycle end to end over the REAL stdio MCP server (`dist-test/mcp/review-server.js` as a child process) with a FAKE
+// U16 (S1, S4): the review lifecycle end to end over the REAL stdio MCP server (the review server entry resolved by impl.testkit.ts, as a child process) with a FAKE
 // `claude` first on its PATH (the real binary is never run), and the delivery gate / Stop reminder of every final state with RDD on and off.
 // The risk tiers come from the real classifier: a dependency change is high (4 lenses), a deletion medium (1 lens), documentation low (0).
 // Every tool result the server returns is checked by the envelope conformance (envelopes.testkit.ts) as it goes by.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { runHook } from "../hooks/run.js";
-import { isTargetConsumed } from "../review/ack.js";
-import { REVIEW_TOOL_NAMES } from "../review/consent.js";
-import { UNREVIEWED_DELIVERY_NOTICE } from "../review/gate.js";
-import { setReviewMode } from "../review/mode.js";
-import { listLineages, readState } from "../review/store.js";
+import { entry } from "./impl.testkit.js";
+import { isTargetConsumed, listLineages, readState } from "./store.testkit.js";
 import { conformToolBody } from "./envelopes.testkit.js";
 import {
-  commitHigh, commitLow, commitMedium, errorCode, good, lineageDirs, makeFakeReviewer, makeWorld, RANGE, SEVERE, withClient, type FakeReviewer, type McpClient, type World,
+  commitHigh, commitLow, commitMedium, errorCode, good, lineageDirs, makeFakeReviewer, makeWorld, RANGE, REVIEW_TOOL_NAMES, runHook, setReviewMode, SEVERE, UNREVIEWED_DELIVERY_NOTICE, withClient,
+  type FakeReviewer, type McpClient, type World,
 } from "./harness.testkit.js";
 import { acknowledge, approveThroughCapture, correctAndCommit, decline, relay, runToOutcome, status, takeCollect, grant } from "./scenarios.testkit.js";
 
@@ -43,11 +40,11 @@ async function scenario(
 
 // ---- the delivery notice and the Stop reminder, as Claude Code would invoke them ----
 
-const on = (w: World): void => void setReviewMode("enable", "global", w.repo, { dataDir: w.data });
-const off = (w: World): void => void setReviewMode("disable", "global", w.repo, { dataDir: w.data });
+const on = (w: World): void => setReviewMode("enable", w);
+const off = (w: World): void => setReviewMode("disable", w);
 const SILENT = { exitCode: 0, stdout: "" };
-const gate = (w: World, command = "git push") => runHook("PreToolUse", JSON.stringify({ session_id: "s1", cwd: w.repo, tool_name: "Bash", tool_input: { command } }), { dataDir: w.data });
-const stop = (w: World, session = "s1") => runHook("Stop", JSON.stringify({ session_id: session, cwd: w.repo, stop_hook_active: false }), { dataDir: w.data });
+const gate = (w: World, command = "git push") => runHook("PreToolUse", { session_id: "s1", cwd: w.repo, tool_name: "Bash", tool_input: { command } }, w);
+const stop = (w: World, session = "s1") => runHook("Stop", { session_id: session, cwd: w.repo, stop_hook_active: false }, w);
 
 /** The delivery hook never denies: an unreviewed candidate yields the one advisory notice and nothing else. */
 function noticed(r: { exitCode: number; stdout: string }, why: string): void {
@@ -237,6 +234,7 @@ test("consent is the human's: relaying twice, a wrong binding or a moved candida
 });
 
 test("coverage: every tool of the server and every envelope family was exercised and conformed", () => {
+  entry("review-server"); // aggregates what the scenarios above saw: with no server entry (py) it fails on the missing entry, not on an empty tally
   assert.deepEqual([...toolsUsed].sort(), ["review_acknowledge_approved", "review_answer_consent", "review_capture", "review_capture_group", "review_run", "review_start", "review_status"]);
   for (const k of ["consent", "start", "start-outcome", "status", "ack", "run:captured", "run:forecast", "run:closed", "run:input-required", "run:consent-required", "error"]) {
     assert.ok(seen.has(k), `no ${k} envelope was conformance-checked (saw ${[...seen].sort().join(", ")})`);

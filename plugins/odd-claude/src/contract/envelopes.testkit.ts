@@ -1,17 +1,46 @@
 // Test-only: structural conformance of every envelope the review engine and the MCP server emit, against the vendored upstream
 // schemas under <repo>/test-fixtures/review/vendor (byte-exact, never edited). The schemas describe the upstream product, so odd-claude's
 // documented differences are applied here as EXPLICIT, NAMED, MINIMAL patches (`SchemaPatch`), each with the reason and the log entry that
-// decided it. `conformance/contract.spec.ts` proves each patch is still needed (dropping any one makes a real envelope fail), so the list
+// decided it. `contract/contract.spec.ts` proves each patch is still needed (dropping any one makes a real envelope fail), so the list
 // cannot grow stale or silently widen.
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { validateReceipt } from "../review/ack.js";
-import { ACK_SCHEMA, CAPTURE_SCHEMA, OUTCOME_SCHEMA, REASON_DESCRIPTIONS } from "../review/contract.js";
-import { CONSENT_SCHEMA, offPathCommand, REVIEW_CONTRACT } from "../review/consent.js";
-import { validate, type Schema } from "../review/schema.js";
-import { START_SCHEMA } from "../review/start.js";
-import { clone, INTEGRATION_ROOT } from "../review/fixtures.testkit.js";
+import { validate, type Schema } from "./schema.testkit.js";
+import { INTEGRATION_ROOT, PLUGIN_ROOT } from "./impl.testkit.js";
+import { validateReceipt } from "./store.testkit.js";
+
+// The contract strings and catalogue of the envelopes, frozen here (captured from the TS implementation) so no product module is imported.
+const REVIEW_CONTRACT = "odd-claude.review-integration/v2";
+const CONSENT_SCHEMA = "odd-claude.review-integration.consent/v3";
+const START_SCHEMA = "odd-claude.review-integration.start/v4";
+const CAPTURE_SCHEMA = "odd-claude.review-integration.capture/v1";
+const ACK_SCHEMA = "odd-claude.review-integration.review-acknowledged/v1";
+const OUTCOME_SCHEMA = "odd-claude.review-integration.start-outcome/v1";
+const REASON_DESCRIPTIONS: Readonly<Record<string, string>> = {
+  not_due: "The candidate has no changes, so no review is due",
+  escalated: "The review was escalated and needs a human decision",
+  target_already_acknowledged: "This candidate was already reviewed and acknowledged",
+  correction_budget_exhausted: "The correction attempts are already used",
+  role_capacity_exceeded: "The admitted role results are full",
+  manual_intervention_required: "Manual intervention is required to proceed",
+  invalidated: "The review authority was invalidated; change the candidate and start again",
+  consent_declined: "Review was declined for this candidate; a different candidate asks again",
+  acknowledgement_token_unavailable: "The approval is pending but its one-shot acknowledgement token was not supplied",
+  corrupted_or_unverifiable_authority: "Review authority is corrupted or unverifiable",
+  fresh_target_ready: "Target is unreviewed and ready for initial review start",
+  native_low_risk_verification: "Low risk candidate eligible for native verification",
+  reviewer_results_required: "Reviewer lens artifacts required for current revision",
+  refuter_results_available: "Blocking findings can be challenged by an optional refuter before correction",
+  review_completion_required: "Every lens result is admitted; the review must be settled",
+  correction_required: "A correction of the blocking findings is required",
+  validator_result_required: "A validator result is required for the corrected candidate",
+  approved_acknowledgement_required: "Approved review awaits its one-shot acknowledgement",
+};
+const shellQuote = (value: string): string => (/^[A-Za-z0-9_@%+=:,./-]+$/.test(value) ? value : `'${value.replace(/'/g, `'\\''`)}'`);
+/** The real off switch of this installation: `node <plugin root>/dist/cli/review-mode.js disable`. */
+const offPathCommand = (): string => `node ${shellQuote(join(PLUGIN_ROOT, "dist", "cli", "review-mode.js"))} disable`;
+export const clone = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
 
 export interface SchemaPatch {
   name: string;

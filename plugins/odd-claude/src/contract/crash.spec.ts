@@ -9,15 +9,11 @@
 // (the real `claude` is never run: a fake first on PATH).
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, utimesSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { runHook } from "../hooks/run.js";
-import { isTargetConsumed, validateReceipt } from "../review/ack.js";
-import { setReviewMode } from "../review/mode.js";
-import { start } from "../review/state.js";
-import { createState, readReceipt, readState, storeRootFor, StoreNotFoundError } from "../review/store.js";
+import { backdate, isTargetConsumed, LIVE_LINEAGE, plantLiveLineage, readReceipt, readState, storeRootFor, StoreNotFoundError, validateReceipt } from "./store.testkit.js";
 import {
-  commitHigh, commitLow, commitMedium, consentArgs, copyWorld, errorCode, good, lineageDirs, lit, makeFakeReviewer, makeWorld, McpClient, RANGE, storeFiles, withClient,
+  commitHigh, commitLow, commitMedium, consentArgs, copyWorld, errorCode, good, lineageDirs, lit, makeFakeReviewer, makeWorld, McpClient, RANGE, runHook, setReviewMode, storeFiles, withClient,
   type FakeReviewer, type World,
 } from "./harness.testkit.js";
 import { acknowledge, approveThroughCapture, grant, relay, runToOutcome, status, type Ack } from "./scenarios.testkit.js";
@@ -286,22 +282,17 @@ const OLD_AT = new Date(Date.now() - 2 * 3_600_000);
 const SWEEP_ID = (n: number): string => `review-${n.toString(16).padStart(16, "0")}`;
 const SWEEP_TEMP = ".atomic-4242-0123456789abcdef";
 const SWEPT = { empty: [SWEEP_ID(1), SWEEP_ID(2)], temps: [SWEEP_ID(3), SWEEP_ID(4)] };
-const LIVE = SWEEP_ID(0xfeed);
+const LIVE = LIVE_LINEAGE;
 
 /** A live lineage plus four old abandoned directories (two empty, two with a temp), everything backdated two hours. */
 async function plantAbandoned(w: World): Promise<void> {
-  const out = start({
-    lineageId: LIVE, targetIdentity: `sha256:${"7".repeat(64)}`, projection: "workspace", baseTree: "b".repeat(40), candidateTree: "c".repeat(40),
-    riskLevel: "medium", selectedLenses: ["reliability"], originalChangedLines: 8, now: "2026-11-19T10:00:00.000Z",
-  });
-  assert.equal(out.ok, true);
-  await createState(w.commonDir, (out as { ok: true; record: Parameters<typeof createState>[1] }).record);
+  plantLiveLineage(w.commonDir);
   const root = storeRootFor(w.commonDir);
   for (const id of [...SWEPT.empty, ...SWEPT.temps]) mkdirSync(join(root, id), { mode: 0o700 });
   for (const id of SWEPT.temps) writeFileSync(join(root, id, SWEEP_TEMP), "x");
   for (const id of [...SWEPT.empty, ...SWEPT.temps, LIVE]) {
-    for (const f of readdirSync(join(root, id))) utimesSync(join(root, id, f), OLD_AT, OLD_AT);
-    utimesSync(join(root, id), OLD_AT, OLD_AT);
+    for (const f of readdirSync(join(root, id))) backdate(join(root, id, f), OLD_AT);
+    backdate(join(root, id), OLD_AT);
   }
 }
 
@@ -407,8 +398,8 @@ test("kill -9 BETWEEN the receipt write and the burn: the receipt is inert (not 
     const a = assertAuthority(crashed.w, "between receipt and burn");
     assert.deepEqual([a.receipts.length, a.burned.length], [1, 0], "the receipt is there, the state is not burned");
     assert.equal(isTargetConsumed(crashed.w.commonDir, target).status, "not_consumed");
-    setReviewMode("enable", "global", crashed.w.repo, { dataDir: crashed.w.data });
-    const push = () => runHook("PreToolUse", JSON.stringify({ session_id: "s", cwd: crashed.w.repo, tool_name: "Bash", tool_input: { command: "git push" } }), { dataDir: crashed.w.data });
+    setReviewMode("enable", crashed.w);
+    const push = () => runHook("PreToolUse", { session_id: "s", cwd: crashed.w.repo, tool_name: "Bash", tool_input: { command: "git push" } }, crashed.w);
     assertNeverDenies(push().stdout, "an inert receipt never makes the delivery hook deny");
     await withClient({ fake, world: crashed.w }, async (c) => {
       const done = await acknowledge(c, crashed.w, ack!);
@@ -437,8 +428,8 @@ test("the receipt check is what makes `consumed`: a burned lineage whose receipt
   });
   const d = copyWorld(w);
   try {
-    setReviewMode("enable", "global", d.repo, { dataDir: d.data });
-    const push = () => runHook("PreToolUse", JSON.stringify({ session_id: "s", cwd: d.repo, tool_name: "Bash", tool_input: { command: "git push" } }), { dataDir: d.data });
+    setReviewMode("enable", d);
+    const push = () => runHook("PreToolUse", { session_id: "s", cwd: d.repo, tool_name: "Bash", tool_input: { command: "git push" } }, d);
     assert.deepEqual(push(), { exitCode: 0, stdout: "" });
     const receiptFile = join(d.commonDir, "odd-plugin", "review-transactions", "v2", lineage, "review-receipt.json");
     const original = readFileSync(receiptFile, "utf8");

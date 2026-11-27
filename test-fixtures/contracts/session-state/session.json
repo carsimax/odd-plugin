@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "sessionId": "sess-contract-0001",
+  "data": {
+    "startedAt": "<TIMESTAMP>",
+    "source": "startup",
+    "exploration": {
+      "lookups": 0,
+      "bytes": 0,
+      "notified": false
+    }
+  }
+}

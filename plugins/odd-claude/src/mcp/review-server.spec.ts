@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { spawn, spawnSync } from "node:child_process";
+import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -312,27 +312,6 @@ test("serve: newline-delimited framing, parse errors, oversize lines, ordering o
   const errs = lines.filter((l) => l.id === null).map((l) => l.error.code).sort();
   assert.deepEqual(errs, [-32700, -32600].sort());
   for (const l of lines) assert.equal(l.jsonrpc, "2.0");
-});
-
-test("the compiled server speaks MCP over stdio: only protocol on stdout, nothing on stderr, exits when stdin closes", async () => {
-  const entry = join(PLUGIN_ROOT, "dist-test", "mcp", "review-server.js");
-  assert.ok(existsSync(entry), entry);
-  const child = spawn(process.execPath, [entry], { stdio: ["pipe", "pipe", "pipe"], env: { PATH: process.env.PATH ?? "", HOME: tmpdir() } });
-  let out = "";
-  let err = "";
-  child.stdout.on("data", (c: Buffer) => { out += c.toString(); });
-  child.stderr.on("data", (c: Buffer) => { err += c.toString(); });
-  child.stdin.write('{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18"}}\n');
-  child.stdin.write('{"jsonrpc":"2.0","method":"notifications/initialized"}\n');
-  child.stdin.write('{"jsonrpc":"2.0","id":2,"method":"tools/list"}\n');
-  child.stdin.end();
-  const code = await new Promise<number | null>((resolve) => child.on("close", resolve));
-  assert.equal(code, 0);
-  assert.equal(err, "");
-  const msgs = out.trim().split("\n").map((l) => JSON.parse(l));
-  assert.equal(msgs.length, 2);
-  assert.equal(msgs[0].result.protocolVersion, "2025-06-18");
-  assert.deepEqual(msgs[1].result.tools.map((t: { name: string }) => t.name), [...REVIEW_TOOL_NAMES]);
 });
 
 // ---- review_assess / review_inspect / review_status (read-only) ----
@@ -890,34 +869,6 @@ test("advisory: a duplicate in-flight JSON-RPC id is rejected, the first call is
   });
 });
 
-test("m2: a large reply is complete when stdin closes right after the request", async () => {
-  await withFx(async (f) => {
-    const long = (c: string): string => c.repeat(200);
-    for (let i = 0; i < 200; i++) {
-      const dir = join(f.repo, `d${i}${long("x")}`, long("y"));
-      mkdirSync(dir, { recursive: true });
-      writeFileSync(join(dir, `${long("f")}.txt`), `${i}\n`);
-    }
-    git(f.repo, "add", "-A");
-    const entry = join(PLUGIN_ROOT, "dist-test", "mcp", "review-server.js");
-    const child = spawn(process.execPath, [entry], { stdio: ["pipe", "pipe", "pipe"], env: { PATH: process.env.PATH ?? "", HOME: tmpdir() } });
-    const chunks: Buffer[] = [];
-    child.stdout.on("data", (c: Buffer) => chunks.push(c));
-    child.stdin.end(`${JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: "review_assess", arguments: { cwd: f.repo, projection: "staged" } } })}\n`);
-    const code = await new Promise<number | null>((resolve) => child.on("close", resolve));
-    assert.equal(code, 0);
-    const out = Buffer.concat(chunks).toString("utf8");
-    assert.ok(out.length > 65536 * 1.5, `the reply is larger than one pipe buffer (${out.length})`);
-    assert.ok(out.endsWith("\n"), "the reply ends with a newline");
-    const msg = JSON.parse(out) as { id: number; result: { content: { text: string }[] } };
-    assert.equal(msg.id, 1);
-    const body = JSON.parse(msg.result.content[0]!.text);
-    assert.equal(body.outcome, "assessed");
-    assert.equal(body.changed_paths_total, 201, "200 new files plus a.txt");
-    assert.equal(body.changed_paths.length, 200, "bounded");
-  });
-});
-
 test("S1/A1: a __proto__ argument is an unknown property, never a schema bypass", async () => {
   await withFx(async (f) => {
     const server = new ReviewServer({ deps: { riskAssessor: assess("low"), modeOptions: { dataDir: f.data } }, cwd: f.repo });
@@ -1054,14 +1005,4 @@ test("S1/A1: every tool rejects __proto__/constructor/prototype, top level and n
     assert.equal(existsSync(join(f.commonDir, "odd-plugin")), false, "nothing was written");
     assert.equal(({} as Record<string, unknown>).limit, undefined, "Object.prototype was not polluted");
   });
-});
-
-test("the server entry exits cleanly on SIGTERM", async () => {
-  const entry = join(PLUGIN_ROOT, "dist", "mcp", "review-server.js");
-  assert.ok(existsSync(entry), entry);
-  const child = spawn(process.execPath, [entry], { stdio: ["pipe", "pipe", "pipe"], env: { PATH: process.env.PATH ?? "", HOME: tmpdir() } });
-  const exited = new Promise<[number | null, NodeJS.Signals | null]>((res) => child.once("exit", (code, signal) => res([code, signal])));
-  await new Promise((res) => setTimeout(res, 300)); // let the entry install its handlers
-  child.kill("SIGTERM");
-  assert.deepEqual(await exited, [0, null]);
 });

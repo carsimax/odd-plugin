@@ -1,0 +1,52 @@
+[
+  {
+    "note": "no data variable: <ODD_CLAUDE_HOME default>/data",
+    "env": {},
+    "dataDir": "<SANDBOX>/home/.odd-claude/data"
+  },
+  {
+    "note": "ODD_CLAUDE_HOME moves the default",
+    "env": {
+      "ODD_CLAUDE_HOME": "<SANDBOX>/oddhome"
+    },
+    "dataDir": "<SANDBOX>/oddhome/data"
+  },
+  {
+    "note": "CLAUDE_PLUGIN_DATA (legacy)",
+    "env": {
+      "CLAUDE_PLUGIN_DATA": "<SANDBOX>/plugin-data"
+    },
+    "dataDir": "<SANDBOX>/plugin-data"
+  },
+  {
+    "note": "ODD_CLAUDE_DATA",
+    "env": {
+      "ODD_CLAUDE_DATA": "<SANDBOX>/odd-data"
+    },
+    "dataDir": "<SANDBOX>/odd-data"
+  },
+  {
+    "note": "ODD_CLAUDE_DATA wins over CLAUDE_PLUGIN_DATA",
+    "env": {
+      "ODD_CLAUDE_DATA": "<SANDBOX>/odd-data",
+      "CLAUDE_PLUGIN_DATA": "<SANDBOX>/plugin-data"
+    },
+    "dataDir": "<SANDBOX>/odd-data"
+  },
+  {
+    "note": "an empty value counts as unset",
+    "env": {
+      "ODD_CLAUDE_DATA": "",
+      "CLAUDE_PLUGIN_DATA": "<SANDBOX>/plugin-data"
+    },
+    "dataDir": "<SANDBOX>/plugin-data"
+  },
+  {
+    "note": "an explicit data dir wins over ODD_CLAUDE_HOME",
+    "env": {
+      "ODD_CLAUDE_DATA": "<SANDBOX>/odd-data",
+      "ODD_CLAUDE_HOME": "<SANDBOX>/oddhome"
+    },
+    "dataDir": "<SANDBOX>/odd-data"
+  }
+]

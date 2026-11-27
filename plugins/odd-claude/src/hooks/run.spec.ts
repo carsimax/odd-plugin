@@ -3,11 +3,7 @@ import assert from "node:assert/strict";
 import { mkdtempSync, rmSync, readFileSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { spawnSync } from "node:child_process";
 import { defaultHandlers, runHook, type Handlers } from "./run.js";
-import { readSessionState } from "../lib/state.js";
-
-const runJs = new URL("./run.js", import.meta.url).pathname;
 
 function tmp(): string {
   return mkdtempSync(join(tmpdir(), "odd-run-"));
@@ -67,41 +63,6 @@ test("invalid stdin JSON fails safe and is logged", () => {
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
-});
-
-test("CLI: SessionStart fixture records session start in state and emits context", () => {
-  const dir = tmp();
-  try {
-    const r = spawnSync(process.execPath, [runJs, "SessionStart"], {
-      input: JSON.stringify({ session_id: "sess-1", hook_event_name: "SessionStart", source: "startup" }),
-      env: { ...process.env, CLAUDE_PLUGIN_DATA: dir },
-      encoding: "utf8",
-    });
-    assert.equal(r.status, 0);
-    const out = JSON.parse(r.stdout);
-    assert.equal(out.hookSpecificOutput.hookEventName, "SessionStart");
-    assert.match(out.hookSpecificOutput.additionalContext, /Coordinator mode: ON/);
-    const state = readSessionState("sess-1", { dataDir: dir });
-    assert.equal(typeof state.startedAt, "string");
-    assert.equal(state.source, "startup");
-  } finally {
-    rmSync(dir, { recursive: true, force: true });
-  }
-});
-
-test("CLI: unknown event and missing data dir env exit 0 (the home default is used)", () => {
-  const home = mkdtempSync(join(tmpdir(), "odd-run-home-"));
-  const env: NodeJS.ProcessEnv = { ...process.env, ODD_CLAUDE_HOME: home };
-  delete env.CLAUDE_PLUGIN_DATA;
-  delete env.ODD_CLAUDE_DATA;
-  const a = spawnSync(process.execPath, [runJs, "Nope"], { input: "{}", env, encoding: "utf8" });
-  assert.equal(a.status, 0);
-  assert.equal(a.stdout, "");
-  const b = spawnSync(process.execPath, [runJs, "SessionStart"], { input: '{"session_id":"x"}', env, encoding: "utf8" });
-  assert.equal(b.status, 0);
-  assert.match(JSON.parse(b.stdout).hookSpecificOutput.additionalContext, /Coordinator mode: ON/);
-  assert.ok(existsSync(join(home, "data")), "state went to ODD_CLAUDE_HOME/data");
-  rmSync(home, { recursive: true, force: true });
 });
 
 test("SessionStart context keeps only dynamic lines for every source", () => {

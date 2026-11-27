@@ -1,0 +1,7 @@
+{
+  "schema": "odd-claude.agent-status/v1",
+  "session": "sess-contract-0001",
+  "cwd": "<SANDBOX>/work",
+  "state": "working",
+  "updatedAt": "<TIMESTAMP>"
+}
