@@ -471,3 +471,67 @@ def test_a_symlinked_state_file_of_an_unrelated_lineage_blocks_like_v9(tmp_path,
     Path(fx.repo, "b.txt").write_text("bee\ny\n")
     log = both(fx, fake, frozen, lambda c: [c.run(), c.pending({"kind": "current-changes", "projection": "workspace"}), c.run({"lineageId": lineage})])
     assert outcomes(log)[0] == "blocked"
+
+
+# ---- mixed v9/Python lineages: each step on its own side must read what the other wrote ----
+
+
+def _mixed(fx, fake, env, steps):
+    """Runs `steps` ([(side, fn(backend))]) all on v9, restores the repo, then each step on its own side; the transcripts must be equal."""
+    root = Path(fx.repo)
+    bak = root.parent / "repo-backup"
+    shutil.copytree(root, bak, symlinks=True)
+    v = Backend("v9", fx, fake, env)
+    for _, fn in steps:
+        fn(v)
+    shutil.rmtree(root)
+    shutil.copytree(bak, root, symlinks=True)
+    shutil.rmtree(bak)
+    shared = []
+    sides = {"v9": Backend("v9", fx, fake, env), "py": Backend("py", fx, fake, env)}
+    for b in sides.values():
+        b.log = shared
+    for side, fn in steps:
+        fn(sides[side])
+    assert len(v.log) == len(shared)
+    for i, (a, b) in enumerate(zip(v.log, shared)):
+        assert a[2:] == b[2:], f"step {i}: v9={a[2:]!r} mixed={b[2:]!r}"
+    return shared
+
+
+def _ack(c, lineage, f):
+    return c.run({"lineageId": lineage, "reviewerRunAcknowledged": True, "reviewerRunBinding": f["reviewer_run_binding"]}, {"concurrency": 4})
+
+
+@pytest.mark.parametrize("first,second", [("py", "v9"), ("v9", "py")])
+def test_mixed_high_risk_group_forecast_on_one_side_run_on_the_other(tmp_path, frozen, first, second):
+    fx = make_fx(tmp_path, f"mix-{first}", unicode_=True)
+    lineage = grant(fx, "high")
+    fake = Fake(tmp_path / f"fake-mix-{first}", {"sleep": {"risk": 0.2}})
+    box = {}
+    log = _mixed(fx, fake, frozen, [
+        (first, lambda c: box.__setitem__("f", c.run({"lineageId": lineage}, {"concurrency": 4}))),
+        (second, lambda c: _ack(c, lineage, box["f"])),
+        (first, lambda c: c.run({"lineageId": lineage})),
+    ])
+    assert [e[2]["outcome"] for e in log] == ["forecast", "closed", "stopped"]
+
+
+@pytest.mark.parametrize("first,second", [("py", "v9"), ("v9", "py")])
+def test_mixed_correction_started_on_one_side_validated_and_closed_on_the_other(tmp_path, frozen, first, second):
+    fx = make_fx(tmp_path, f"mixc-{first}")
+    lineage = grant(fx, "medium")
+    fake = Fake(tmp_path / f"fake-mixc-{first}", {"findings": {"risk": [SEVERE]}})
+    box = {}
+
+    def fix(c):
+        Path(fx.repo, "a.txt").write_text(FIXED_A)
+        box["f2"] = c.run({"lineageId": lineage})
+
+    log = _mixed(fx, fake, frozen, [
+        (first, lambda c: box.__setitem__("f", c.run({"lineageId": lineage}))),
+        (first, lambda c: _ack(c, lineage, box["f"])),
+        (second, fix),
+        (first, lambda c: _ack(c, lineage, box["f2"])),
+    ])
+    assert [e[2]["outcome"] for e in log] == ["forecast", "input-required", "forecast", "closed"]

@@ -134,3 +134,14 @@ def test_workspace_declined_low_clean_and_clone_override_equal_v9(world):
     run(world, cases)
     assert py_notice({"cwd": str(dirty), "command": "git push"}, o) == G.UNREVIEWED_DELIVERY_NOTICE
     assert py_notice({"cwd": str(override), "command": "git push"}, o) is None
+
+
+LOOKALIKES = ["git\u200bpush", "git\u180epush", "gh\u3000pr merge --squash", "git status; push", '"git push"', "git -C 'a b' push origin HEAD", "git pushd", "\u00e1git push", "_git push", "Git push",
+              "git push --force-with-lease", "gh pr create && gh pr merge", "git $(echo push)", "git push|tee", "git\u2028push", "git\u00a0push", "git\u2003push"]
+
+
+def test_unicode_lookalike_and_chained_commands_equal_v9(world):
+    repo = str(world.new())
+    on = world.data("on")
+    run(world, [[{"cwd": repo, "command": c}, {"dataDir": on}] for c in LOOKALIKES])
+    assert py_notice({"cwd": repo, "command": "git\u3000push"}, {"dataDir": on}) == G.UNREVIEWED_DELIVERY_NOTICE

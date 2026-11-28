@@ -1587,3 +1587,35 @@ def test_pending_correction_lineage_is_none_without_a_pending_lineage_and_for_an
     assert pending_correction_lineage(r.repo, {"kind": "current-changes", "projection": "workspace"}) is None
     clean = make_repo(dirty=False)
     assert pending_correction_lineage(clean.repo, {"kind": "current-changes", "projection": "workspace"}) is None
+
+
+def test_an_abort_while_a_slow_reviewer_runs_returns_promptly_and_captures_nothing(r):
+    lineage = grant(r, "medium")
+    ac = AbortSignal()
+    # the abort lands 100 ms after the reviewer started, while it still runs
+    calls, runner = fake_runner(delay_ms={"risk": 1500}, during=lambda: threading.Timer(0.1, ac.abort).start())
+    deps = {"riskAssessor": assess("medium"), "runner": runner}
+    f = run_review(inp(r, lineageId=lineage), deps)
+    t0 = time.monotonic()
+    out = run_review(inp(r, lineageId=lineage, signal=ac, reviewerRunAcknowledged=True, reviewerRunBinding=f["reviewer_run_binding"]), deps)
+    assert out["outcome"] == "cancelled" and time.monotonic() - t0 < 1.2 and calls.roles == ["risk"]
+    time.sleep(1.6)  # the abandoned reviewer finishes; its answer must not be captured
+    assert len(state_of(r, lineage)["admitted_role_results"]) == 0
+
+
+def test_with_concurrency_one_an_abort_inside_the_first_reviewer_starts_no_queued_reviewer(r):
+    lineage = grant(r, "high")
+    ac = AbortSignal()
+    calls, runner = fake_runner(during=ac.abort)
+    deps = {"riskAssessor": assess("high"), "runner": runner, "concurrency": 1}
+    f = run_review(inp(r, lineageId=lineage), deps)
+    assert run_review(inp(r, lineageId=lineage, signal=ac, reviewerRunAcknowledged=True, reviewerRunBinding=f["reviewer_run_binding"]), deps)["outcome"] == "cancelled"
+    time.sleep(0.2)
+    assert calls.roles == ["risk"]
+
+
+def test_concurrency_three_never_exceeds_three_live_reviewers(r):
+    lineage = grant(r, "high")
+    calls, runner = fake_runner(delay_ms={"risk": 60, "resilience": 60, "readability": 60, "reliability": 60})
+    _, done = forecast_then_run(r, lineage, {"riskAssessor": assess("high"), "runner": runner, "concurrency": 3})
+    assert done["outcome"] == "closed" and calls.max_active == 3

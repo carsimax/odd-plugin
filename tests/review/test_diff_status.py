@@ -226,3 +226,23 @@ def test_review_status_bad_cwds_and_missing_opts_equal_v9(world, tmp_path):
     (tmp_path / "f").write_text("x")
     cases = [[str(plain)], [str(tmp_path / "missing")], [str(tmp_path / "f")], [""], [None], [5], [[repo]], [repo + "/a.txt"], [repo + "/"], [repo + "/../" + os.path.basename(repo)], ["rel/path"], ["é\U0001f600"], [repo + "\x00"]]
     diff_cases(MOD, "reviewStatus", S.review_status, cases)
+
+
+def test_scan_bounds_and_forged_unreachable_stop_records_equal_v9(tmp_path):
+    from odd_claude.review.state import state_revision
+
+    (tmp_path / "s").mkdir()
+    rr = Repo(tmp_path / "s", True)
+    rr.repo, rr.common_dir = str(rr.repo), os.path.join(str(rr.repo), ".git")
+    s = start(rr, "high")
+    diff_cases(MOD, "reviewStatus", S.review_status, [[rr.repo, o] for o in [{"limit": None}, {"limit": 0}, {"limit": -1}, {"limit": 1.5}, {"maxScan": None}, {"maxScan": 0}, {"limit": None, "maxScan": None}]])
+    f = os.path.join(store_root_for(rr.common_dir), s["lineage_id"], "review-state.json")
+    cur = json.loads(Path(f).read_text())
+    for forged in [
+        {**cur, "state": "correction_required", "correction_attempts": 2, "fix_finding_ids": []},
+        {**cur, "admitted_role_results": [{"role": "refuter", "result_hash": "sha256:" + "1" * 64}] * 3},
+    ]:
+        forged["revision"] = state_revision(forged)
+        Path(f).write_text(json.dumps(forged))
+        diff_cases(MOD, "reviewStatus", S.review_status, [[rr.repo]])
+        assert S.review_status(rr.repo)["next_transition"]["reason_code"] not in ("correction_budget_exhausted", "role_capacity_exceeded")
