@@ -1,4 +1,5 @@
-"""Differential oracle: calls the compiled v9 lib (plugins/odd-claude/dist/lib/<module>.js) through node.
+"""Differential oracle: calls a compiled v9 module through node: `module` is a bare lib name (`"state"` ->
+plugins/odd-claude/dist/lib/state.js) or a path relative to `plugins/odd-claude/dist/` (`"review/canonical"` -> dist/review/canonical.js).
 
 Args and results cross as ASCII-only JSON (`\\u` escapes both ways), so astral characters and lone surrogates
 round-trip faithfully. Limit: `undefined`, NaN/Infinity and non-JSON values (Map, Date...) do not cross.
@@ -12,7 +13,8 @@ from typing import Any
 
 import pytest
 
-DIST_LIB = Path(__file__).resolve().parents[2] / "plugins" / "odd-claude" / "dist" / "lib"
+DIST = Path(__file__).resolve().parents[2] / "plugins" / "odd-claude" / "dist"
+DIST_LIB = DIST / "lib"
 
 needs_v9 = pytest.mark.skipif(shutil.which("node") is None or not DIST_LIB.is_dir(), reason="node or plugins/odd-claude/dist/lib missing")
 
@@ -32,7 +34,7 @@ def v9_many(module: str, fn: str, calls: list[list], env: dict | None = None, cw
     """Runs `module.fn(*args)` for each args list in one node process; returns the decoded results in order."""
     import os
 
-    url = (DIST_LIB / f"{module}.js").as_uri()
+    url = ((DIST / module if "/" in module else DIST_LIB / module).with_name(module.rsplit("/", 1)[-1] + ".js")).as_uri()
     r = subprocess.run(
         ["node", "--input-type=module", "-e", _JS, url, fn, json.dumps(calls)],
         capture_output=True, text=True, encoding="ascii", env=None if env is None else {**os.environ, **env}, cwd=cwd, timeout=120,
