@@ -56,6 +56,17 @@ def _g(d: dict, k: str) -> Any:
     return d.get(k, _U)
 
 
+def _num(d: dict, k: str) -> float:
+    """JS numeric coercion of a field for `<`/`>=` comparisons: missing is NaN (every comparison false), null is 0."""
+    v = d.get(k, _U)
+    return float("nan") if v is _U else 0 if v is None else v
+
+
+def _truthy(v: Any) -> bool:
+    """JS truthiness of a JSON value (missing included)."""
+    return not (v is _U or v is None or v is False or v == 0 or v == "") if not isinstance(v, (list, dict)) else True
+
+
 def _str(v: Any) -> str:
     """JS `String(v)` / template interpolation of a JSON value (or a missing one)."""
     return "undefined" if v is _U else _js_string(v)
@@ -668,8 +679,8 @@ def start(input: dict) -> Outcome:
 
 
 def admit_lens_result(record: StateRecord, input: dict) -> Outcome:
-    if record["state"] != "reviewing":
-        return _refuse("illegal_state", f"cannot admit a lens result from {_str(record['state'])}")
+    if _g(record, "state") != "reviewing":
+        return _refuse("illegal_state", f"cannot admit a lens result from {_str(_g(record, "state"))}")
     bad = _bad_now(_g(input, "now"))
     if bad:
         return bad
@@ -707,8 +718,8 @@ def admit_lens_result(record: StateRecord, input: dict) -> Outcome:
 
 
 def admit_validator_result(record: StateRecord, input: dict) -> Outcome:
-    if record["state"] != "validating":
-        return _refuse("illegal_state", f"cannot admit a validator result from {_str(record['state'])}")
+    if _g(record, "state") != "validating":
+        return _refuse("illegal_state", f"cannot admit a validator result from {_str(_g(record, "state"))}")
     bad = _bad_now(_g(input, "now"))
     if bad:
         return bad
@@ -728,8 +739,8 @@ def admit_validator_result(record: StateRecord, input: dict) -> Outcome:
 
 def admit_refuter_result(record: StateRecord, input: dict) -> Outcome:
     """One optional refuter batch, after every lens result and before the correction decision."""
-    if record["state"] != "reviewing":
-        return _refuse("illegal_state", f"cannot admit a refuter result from {_str(record['state'])}")
+    if _g(record, "state") != "reviewing":
+        return _refuse("illegal_state", f"cannot admit a refuter result from {_str(_g(record, "state"))}")
     bad = _bad_now(_g(input, "now"))
     if bad:
         return bad
@@ -762,8 +773,8 @@ def admit_refuter_result(record: StateRecord, input: dict) -> Outcome:
 
 def require_correction(record: StateRecord, input: dict) -> Outcome:
     """Freezes the ledger and opens a correction phase (up to MAX_CORRECTION_ATTEMPTS per lineage) for the named severe findings."""
-    if record["state"] != "reviewing":
-        return _refuse("illegal_state", f"cannot require a correction from {_str(record['state'])}")
+    if _g(record, "state") != "reviewing":
+        return _refuse("illegal_state", f"cannot require a correction from {_str(_g(record, "state"))}")
     bad = _bad_now(_g(input, "now"))
     if bad:
         return bad
@@ -787,9 +798,9 @@ def require_correction(record: StateRecord, input: dict) -> Outcome:
         f = next((x for x in record["findings"] if _seq(x["id"], fid)), None)
         if not f or finding_disposition(f, _refuted_of(record)) != "blocking":
             return _refuse("invalid_input", f"{_str(fid)} is not a blocking severe finding of this review")
-    if record["correction_attempts"] >= MAX_CORRECTION_ATTEMPTS:
+    if _num(record, "correction_attempts") >= MAX_CORRECTION_ATTEMPTS:
         return _refuse("illegal_state", "the correction attempts are already consumed")
-    if record["correction_budget"] <= 0:
+    if _num(record, "correction_budget") <= 0:
         return _refuse("correction_unavailable", "the correction budget is zero; escalate instead")
     nxt = _copy(record)
     nxt["state"] = "correction_required"
@@ -800,16 +811,16 @@ def require_correction(record: StateRecord, input: dict) -> Outcome:
 
 
 def begin_validation(record: StateRecord, input: dict) -> Outcome:
-    if record["state"] != "correction_required":
-        return _refuse("illegal_state", f"cannot begin validation from {_str(record['state'])}")
+    if _g(record, "state") != "correction_required":
+        return _refuse("illegal_state", f"cannot begin validation from {_str(_g(record, "state"))}")
     bad = _bad_now(_g(input, "now"))
     if bad:
         return bad
     lines = _g(input, "actualCorrectionLines")
     if not _non_neg_int(lines):
         return _refuse("invalid_input", "actualCorrectionLines must be a non-negative integer")
-    if lines > record["correction_budget"]:
-        return _refuse("correction_over_budget", f"correction of {_str(lines)} lines exceeds the budget of {_str(record['correction_budget'])}")
+    if lines > _num(record, "correction_budget"):
+        return _refuse("correction_over_budget", f"correction of {_str(lines)} lines exceeds the budget of {_str(_g(record, "correction_budget"))}")
     cti, cct = _g(input, "correctionTargetIdentity"), _g(input, "correctionCandidateTree")
     if _opt_sha_bad(cti):
         return _refuse("invalid_input", "correctionTargetIdentity must be sha256:<64 hex>")
@@ -818,11 +829,11 @@ def begin_validation(record: StateRecord, input: dict) -> Outcome:
             return _refuse("invalid_input", "correctionCandidateTree needs correctionTargetIdentity")
         if not _is_tree(cct):
             return _refuse("invalid_input", "correctionCandidateTree must be a 40 or 64 hex tree id")
-    if _seq(cti, record["target_identity"]) or (cct is not _U and _seq(cct, record["candidate_tree"])):
+    if _seq(cti, _g(record, "target_identity")) or (cct is not _U and _seq(cct, _g(record, "candidate_tree"))):
         return _refuse("correction_unavailable", "the corrected candidate is unchanged: make a correction before validating")
     nxt = _copy(record)
     nxt["state"] = "validating"
-    nxt["correction_attempts"] = record["correction_attempts"] + 1
+    nxt["correction_attempts"] = _num(record, "correction_attempts") + 1
     nxt["actual_correction_lines"] = lines
     if cti is not _U:
         nxt["correction_target_identity"] = cti
@@ -853,16 +864,16 @@ def _adopt_corrected(nxt: dict, record: StateRecord, tree: Any) -> bool:
 
 def approve(record: StateRecord, input: dict) -> Outcome:
     """Approves and issues the one-shot acknowledgement token; only its hash is stored."""
-    if record["state"] != "reviewing" and record["state"] != "validating":
-        return _refuse("illegal_state", f"cannot approve from {_str(record['state'])}")
+    if _g(record, "state") != "reviewing" and _g(record, "state") != "validating":
+        return _refuse("illegal_state", f"cannot approve from {_str(_g(record, "state"))}")
     bad = _bad_now(_g(input, "now"))
     if bad:
         return bad
     if not _lenses_admitted(record):
         return _refuse("lenses_incomplete", "every selected lens result must be admitted before approval")
-    if record["state"] == "reviewing" and any(finding_disposition(f, _refuted_of(record)) in ("blocking", "inconclusive") for f in record["findings"]):
+    if _g(record, "state") == "reviewing" and any(finding_disposition(f, _refuted_of(record)) in ("blocking", "inconclusive") for f in record["findings"]):
         return _refuse("severe_findings_open", "severe findings require a correction or escalation")
-    if record["state"] == "validating" and not any(e.get("role") == "validator" for e in record["admitted_role_results"]):
+    if _g(record, "state") == "validating" and not any(e.get("role") == "validator" for e in record["admitted_role_results"]):
         return _refuse("validator_missing", "a validator result must be admitted before approval")
     token = _new_token(input.get("randomToken"))
     if not isinstance(token, str) or not _TOKEN_RE.fullmatch(token):
@@ -873,7 +884,7 @@ def approve(record: StateRecord, input: dict) -> Outcome:
     if cct is not _U and "correction_target_identity" not in record:
         return _refuse("invalid_input", "correctionCandidateTree needs a record with a correction target")
     nxt = _copy(record)
-    if record["state"] == "validating" and "correction_target_identity" in record:
+    if _g(record, "state") == "validating" and "correction_target_identity" in record:
         # The validator judged the CORRECTED candidate: from here on the lineage's candidate is that one. The reviewed original is
         # kept only as history. Without the corrected tree the approval is refused.
         if not _adopt_corrected(nxt, record, None if cct is _U else cct):
@@ -889,12 +900,12 @@ def approve(record: StateRecord, input: dict) -> Outcome:
 def reopen_correction(record: StateRecord, input: dict) -> Outcome:
     """A validating correction that failed with attempts left reopens a correction on the same frozen findings. The failed
     corrected candidate becomes the lineage's candidate. Refused when no attempt is left or the corrected tree is unknown."""
-    if record["state"] != "validating":
-        return _refuse("illegal_state", f"cannot reopen a correction from {_str(record['state'])}")
+    if _g(record, "state") != "validating":
+        return _refuse("illegal_state", f"cannot reopen a correction from {_str(_g(record, "state"))}")
     bad = _bad_now(_g(input, "now"))
     if bad:
         return bad
-    if record["correction_attempts"] >= MAX_CORRECTION_ATTEMPTS:
+    if _num(record, "correction_attempts") >= MAX_CORRECTION_ATTEMPTS:
         return _refuse("illegal_state", "the correction attempts are already consumed")
     cct = _g(input, "correctionCandidateTree")
     if _opt_tree_bad(cct):
@@ -914,8 +925,8 @@ def _reason_bad(reason: Any) -> bool:
 
 
 def escalate(record: StateRecord, input: dict) -> Outcome:
-    if record["state"] not in ("reviewing", "correction_required", "validating"):
-        return _refuse("illegal_state", f"cannot escalate from {_str(record['state'])}")
+    if _g(record, "state") not in ("reviewing", "correction_required", "validating"):
+        return _refuse("illegal_state", f"cannot escalate from {_str(_g(record, "state"))}")
     bad = _bad_now(_g(input, "now"))
     if bad:
         return bad
@@ -928,7 +939,7 @@ def escalate(record: StateRecord, input: dict) -> Outcome:
         return _refuse("invalid_input", "correctionCandidateTree needs a record with a correction target")
     nxt = _copy(record)
     # An escalation after a validated correction binds the corrected candidate too; without a known corrected tree it keeps the reviewed one.
-    if record["state"] == "validating":
+    if _g(record, "state") == "validating":
         _adopt_corrected(nxt, record, None if cct is _U else cct)
     nxt["state"] = "escalated"
     nxt["escalation_reason"] = input["reason"]
@@ -937,10 +948,10 @@ def escalate(record: StateRecord, input: dict) -> Outcome:
 
 
 def invalidate(record: StateRecord, input: dict) -> Outcome:
-    if record["state"] == "approved" and record["burned"]:
+    if _g(record, "state") == "approved" and _truthy(_g(record, "burned")):
         return _refuse("already_burned", "a burned approval cannot be invalidated")
-    if record["state"] == "escalated" or record["state"] == "invalidated":
-        return _refuse("illegal_state", f"cannot invalidate from {_str(record['state'])}")
+    if _g(record, "state") == "escalated" or _g(record, "state") == "invalidated":
+        return _refuse("illegal_state", f"cannot invalidate from {_str(_g(record, "state"))}")
     bad = _bad_now(_g(input, "now"))
     if bad:
         return bad
@@ -952,7 +963,7 @@ def invalidate(record: StateRecord, input: dict) -> Outcome:
         nxt.pop(k, None)
     nxt["fix_finding_ids"] = []
     nxt["correction_attempts"] = 0
-    if nxt.get("original_target_identity") is not None and nxt.get("original_candidate_tree") is not None:
+    if "original_target_identity" in nxt and "original_candidate_tree" in nxt:
         nxt["target_identity"] = nxt["original_target_identity"]
         nxt["candidate_tree"] = nxt["original_candidate_tree"]
     nxt.pop("original_target_identity", None)
@@ -965,9 +976,9 @@ def invalidate(record: StateRecord, input: dict) -> Outcome:
 
 def burn(record: StateRecord, input: dict) -> Outcome:
     """Spends the approval: the raw token must hash to the stored hash (constant-time compare)."""
-    if record["state"] != "approved":
-        return _refuse("illegal_state", f"cannot burn from {_str(record['state'])}")
-    if record["burned"]:
+    if _g(record, "state") != "approved":
+        return _refuse("illegal_state", f"cannot burn from {_str(_g(record, "state"))}")
+    if _truthy(_g(record, "burned")):
         return _refuse("already_burned", "this approval was already burned")
     bad = _bad_now(_g(input, "now"))
     if bad:

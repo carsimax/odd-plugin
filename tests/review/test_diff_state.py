@@ -346,3 +346,25 @@ def test_approve_token_is_hashed_the_same_way_on_both_sides():
     assert v9_many("review/state", "burn", [[p["record"], {"token": p["ackToken"], "now": T1}]])[0]["ok"] is True, "v9 burns a Python-minted approval"
     assert v9_many("review/state", "burn", [[p["record"], {"token": v9r["ackToken"], "now": T1}]])[0]["refusal"]["code"] == "token_mismatch"
     assert v9_many("review/state", "validateStateRecord", [[p["record"]]])[0]["ok"] is True
+
+
+def _err_class(x):
+    return {"__error__": "thrown"} if isinstance(x, dict) and "__error__" in x else x
+
+
+@pytest.mark.parametrize("op", list(OPS))
+def test_transitions_on_unvalidated_records_with_missing_keys_refuse_or_throw_like_v9(op):
+    """A record with a top-level key removed (or set to null): v9 refuses where it tolerates `undefined`, and throws otherwise;
+    Python must refuse in the same cases (a thrown error only has to be an error on both sides, their messages are the engines')."""
+    fn_py, base = OPS[op]
+    calls = [[{k: v for k, v in r.items() if k != key}, base] for r in RECORDS.values() for key in r]
+    calls += [[{**r, key: None}, base] for r in RECORDS.values() for key in r]
+    want = v9_chunked(op, calls)
+    bad = []
+    for args, w in zip(calls, want):
+        g = _err_class(py_oracle_err(fn_py, *clone(args)))
+        if op == "approve":
+            g, w = norm(g), norm(w)
+        if g != _err_class(w):
+            bad.append(f"{op}: python={json.dumps(g)[:200]} v9={json.dumps(w)[:200]} missing/null keys of {sorted(set(args[0]) ^ set(RECORDS['reviewing']))[:3]}")
+    assert not bad, f"{len(bad)} divergences, first: {bad[0]}"

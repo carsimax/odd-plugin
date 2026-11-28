@@ -484,7 +484,7 @@ def test_symlinked_lineage_dir_and_junk_entries_in_the_listing(tmp_path):
             Path(root, f"junk-{i}").write_text("x")
 
     p.both(junk)
-    ops = [{"op": "list"}] + [{"op": "list", "options": {"limit": n}} for n in (-1, 0, 1, 2, 3)] + [{"op": "list", "options": {"maxScan": n}} for n in (0, 1, 5, 100)]
+    ops = [{"op": "list"}] + [{"op": "list", "options": {"limit": n}} for n in (-1, 0, 1, 2, 3, 0.5, 1.5, 2.5, -0.5, -1.5, 1e308)] + [{"op": "list", "options": {"maxScan": n}} for n in (0, 1, 5, 100, 0.5, 1.5, 5.5, -1, -0.5)]
     ops += [{"op": "readState", "lineage": "review-" + "c" * 16}, {"op": "create", "record": new_record("review-" + "c" * 16, 3)}]
     res = p.run(ops)
     assert res[0]["ok"]["lineages"] == [LINEAGE, OTHER]

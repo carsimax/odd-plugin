@@ -539,7 +539,7 @@ def _list_lineages_impl(common_dir: str, limit: int | None, max_scan: int | None
     lim = len(found) if limit is None else max(0, limit)
     if len(found) > lim:
         truncated = True
-    return {"lineages": found[:lim], "truncated": truncated}
+    return {"lineages": found[: int(min(lim, len(found)))], "truncated": truncated}  # JS `slice` truncates a fractional end toward zero
 
 
 def read_state(common_dir: str, lineage: str) -> dict:
