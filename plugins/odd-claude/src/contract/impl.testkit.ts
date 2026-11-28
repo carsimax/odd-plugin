@@ -1,7 +1,9 @@
 // The ONLY place that maps ODD_IMPL to entry commands (CLI by name, hook runner, MCP review server, scripts). Contract specs spawn
 // products through `entry`/`run` and never build a path to a product file themselves.
 //   ODD_IMPL=ts (default): the compiled TypeScript product (`dist/`, and `dist-test/mcp/review-server.js` for the server).
-//   ODD_IMPL=py: there is no Python entry yet, so resolving any entry throws a message naming it (Phase 2+ fills this table in).
+//   ODD_IMPL=py: the Python product runs from the repo venv (`.venv/bin/python -m <module>`, the absolute-interpreter shape of the phase 0
+//   command-shape spike). Only the entries ported so far are in PY_ENTRIES (phase 3: review-mode, review-server); resolving any other entry
+//   throws a message naming it, so a test that needs a later phase's entry fails on exactly that (each later phase adds its rows).
 import { spawnSync, type SpawnSyncOptionsWithStringEncoding, type SpawnSyncReturns } from "node:child_process";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -41,12 +43,25 @@ const TS_ENTRIES: Record<EntryName, Entry> = {
   installer: { command: NODE, args: [join(PLUGIN_ROOT, "dist", "installer", "bin.js")] },
 };
 
+const PYTHON = join(REPO_ROOT, ".venv", "bin", "python");
+const PY_ENTRIES: Partial<Record<EntryName, Entry>> = {
+  "review-mode": { command: PYTHON, args: ["-m", "odd_claude.cli.review_mode"] },
+  "review-server": { command: PYTHON, args: [join(REPO_ROOT, "src", "odd_claude", "mcp", "__main__.py")] }, // a file path: the contract spec asserts args[0] exists
+};
+
 /**
  * The command that runs entry `name`. `preload` loads the kill -9 injector (crash tests) into the review server; it is a TS-only seam
- * (a Python port injects its crashes its own way), so it is only honoured for `review-server`.
+ * (a Python port injects its crashes its own way: tests/mcp/kill_preload.py), so it is only honoured for `review-server`.
  */
 export function entry(name: EntryName, opts: { preload?: boolean } = {}): Entry {
-  if (IMPL === "py") throw new Error(`ODD_IMPL=py: no Python entry for "${name}" yet`);
+  if (IMPL === "py") {
+    const py = PY_ENTRIES[name];
+    if (py === undefined) throw new Error(`ODD_IMPL=py: no Python entry for "${name}" yet`);
+    if (opts.preload === true && name !== "review-server") throw new Error(`the kill preload only applies to "review-server", not "${name}"`);
+    // The Python twin of kill-preload.testkit.ts (same ODD_KILL_* contract): a launcher that patches os/shutil in the server process only.
+    if (opts.preload === true) return { command: py.command, args: ["-P", join(REPO_ROOT, "tests", "mcp", "kill_preload.py")] };
+    return { command: py.command, args: [...py.args] };
+  }
   if (IMPL !== "ts") throw new Error(`ODD_IMPL=${IMPL}: unknown implementation (expected ts or py), cannot resolve entry "${name}"`);
   const args = [...TS_ENTRIES[name].args];
   if (opts.preload === true) {

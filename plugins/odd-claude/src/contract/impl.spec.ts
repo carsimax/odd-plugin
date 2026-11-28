@@ -12,12 +12,21 @@ test(`ODD_IMPL=${IMPL}`, () => {
   assert.ok(["ts", "py"].includes(IMPL), `ODD_IMPL must be ts or py, got ${IMPL}`);
 });
 
-test("the resolver names the missing entry when the implementation has none (py) and resolves every entry for ts", () => {
+test("the resolver resolves the ported entries and names the missing one otherwise (py), and resolves every entry for ts", () => {
   const names = ["coordinator", "setup", "status", "review-mode", "hook-runner", "review-server", "check-naming", "stats", "retro", "statusline", "release-payload", "bump-version"] as const;
+  const ported = ["review-mode", "review-server"]; // phase 3; each later phase adds its entries here and to PY_ENTRIES
   for (const n of names) {
-    if (IMPL === "py") assert.throws(() => entry(n), new RegExp(`ODD_IMPL=py: no Python entry for "${n}"`));
+    if (IMPL === "py" && !ported.includes(n)) assert.throws(() => entry(n), new RegExp(`ODD_IMPL=py: no Python entry for "${n}"`));
     else assert.ok(entry(n).args.length > 0, n);
   }
+});
+
+test("py: a ported entry is the repo venv interpreter running its module, and the kill preload stays a review-server option", () => {
+  if (IMPL !== "py") return;
+  assert.deepEqual(entry("review-mode").args, ["-m", "odd_claude.cli.review_mode"]);
+  assert.match(entry("review-server").args[0]!, /src\/odd_claude\/mcp\/__main__\.py$/);
+  assert.match(entry("review-mode").command, /\.venv\/bin\/python$/);
+  assert.throws(() => entry("review-mode", { preload: true }), /kill preload only applies to "review-server"/);
 });
 
 test("no file under src/contract imports a path outside src/contract other than node:*", () => {

@@ -25,3 +25,11 @@ def test_thrown_error_comes_back_as_error_dict():
 def test_a_different_expected_value_is_detected():
     assert v9("state", "safeSegment", "a b") != "a b"
     assert v9("state", "safeSegment", "\U0001f600") != "_"
+
+
+def test_module_may_be_a_path_relative_to_dist():
+    from odd_claude.review.canonical import canonical_json
+
+    for v in [{"b": 1, "a": [None, "\U0001f600"]}, "x", 1.5]:
+        assert v9("review/canonical", "canonicalJson", v) == canonical_json(v)
+    assert v9_many("review/canonical", "canonicalJson", [[{"b": 1, "a": 2}]]) == ['{"a":2,"b":1}']

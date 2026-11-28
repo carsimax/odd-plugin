@@ -2,7 +2,7 @@
 
 **Goal.** Rebuild odd-claude's deterministic code (hooks, lib, review engine, MCP server, CLI, installer, TUI) in Python 3.14 with Pydantic v2, at behavioral parity with v9, so that the harness can later host its own local-AI services: an own memory (replacing Engram), an own code graph (replacing codegraph) and a curator, backed by Qdrant and Ollama. The tool is personal: it is built to do the job well, not to be fast.
 
-Status: **Phase 0 complete on `feat/py-phase0-spikes`; no port started.** Date: 2026-11-27. The v1-v9 history is in [roadmap.md](roadmap.md).
+Status: **Phases 0-2 complete (PRs #69, #70, #71 merged); Phase 3 (review engine) in progress on `feat/py-review`.** Date: 2026-11-27. The v1-v9 history is in [roadmap.md](roadmap.md).
 
 Everything marked *proposal* or *open question* below is not decided. Everything under [Decisions](#2-decisions) is.
 
@@ -11,8 +11,9 @@ Everything marked *proposal* or *open question* below is not decided. Everything
 ## 1. Quick path
 
 1. Phase 0 spikes settle the open technical questions with measurements.
-2. Phases 1-8 reach v10.0.0: Python at parity with TS v9, contract tests as the arbiter.
-3. Only then: Phase 9 own memory, Phase 10 own code graph, Phase 11 curator discovery.
+2. Phases 1-8 reach v10.0.0: Python at parity with TS v9, contract tests as the arbiter (Phase 3 review engine, then Phase 4 hooks).
+3. Phase 8.5 (v10.x cleanup) retires all legacy TS/JS after v10.0.0.
+4. Only then: Phase 9 own memory, Phase 10 own code graph, Phase 11 curator discovery.
 
 Each phase becomes a feature document `odd/tasks/<name>.md` when it starts, with its own specs and tasks.
 
@@ -38,6 +39,8 @@ Product decisions from the grill rounds of 2026-11-27. The answer column is verb
 | Cutover | "Al alcanzar paridad (Recommended)" | Engram and codegraph stay in use during migration. Each is uninstalled only when its replacement covers today's usage. |
 | Upstream | "Referencia, no fuente (Recommended)" | gentle-shell is a reference for ideas, not the behavior source. The bench oracle against gentle-ai stays while useful. **Supersedes guiding principles 6-7 of [roadmap.md](roadmap.md) for v10.** |
 | Post-v10 priority | "Memoria propia (Recommended)" | Order: own memory, then own code graph, then curator. |
+| Legacy TS/JS (D1, 2026-11-27) | Request: "Agreda entre la fase 8 y 9 retirar completamente el codigo legado ts y js". Scope: "Todo, cero TS/JS (Recommended)" (option text: "La fase nueva porta la suite de contratos a pytest y el bench a Python, borra package.json, node_modules, scripts .mjs y toda dependencia de node. Revierte esas dos decisiones (quedan registradas como reemplazadas). El repo queda 100% Python.") | New Phase 8.5 between Phases 8 and 9. Supersedes the Phase 1 suite-language decision ("TS node:test (Recommended)", if recorded) and the bench decision ("Se queda en TS (Recommended)"), both kept as written and marked "Superseded by Phase 8.5 (2026-11-27)". |
+| Phase order (D2, 2026-11-27) | "Invertir 3 y 4 (Recommended)" (option text: "Primero motor de revisión + servidor MCP + CLI review-mode; luego hooks (con los CLIs stats/retro/tasks que sus tests usan, que son envoltorios finos sobre lib ya portada). Cada fase termina con sus contratos en verde con ODD_IMPL=py.") | Phase 3 = review engine and MCP server (+ `review-mode`), Phase 4 = hooks (+ `stats`, `retro`, `tasks`). Reason: Stop and PreToolUse import the review engine (`hooks/stop.ts:5-10`, `hooks/pre-tool-use.ts:2`), ~5.6k lines of `src/review/`; 10 of the 17 hook contract tests also spawn `review-mode`, `review-server`, `stats`, `retro` or `tasks`. |
 | Latency | User: "los ms no son relevantes" | The deterministic core can stay process-per-invocation and import Pydantic freely. A resident daemon exists only for AI/vector services (memory, graph semantic layer, curator), never for hooks. |
 
 ---
@@ -49,7 +52,7 @@ Product decisions from the grill rounds of 2026-11-27. The answer column is verb
 3. **Persisted formats stay readable.** Session state, status files, review store and installer manifest keep their schemas; an installed v9 data directory is read by v10.
 4. **Degrade, never block.** Optional AI infra down means a warning once and a log line, never a blocked Claude Code session.
 5. **Deterministic core is process-per-call.** Hooks and CLI start, work, exit. A daemon serves only AI services.
-6. **Pydantic v2 everywhere it crosses a boundary.** Every persisted format and every MCP tool input has a model.
+6. **Pydantic v2 everywhere it crosses a boundary.** Every persisted format and every MCP tool input has a model. Exception: review-store records (`odd-claude.review-state/v2`, receipts) are plain dicts in v9's JSON shape validated by the ported hand-written validator, because it must reproduce v9's full error lists; decided in Phase 3 (`odd/tasks/py-review.md` L11).
 7. **Upstream is reference, not source.** Ideas may come from gentle-shell; behavior is defined by this repo's specs and contract tests.
 8. **Personal tool, serious releases.** No telemetry, no multi-user concerns. Releases and rollback stay, because a broken harness breaks every session.
 
@@ -99,7 +102,7 @@ Concurrency in place: session lock files, atomic tmp+rename writes, pruning of 7
 | Engram | 34 references across 11 payload files (heaviest `claude-md/08-memory.md`, `rules/odd-tracking.md`) |
 | codegraph | 33 references across 15 files (`claude-md/09-codegraph.md`, all agents) |
 
-**Dependency on in-flight work.** `odd/tasks/autonomous-review.md` is in progress in TS and changes correction limits. The review port (Phase 4) starts from its merged state.
+**Dependency on in-flight work.** None. `autonomous-review` (which changed correction limits) merged in PR #68 (v9.2.0); the review port (Phase 3) starts from it.
 
 ---
 
@@ -128,10 +131,10 @@ payload/            # rules, agents, skills, claude-md, output-styles, statuslin
 tests/
   contract/         # implementation-agnostic, black-box
   unit/
-bench/              # stays TS (decided in Phase 0)
+bench/              # ported to Python in Phase 8.5 (was: stays TS, Phase 0; superseded by Phase 8.5, 2026-11-27)
 ```
 
-Single console entrypoint `odd-claude` with subcommands, for example `odd-claude hook <Event>`, `odd-claude mcp review`, `odd-claude tasks`. The root `src/odd_claude/` is decided (`plugins/odd-claude/` is retired in Phase 8); bench stays TS.
+Single console entrypoint `odd-claude` with subcommands, for example `odd-claude hook <Event>`, `odd-claude mcp review`, `odd-claude tasks`. The root `src/odd_claude/` is decided (`plugins/odd-claude/` is retired in Phase 8); bench is ported to Python and all TS/JS is removed in Phase 8.5.
 
 ### v10 (proposal)
 
@@ -216,34 +219,40 @@ Risk items use the ODD numbering: 1 persisted data, 2 security, 3 consumed contr
 - **Depends on.** Phase 1.
 - **Becomes** `odd/tasks/py-core-lib.md`.
 
-### Phase 3: Hooks
+### Phase 3: Review engine and MCP server
 
-- **Goal.** The 9 events behind `odd-claude hook <Event>`.
-- **Scope.** Fail-open semantics (errors give exit 0, empty stdout, logged); Stop is the only blocking hook; async events (StopFailure); SubagentStart/SubagentStop silent.
-- **Exit criteria.**
-  - Hook contract tests pass with `ODD_IMPL=py`.
-  - Stop blocks only where v9 blocks.
-  - A forced internal error yields exit 0 and an empty stdout.
-- **Risk.** Items 3, 4.
-- **Depends on.** Phase 2.
-- **Becomes** `odd/tasks/py-hooks.md`.
+Ordered before hooks by decision D2 (2026-11-27): the Stop and PreToolUse hooks import the review engine, so the engine must exist first.
 
-### Phase 4: Review engine and MCP server
-
-- **Goal.** Review lifecycle and the odd-review MCP server in Python.
-- **Scope.** Start only after `autonomous-review` merges. Pure state machine, revision-CAS store, consent binding and drift, forecast, capture, acknowledgement, 10 tools with identical names and input schemas (contract item 3), restricted validation and argument coercion as v9.
+- **Goal.** Review lifecycle, the odd-review MCP server and the `review-mode` CLI in Python.
+- **Scope.** Pure state machine, revision-CAS store, consent binding and drift, forecast, capture, acknowledgement, 10 tools with identical names and input schemas (contract item 3), restricted validation and argument coercion as v9. The `review-mode` CLI (a command hook contract tests spawn). Starts from the merged `autonomous-review` state (PR #68, v9.2.0).
 - **Exit criteria.**
   - MCP contract and conformance suites pass with `ODD_IMPL=py`.
   - Tool names and input schemas match v9 exactly (diffed from `tools/list`).
   - A review transaction written by TS is readable by Python and the reverse.
+  - `review-mode` contract tests pass with `ODD_IMPL=py`.
 - **Risk.** Items 1, 3, 4.
-- **Depends on.** Phase 2; `autonomous-review` merged.
-- **Becomes** `odd/tasks/py-review-mcp.md`.
+- **Depends on.** Phase 2.
+- **Becomes** `odd/tasks/py-review.md`.
+
+### Phase 4: Hooks
+
+- **Goal.** The 9 events behind `odd-claude hook <Event>`.
+- **Scope.**
+  - Fail-open semantics (errors give exit 0, empty stdout, logged); Stop is the only blocking hook; async events (StopFailure); SubagentStart/SubagentStop silent.
+  - The thin CLIs `stats`, `retro` and `tasks` that hook contract tests spawn (wrappers over lib ported in Phase 2). The other CLI commands stay in Phase 5.
+  - The hook-layer lib modules mapped to this phase in `docs/contracts/test-mapping.md`: advisory-notices, agent-status, codegraph-trust, codegraph, root, session-integrations, skill-registry, status, terminal.
+- **Exit criteria.**
+  - Hook contract tests pass with `ODD_IMPL=py` (Stop and PreToolUse use the Phase 3 review engine).
+  - Stop blocks only where v9 blocks.
+  - A forced internal error yields exit 0 and an empty stdout.
+- **Risk.** Items 3, 4.
+- **Depends on.** Phase 3.
+- **Becomes** `odd/tasks/py-hooks.md`.
 
 ### Phase 5: CLI
 
 - **Goal.** All commands on the new entrypoint.
-- **Scope.** The 15 commands; rewrite skills `!` lines and `rules/odd-tracking.md:29` to the new entrypoint.
+- **Scope.** The 15 commands (`review-mode`, `stats`, `retro` and `tasks` already landed in Phases 3-4); rewrite skills `!` lines and `rules/odd-tracking.md:29` to the new entrypoint.
 - **Exit criteria.**
   - Every command's stdout, exit code and JSON schema match v9 in contract tests.
   - No payload line still references `node .../dist/cli/*`.
@@ -264,7 +273,7 @@ Risk items use the ODD numbering: 1 persisted data, 2 security, 3 consumed contr
   - v9 to v10 migration then rollback to v9 leaves a working v9.
   - Rewritten settings.json keeps unrelated user entries.
 - **Risk.** Items 1, 5 (and 2 for settings.json writes).
-- **Depends on.** Phases 3, 4, 5.
+- **Depends on.** Phases 3, 4, 5 (hooks Phase 4, review Phase 3).
 - **Becomes** `odd/tasks/py-installer.md`.
 
 ### Phase 7: TUI on Textual
@@ -292,6 +301,25 @@ Risk items use the ODD numbering: 1 persisted data, 2 security, 3 consumed contr
 - **Risk.** Items 3, 5.
 - **Depends on.** Phases 1-7.
 - **Becomes** `odd/tasks/py-release-v10.md`.
+
+### Phase 8.5: Retire legacy TS/JS
+
+Added by decision D1 (2026-11-27). Runs after v10.0.0 and before Phase 9.
+
+- **Goal.** The repo is 100% Python: zero TS/JS and no node dependency.
+- **Scope.**
+  - Port the contract suite (`plugins/odd-claude/src/contract/`, TS node:test) to pytest, keeping test names and assertions.
+  - Port `bench/` to Python.
+  - Delete every TS/JS source, `package.json` and lockfiles, `node_modules`, `.mjs` scripts, `tsconfig*` and `dist/`.
+  - Remove every node dependency from docs, CI-less release scripts and payload text.
+- **Open item.** The v9 differential oracle (`tests/lib/v9_oracle.py`) and the `test_diff_*` tests that call node are retired or frozen to recorded outputs. Decide in this phase.
+- **Exit criteria.**
+  - `git ls-files` shows no `*.ts`, `*.tsx`, `*.js`, `*.mjs`, `*.cjs`, `package.json`.
+  - The pytest contract suite passes.
+  - The full test suite runs with no `node` on PATH.
+- **Risk.** Items 5, 6.
+- **Depends on.** Phase 8.
+- **Becomes** `odd/tasks/py-retire-ts.md`.
 
 ### Phase 9: Own memory (replaces Engram)
 
@@ -351,9 +379,10 @@ Ordering only, no dates.
 | Order | Milestone | Contains |
 |-------|-----------|----------|
 | 1 | v10.0.0 parity | Phases 0-8 |
-| 2 | v10.x memory | Phase 9 |
-| 3 | v11 graph | Phase 10 |
-| 4 | Curator | Phase 11 (scope decided first) |
+| 2 | v10.x cleanup | Phase 8.5 (retire legacy TS/JS; after v10.0.0, before Phase 9) |
+| 3 | v10.x memory | Phase 9 |
+| 4 | v11 graph | Phase 10 |
+| 5 | Curator | Phase 11 (scope decided first) |
 
 ---
 
@@ -368,7 +397,7 @@ Ordering only, no dates.
 | RAM pressure | Claude Code + Docker + Ollama on 16GB swap and slow everything | Phase 0 measurement; small models; degrade when infra is down |
 | Scope creep mixing migration with features | Parity becomes unverifiable | "Paridad primero": no feature merges before v10.0.0 |
 | Behavior covered only by internal TS tests is lost | Silent regressions after port | Phase 1 test mapping (port / replace / drop with reason) |
-| In-flight `autonomous-review` | Review port starts from a moving base | Phase 4 waits for its merge |
+| `autonomous-review` base moving | Review port starts from a moving base | Resolved: merged in PR #68 (v9.2.0); Phase 3 starts from it |
 
 ---
 
@@ -382,7 +411,7 @@ Resolved in Phase 0 (evidence: `spikes/py-07-open-questions/README.md`).
 | MCP server | "A mano (Recommended)": hand-rolled |
 | Packaging | "Wheel (Recommended)": the release publishes a wheel + payload; the installer creates the venv with uv and installs the wheel; rollback = flip the `current` symlink |
 | Name of the new root | "src/odd_claude (Recommended)": stays as is; `plugins/odd-claude/` is retired in Phase 8 |
-| bench | "Se queda en TS (Recommended)": stays TS; revisit after v10.0.0 if it stops being useful |
+| bench | "Se queda en TS (Recommended)": stays TS; revisit after v10.0.0 if it stops being useful. Superseded by Phase 8.5 (2026-11-27): bench is ported to Python (D1) |
 | Memory store design | Deferred to Phase 9 ("Diferir a Fase 9 (Recommended)"); hybrid FTS + vector stays the leading idea; the RAM measurement is an input |
 
 ---
