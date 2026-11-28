@@ -171,15 +171,19 @@ class Backend:
         return f, done
 
 
+# git's background maintenance creates and removes these mid-copy (copytree then fails on the vanished file)
+_TRANSIENT = shutil.ignore_patterns("maintenance.lock", "gc.pid")
+
+
 def both(fx, fake, env, scenario):
     """Runs `scenario(call)` on v9, restores the whole repo directory, runs it on Python; asserts equal transcripts; returns the Python log (with the peak concurrency of each side)."""
     root = Path(fx.repo)
     bak = root.parent / "repo-backup"
-    shutil.copytree(root, bak, symlinks=True)
+    shutil.copytree(root, bak, symlinks=True, ignore=_TRANSIENT)
     v = Backend("v9", fx, fake, env)
     scenario(v)
     shutil.rmtree(root)
-    shutil.copytree(bak, root, symlinks=True)
+    shutil.copytree(bak, root, symlinks=True, ignore=_TRANSIENT)
     shutil.rmtree(bak)
     p = Backend("py", fx, fake, env)
     scenario(p)
@@ -480,12 +484,12 @@ def _mixed(fx, fake, env, steps):
     """Runs `steps` ([(side, fn(backend))]) all on v9, restores the repo, then each step on its own side; the transcripts must be equal."""
     root = Path(fx.repo)
     bak = root.parent / "repo-backup"
-    shutil.copytree(root, bak, symlinks=True)
+    shutil.copytree(root, bak, symlinks=True, ignore=_TRANSIENT)
     v = Backend("v9", fx, fake, env)
     for _, fn in steps:
         fn(v)
     shutil.rmtree(root)
-    shutil.copytree(bak, root, symlinks=True)
+    shutil.copytree(bak, root, symlinks=True, ignore=_TRANSIENT)
     shutil.rmtree(bak)
     shared = []
     sides = {"v9": Backend("v9", fx, fake, env), "py": Backend("py", fx, fake, env)}

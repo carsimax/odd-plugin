@@ -12,6 +12,7 @@ import os
 import runpy
 import shutil
 import signal
+import time
 
 cd = os.environ.get("ODD_KILL_CD", "")
 arm = os.environ.get("ODD_KILL_ARM", "")
@@ -33,6 +34,11 @@ if cd and arm and log:
             return False
         return isinstance(p, str) and p.startswith(cd) and "/LOCK" not in p
 
+    def die():
+        os.kill(os.getpid(), signal.SIGKILL)
+        # a tool runs in its own thread and the kernel may deliver the signal to another one: this thread must not run a single further call meanwhile
+        time.sleep(60)
+
     def ev(label: str, fn):
         global n
         if not os.path.exists(arm):
@@ -47,10 +53,10 @@ if cd and arm and log:
         _o["close"](fd)
         _o["replace"](log + ".tmp", log)
         if n == kill_at and phase == "before":
-            os.kill(os.getpid(), signal.SIGKILL)
+            die()
         r = fn()
         if n == kill_at and phase == "after":
-            os.kill(os.getpid(), signal.SIGKILL)
+            die()
         return r
 
     def p_open(path, *a, **k):
