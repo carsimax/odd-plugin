@@ -52,7 +52,7 @@ Product decisions from the grill rounds of 2026-11-27. The answer column is verb
 3. **Persisted formats stay readable.** Session state, status files, review store and installer manifest keep their schemas; an installed v9 data directory is read by v10.
 4. **Degrade, never block.** Optional AI infra down means a warning once and a log line, never a blocked Claude Code session.
 5. **Deterministic core is process-per-call.** Hooks and CLI start, work, exit. A daemon serves only AI services.
-6. **Pydantic v2 everywhere it crosses a boundary.** Every persisted format and every MCP tool input has a model.
+6. **Pydantic v2 everywhere it crosses a boundary.** Every persisted format and every MCP tool input has a model. Exception: review-store records (`odd-claude.review-state/v2`, receipts) are plain dicts in v9's JSON shape validated by the ported hand-written validator, because it must reproduce v9's full error lists; decided in Phase 3 (`odd/tasks/py-review.md` L11).
 7. **Upstream is reference, not source.** Ideas may come from gentle-shell; behavior is defined by this repo's specs and contract tests.
 8. **Personal tool, serious releases.** No telemetry, no multi-user concerns. Releases and rollback stay, because a broken harness breaks every session.
 
